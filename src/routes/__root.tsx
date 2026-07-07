@@ -77,14 +77,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "PracticeReady — Scenario-based onboarding for GP reception teams" },
+      {
+        name: "description",
+        content:
+          "PracticeReady helps new GP reception and admin staff practise realistic situations before they take live calls.",
+      },
+      { property: "og:title", content: "PracticeReady" },
+      {
+        property: "og:description",
+        content:
+          "Scenario-based onboarding for GP reception and admin teams.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
