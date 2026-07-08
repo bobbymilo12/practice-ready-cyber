@@ -43,23 +43,19 @@ function Review() {
             Review draft scenarios
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Manager review required. Approved scenarios become part of the module. Nothing is
-            published until you choose to publish.
+            Manager review required. Approve every scenario, then publish the module for staff.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              publishModule(module.id);
-              nav({ to: "/dashboard" });
-            }}
-            disabled={!allApproved}
-            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-            title={allApproved ? "Publish module" : "Approve all scenarios first"}
-          >
-            Publish module
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            publishModule(module.id);
+            nav({ to: "/dashboard" });
+          }}
+          disabled={!allApproved}
+          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+        >
+          Publish module
+        </button>
       </div>
 
       <div className="mt-8 space-y-5">
@@ -92,20 +88,23 @@ function ScenarioCard({
   onSave: (s: Scenario) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(scenario);
+  const [draft, setDraft] = useState<Scenario>(scenario);
 
   return (
     <Card>
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {scenario.kind === "mcq" ? "Multiple choice · 1 of 4" : "Put steps in order"}
+          </div>
           {editing ? (
             <input
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-              className="w-full rounded-lg border border-input bg-background p-2 font-display text-lg font-semibold"
+              className="mt-1 w-full rounded-lg border border-input bg-background p-2 font-display text-lg font-semibold"
             />
           ) : (
-            <h3 className="font-display text-lg font-semibold">{scenario.title}</h3>
+            <h3 className="mt-1 font-display text-lg font-semibold">{scenario.title}</h3>
           )}
         </div>
         <Badge tone={scenario.status === "approved" ? "approved" : "draft"}>
@@ -122,7 +121,7 @@ function ScenarioCard({
             rows={2}
           />
         ) : (
-          <>"{scenario.patientQuote}"</>
+          <>&ldquo;{scenario.patientQuote}&rdquo;</>
         )}
       </blockquote>
 
@@ -138,29 +137,71 @@ function ScenarioCard({
         )}
       </p>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <OptionBox
-          letter="A"
-          value={editing ? draft.optionA : scenario.optionA}
-          isBest={scenario.bestAnswer === "A"}
-          editable={editing}
-          onChange={(v) => setDraft({ ...draft, optionA: v })}
-        />
-        <OptionBox
-          letter="B"
-          value={editing ? draft.optionB : scenario.optionB}
-          isBest={scenario.bestAnswer === "B"}
-          editable={editing}
-          onChange={(v) => setDraft({ ...draft, optionB: v })}
-        />
-      </div>
+      {scenario.kind === "mcq" && draft.kind === "mcq" && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {scenario.options.map((opt, i) => {
+            const isBest = i === scenario.correctIndex;
+            return (
+              <div
+                key={i}
+                className={`rounded-lg border p-3 text-sm ${
+                  isBest ? "border-accent/60 bg-accent/5" : "border-border"
+                }`}
+              >
+                <div className="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                  <span>Option {String.fromCharCode(65 + i)}</span>
+                  {isBest && <span className="text-[color:var(--success)]">Best answer</span>}
+                </div>
+                {editing ? (
+                  <textarea
+                    value={draft.options[i]}
+                    onChange={(e) => {
+                      const next = [...draft.options];
+                      next[i] = e.target.value;
+                      setDraft({ ...draft, options: next });
+                    }}
+                    rows={3}
+                    className="w-full resize-none bg-transparent outline-none"
+                  />
+                ) : (
+                  opt
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {scenario.kind === "order" && draft.kind === "order" && (
+        <ol className="mt-3 space-y-2">
+          {scenario.steps.map((s, i) => (
+            <li
+              key={i}
+              className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm"
+            >
+              <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+                {i + 1}
+              </span>
+              {editing ? (
+                <input
+                  value={draft.steps[i]}
+                  onChange={(e) => {
+                    const next = [...draft.steps];
+                    next[i] = e.target.value;
+                    setDraft({ ...draft, steps: next });
+                  }}
+                  className="w-full bg-transparent outline-none"
+                />
+              ) : (
+                <span>{s}</span>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
 
       <div className="mt-4 rounded-lg bg-surface p-3 text-sm">
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Best answer
-        </div>
-        <div className="mt-1 font-medium">Option {scenario.bestAnswer}</div>
-        <div className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Learning point
         </div>
         {editing ? (
@@ -228,39 +269,5 @@ function ScenarioCard({
         )}
       </div>
     </Card>
-  );
-}
-
-function OptionBox({
-  letter,
-  value,
-  isBest,
-  editable,
-  onChange,
-}: {
-  letter: string;
-  value: string;
-  isBest: boolean;
-  editable: boolean;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div
-      className={`rounded-lg border p-3 text-sm ${
-        isBest ? "border-accent/50 bg-accent/5" : "border-border"
-      }`}
-    >
-      <div className="mb-1 text-xs font-semibold text-muted-foreground">Option {letter}</div>
-      {editable ? (
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          rows={3}
-          className="w-full resize-none bg-transparent outline-none"
-        />
-      ) : (
-        value
-      )}
-    </div>
   );
 }

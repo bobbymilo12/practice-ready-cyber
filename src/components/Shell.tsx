@@ -18,16 +18,27 @@ export function Shell({ children }: { children: ReactNode }) {
             <Link to="/dashboard" className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium">
               Manager
             </Link>
+            <Link to="/staff" className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium">
+              Trainee
+            </Link>
             <Link to="/" className="hover:text-foreground">
               About
             </Link>
           </nav>
-          <Link
-            to="/dashboard"
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-          >
-            Open dashboard
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/staff"
+              className="hidden rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface sm:inline-flex"
+            >
+              Trainee
+            </Link>
+            <Link
+              to="/dashboard"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Manager
+            </Link>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
