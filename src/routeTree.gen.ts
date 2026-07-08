@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainRouteImport } from './routes/train'
+import { Route as StaffRouteImport } from './routes/staff'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
@@ -20,6 +21,11 @@ import { Route as ModulesCreateRouteImport } from './routes/modules.create'
 const TrainRoute = TrainRouteImport.update({
   id: '/train',
   path: '/train',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffRoute = StaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResultsRoute = ResultsRouteImport.update({
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/results': typeof ResultsRoute
+  '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/review': typeof ModulesReviewRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/results': typeof ResultsRoute
+  '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/review': typeof ModulesReviewRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/results': typeof ResultsRoute
+  '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/review': typeof ModulesReviewRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/results'
+    | '/staff'
     | '/train'
     | '/modules/create'
     | '/modules/review'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/results'
+    | '/staff'
     | '/train'
     | '/modules/create'
     | '/modules/review'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/results'
+    | '/staff'
     | '/train'
     | '/modules/create'
     | '/modules/review'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
   ResultsRoute: typeof ResultsRoute
+  StaffRoute: typeof StaffRoute
   TrainRoute: typeof TrainRoute
   ModulesCreateRoute: typeof ModulesCreateRoute
   ModulesReviewRoute: typeof ModulesReviewRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/train'
       fullPath: '/train'
       preLoaderRoute: typeof TrainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff': {
+      id: '/staff'
+      path: '/staff'
+      fullPath: '/staff'
+      preLoaderRoute: typeof StaffRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/results': {
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
   ResultsRoute: ResultsRoute,
+  StaffRoute: StaffRoute,
   TrainRoute: TrainRoute,
   ModulesCreateRoute: ModulesCreateRoute,
   ModulesReviewRoute: ModulesReviewRoute,
