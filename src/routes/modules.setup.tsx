@@ -16,7 +16,7 @@ export const Route = createFileRoute("/modules/setup")({
 function Setup() {
   const { topic, title } = Route.useSearch();
   const nav = useNavigate();
-  const { answers, setAnswer, resetAnswers, createDraftModule } = useApp();
+  const { answers, setAnswer, resetAnswers, createDraftModule, practiceData } = useApp();
 
   const topicDef = TOPICS.find((t) => t.key === topic) ?? TOPICS[TOPICS.length - 1];
   const questions = topicDef.questions;
