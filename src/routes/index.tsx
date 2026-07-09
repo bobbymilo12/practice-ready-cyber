@@ -1,7 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card } from "@/components/Shell";
-import heroReceptionist from "@/assets/hero-receptionist.jpg";
-import heroTraining from "@/assets/hero-training.jpg";
+
+const HERO_RECEPTIONIST =
+  "https://images.unsplash.com/photo-1666214280391-8ff5bd3c0bf0?auto=format&fit=crop&w=1400&q=80";
+const HERO_TRAINING =
+  "https://images.unsplash.com/photo-1573497491765-dccce02b29df?auto=format&fit=crop&w=1400&q=80";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -64,7 +67,7 @@ function Landing() {
 
         <div className="relative">
           <img
-            src={heroReceptionist}
+            src={HERO_RECEPTIONIST}
             alt="GP practice receptionist smiling while taking a call at the front desk"
             width={1280}
             height={960}
@@ -83,7 +86,7 @@ function Landing() {
 
       <section className="mt-24 grid gap-8 md:grid-cols-[1fr_1.1fr] md:items-center">
         <img
-          src={heroTraining}
+          src={HERO_TRAINING}
           alt="Two GP admin colleagues reviewing a training module together"
           width={1280}
           height={960}
