@@ -24,12 +24,20 @@ function Dashboard() {
             Manager dashboard
           </h1>
         </div>
-        <Link
-          to="/modules/create"
-          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
-        >
-          + Create new module
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/data-hub"
+            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
+          >
+            Data hub
+          </Link>
+          <Link
+            to="/modules/create"
+            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
+          >
+            + Create new module
+          </Link>
+        </div>
       </div>
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
