@@ -1,7 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card } from "@/components/Shell";
-import heroReceptionist from "@/assets/hero-receptionist.jpg";
-import heroTraining from "@/assets/hero-training.jpg";
+
+const HERO_RECEPTIONIST =
+  "https://images.unsplash.com/photo-1666214280391-8ff5bd3c0bf0?auto=format&fit=crop&w=1400&q=80";
+const HERO_TRAINING =
+  "https://images.unsplash.com/photo-1573497491765-dccce02b29df?auto=format&fit=crop&w=1400&q=80";
 
 export const Route = createFileRoute("/")({
   head: () => ({

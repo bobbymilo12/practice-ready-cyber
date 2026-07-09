@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainRouteImport } from './routes/train'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as DataHubRouteImport } from './routes/data-hub'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ModulesSetupRouteImport } from './routes/modules.setup'
@@ -31,6 +32,11 @@ const StaffRoute = StaffRouteImport.update({
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DataHubRoute = DataHubRouteImport.update({
+  id: '/data-hub',
+  path: '/data-hub',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -62,6 +68,7 @@ const ModulesCreateRoute = ModulesCreateRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/data-hub': typeof DataHubRoute
   '/results': typeof ResultsRoute
   '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/data-hub': typeof DataHubRoute
   '/results': typeof ResultsRoute
   '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/data-hub': typeof DataHubRoute
   '/results': typeof ResultsRoute
   '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/data-hub'
     | '/results'
     | '/staff'
     | '/train'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/data-hub'
     | '/results'
     | '/staff'
     | '/train'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/data-hub'
     | '/results'
     | '/staff'
     | '/train'
@@ -126,6 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  DataHubRoute: typeof DataHubRoute
   ResultsRoute: typeof ResultsRoute
   StaffRoute: typeof StaffRoute
   TrainRoute: typeof TrainRoute
@@ -155,6 +168,13 @@ declare module '@tanstack/react-router' {
       path: '/results'
       fullPath: '/results'
       preLoaderRoute: typeof ResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/data-hub': {
+      id: '/data-hub'
+      path: '/data-hub'
+      fullPath: '/data-hub'
+      preLoaderRoute: typeof DataHubRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -198,6 +218,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  DataHubRoute: DataHubRoute,
   ResultsRoute: ResultsRoute,
   StaffRoute: StaffRoute,
   TrainRoute: TrainRoute,
