@@ -67,7 +67,7 @@ function Landing() {
 
         <div className="relative">
           <img
-            src={heroReceptionist}
+            src={HERO_RECEPTIONIST}
             alt="GP practice receptionist smiling while taking a call at the front desk"
             width={1280}
             height={960}
@@ -86,7 +86,7 @@ function Landing() {
 
       <section className="mt-24 grid gap-8 md:grid-cols-[1fr_1.1fr] md:items-center">
         <img
-          src={heroTraining}
+          src={HERO_TRAINING}
           alt="Two GP admin colleagues reviewing a training module together"
           width={1280}
           height={960}
