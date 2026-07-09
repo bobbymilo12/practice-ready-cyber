@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
+import { Link } from "@tanstack/react-router";
 import { useApp, TOPICS, draftsForTopic, type ScenarioFormat } from "@/lib/store";
 
 export const Route = createFileRoute("/modules/setup")({
