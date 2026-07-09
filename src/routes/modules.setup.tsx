@@ -60,6 +60,31 @@ function Setup() {
           />
         </div>
 
+        <Card className="mt-6 bg-surface">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                From your data hub · reference while answering
+              </div>
+              <p className="mt-1 text-sm font-medium">{practiceData.practiceName}</p>
+            </div>
+            <Link to="/data-hub" className="text-xs font-medium text-primary hover:underline">
+              Edit data hub →
+            </Link>
+          </div>
+          {practiceData.staff.length > 0 && (
+            <ul className="mt-3 grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2">
+              {practiceData.staff.map((s) => (
+                <li key={s.id}>
+                  <span className="font-medium text-foreground">{s.name}</span> — {s.role}
+                  {s.clinics ? ` · ${s.clinics}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+
         {phase === "questions" && current && (
           <Card className="mt-6">
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
