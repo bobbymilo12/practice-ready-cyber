@@ -34,7 +34,7 @@ function Setup() {
     setGenerating(true);
     setTimeout(() => {
       const seed = draftsForTopic(topic, format, title);
-      const id = createDraftModule(title, `${title} — draft`, seed);
+      const id = createDraftModule(title, `${title} — draft`, topic, seed);
       resetAnswers();
       nav({ to: "/modules/review", search: { id } });
     }, 1200);
