@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp } from "@/lib/store";
 
@@ -9,14 +10,18 @@ export const Route = createFileRoute("/results")({
 
 function Results() {
   const r = useApp((s) => s.lastResult);
+  const results = useApp((s) => s.results);
+  const setResults = useApp.setState;
+  const [confidence, setConfidence] = useState<number | null>(r?.confidence ?? null);
+  const [saved, setSaved] = useState<boolean>(typeof r?.confidence === "number");
 
   if (!r) {
     return (
       <Shell>
         <Card>
           <p>No recent results. Complete a training module to see your score.</p>
-          <Link to="/dashboard" className="mt-3 inline-block text-primary hover:underline">
-            Back to dashboard
+          <Link to="/staff" className="mt-3 inline-block text-primary hover:underline">
+            Back to your training
           </Link>
         </Card>
       </Shell>
@@ -24,7 +29,18 @@ function Results() {
   }
 
   const pct = Math.round((r.correct / r.total) * 100);
-  const confidence = pct >= 90 ? "High" : pct >= 60 ? "Building" : "Needs practice";
+  const scoreLabel = pct >= 90 ? "Strong" : pct >= 60 ? "Building" : "Needs practice";
+
+  const saveConfidence = (value: number) => {
+    setConfidence(value);
+    // Update the most recent matching result in history + lastResult
+    const updated = { ...r, confidence: value };
+    const newResults = results.map((x) =>
+      x.completedAt === r.completedAt && x.moduleId === r.moduleId ? updated : x,
+    );
+    setResults({ lastResult: updated, results: newResults });
+    setSaved(true);
+  };
 
   return (
     <Shell>
@@ -48,9 +64,9 @@ function Results() {
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Confidence check
+                Learning summary
               </div>
-              <div className="mt-1 font-display text-2xl font-semibold">{confidence}</div>
+              <div className="mt-1 font-display text-2xl font-semibold">{scoreLabel}</div>
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-accent"
@@ -69,12 +85,44 @@ function Results() {
           </div>
         </Card>
 
+        {/* Confidence check */}
+        <Card className="mt-5">
+          <h3 className="font-display text-lg font-semibold">Confidence check</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            How confident do you feel handling this in a real call? This helps your
+            manager know where to give extra support — it is not a test score.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {[1, 2, 3, 4, 5].map((v) => {
+              const active = confidence === v;
+              return (
+                <button
+                  key={v}
+                  onClick={() => saveConfidence(v)}
+                  className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                    active
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:border-primary/40"
+                  }`}
+                >
+                  {v} — {["Not yet", "Shaky", "Ok", "Confident", "Very confident"][v - 1]}
+                </button>
+              );
+            })}
+          </div>
+          {saved && confidence !== null && (
+            <p className="mt-3 text-xs text-[color:var(--success)]">
+              Saved. You can change this any time.
+            </p>
+          )}
+        </Card>
+
         <Card className="mt-5">
           <h3 className="font-display text-lg font-semibold">Areas to review</h3>
           {r.wrongTitles.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              You picked the best answer for every scenario. Consider revisiting the learning
-              points to reinforce your knowledge.
+              You picked the best answer for every scenario. Revisit the learning points
+              to reinforce what you've practised.
             </p>
           ) : (
             <ul className="mt-3 space-y-2 text-sm">
@@ -91,8 +139,8 @@ function Results() {
         </Card>
 
         <div className="mt-6 rounded-xl border border-border bg-surface p-4 text-sm text-muted-foreground">
-          Results are for learning support only. They are not a performance assessment or a
-          disciplinary measure. Speak with your manager if any topic feels unclear.
+          Results are for learning support only. They are not a performance assessment or
+          a disciplinary measure. Speak with your manager if any topic feels unclear.
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
@@ -104,10 +152,10 @@ function Results() {
             Retake module
           </Link>
           <Link
-            to="/dashboard"
+            to="/staff"
             className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
           >
-            Back to dashboard
+            Back to your training
           </Link>
         </div>
       </div>
