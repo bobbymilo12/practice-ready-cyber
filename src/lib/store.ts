@@ -1002,12 +1002,23 @@ export const useApp = create<AppState>()(
             return { practiceData: { ...state.practiceData, staff } };
           }
           const modules = state.modules.map((m) => {
+            let moduleTouched = false;
             const scenarios = m.scenarios.map((sc) => {
               const next = replaceInScenario(sc, trimmedOld, trimmedNew);
-              if (JSON.stringify(next) !== JSON.stringify(sc)) touched += 1;
+              if (JSON.stringify(next) !== JSON.stringify(sc)) {
+                touched += 1;
+                moduleTouched = true;
+              }
               return next;
             });
-            return { ...m, scenarios };
+            return moduleTouched
+              ? {
+                  ...m,
+                  scenarios,
+                  needsReview: true,
+                  reviewReason: `Staff changed: "${trimmedOld}" → "${trimmedNew}". Re-check scenarios still reflect current practice.`,
+                }
+              : { ...m, scenarios };
           });
           return { practiceData: { ...state.practiceData, staff }, modules };
         });
