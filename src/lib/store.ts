@@ -942,8 +942,26 @@ export const useApp = create<AppState>()(
 
       setLastResult: (r) => set({ lastResult: r }),
 
+      addResult: (r) =>
+        set((state) => ({ results: [r, ...state.results].slice(0, 50), lastResult: r })),
+
+      clearReviewFlag: (moduleId) =>
+        set((state) => ({
+          modules: state.modules.map((m) =>
+            m.id === moduleId ? { ...m, needsReview: false, reviewReason: undefined } : m,
+          ),
+        })),
+
       setPracticeField: (field, value) =>
         set((state) => ({ practiceData: { ...state.practiceData, [field]: value } })),
+
+      setRolePolicy: (field, value) =>
+        set((state) => ({
+          practiceData: {
+            ...state.practiceData,
+            rolePolicies: { ...state.practiceData.rolePolicies, [field]: value },
+          },
+        })),
 
       addStaff: (s) =>
         set((state) => ({
