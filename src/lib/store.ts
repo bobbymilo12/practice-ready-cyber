@@ -260,6 +260,41 @@ const FIRST_WEEK_QUESTIONS: SetupQuestion[] = [
   { key: "neverDo", q: "Common week-1 mistakes to prevent?", placeholder: "e.g. Booking chest pain into routine, sharing results without ID check" },
 ];
 
+const VACCINE_QUESTIONS: SetupQuestion[] = [
+  { key: "types", q: "Which vaccines does your practice commonly book?", placeholder: "e.g. Flu, COVID, childhood imms, pneumococcal, shingles, travel" },
+  { key: "whoAdministers", q: "Which clinicians administer which vaccines?", placeholder: "e.g. Priya (childhood + flu), Marcus HCA (flu, pneumo, B12), Sarah pharmacist (COVID)" },
+  { key: "clinicDays", q: "What are your vaccine clinic days / slots?", placeholder: "e.g. Flu Sat clinics Oct–Nov; childhood imms Tue mornings" },
+  { key: "eligibility", q: "How does reception check eligibility for each?", placeholder: "e.g. Age band on EMIS; at-risk register; pregnancy status" },
+  { key: "unclearEligibility", q: "What should staff do if eligibility is unclear?", placeholder: "e.g. Don't book; task duty GP or immunisation lead to confirm" },
+  { key: "escalate", q: "Which vaccine requests must be escalated (not booked)?", placeholder: "e.g. Post-exposure, immunocompromised, travel to high-risk destinations" },
+  { key: "canSay", q: "What can reception say (and what to avoid)?", placeholder: "e.g. Say: 'The nurse will discuss suitability.' Avoid: 'It's safe for you.'" },
+  { key: "commonMistakes", q: "Common vaccine booking mistakes new starters make?", placeholder: "e.g. Booking pregnant patients into wrong flu clinic; missing spacing rules" },
+  { key: "advice", q: "Which staff members should be asked when unsure?", placeholder: "e.g. Priya (imms lead), duty GP" },
+  { key: "localRules", q: "Local vaccine booking rules to include?", placeholder: "e.g. Spacing between COVID + flu, consent form process" },
+];
+
+const FIT_NOTE_QUESTIONS: SetupQuestion[] = [
+  { key: "process", q: "What is your local fit note process?", placeholder: "e.g. Request via NHS App or admin form; GP reviews within 3 working days" },
+  { key: "who", q: "Who issues fit notes at your practice?", placeholder: "e.g. Any GP; ANPs can issue for conditions they've seen" },
+  { key: "under7", q: "How are self-cert (under 7 days) enquiries handled?", placeholder: "e.g. Explain SC2, no GP note needed, signpost to employer" },
+  { key: "backdating", q: "Rules on backdating and extensions?", placeholder: "e.g. GP discretion, requires prior contact record" },
+  { key: "collection", q: "How does the patient receive it?", placeholder: "e.g. Digital via NHS App; paper collection needs ID" },
+  { key: "neverPromise", q: "What must reception never promise?", placeholder: "e.g. That a fit note will be issued, or for a specific period" },
+  { key: "urgent", q: "How are urgent (benefits, tribunal, housing) fit note requests handled?", placeholder: "e.g. Flag to duty admin lead, evidence in record" },
+  { key: "escalate", q: "Escalation route?", placeholder: "e.g. Practice manager if patient dissatisfied with GP decision" },
+];
+
+const HOME_VISIT_QUESTIONS: SetupQuestion[] = [
+  { key: "cutoff", q: "What is the daily cut-off time for home visit requests?", placeholder: "e.g. 10:30 for routine; urgent taken any time" },
+  { key: "who", q: "Who triages home visit requests?", placeholder: "e.g. Duty GP; visits allocated after morning surgery" },
+  { key: "info", q: "What information must reception collect from the caller?", placeholder: "e.g. Name, DOB, address, phone, reason, access instructions, other people at address" },
+  { key: "redFlags", q: "Red-flag symptoms that mean 999 not visit?", placeholder: "e.g. Chest pain, stroke signs, unconscious, severe bleeding" },
+  { key: "houseBound", q: "How do staff verify housebound status?", placeholder: "e.g. Housebound register in EMIS; ask about mobility" },
+  { key: "neverPromise", q: "What must reception never promise?", placeholder: "e.g. A visit time, which GP, that a visit will be agreed" },
+  { key: "escalate", q: "Escalation if duty GP declines but family are unhappy?", placeholder: "e.g. Senior partner or practice manager" },
+  { key: "afterHours", q: "What happens if request comes after cut-off?", placeholder: "e.g. Duty GP decides; if not, signpost 111" },
+];
+
 const GENERIC_QUESTIONS: SetupQuestion[] = [
   { key: "context", q: "Describe the exact situation this module should cover.", placeholder: "e.g. Handling test results enquiries by phone" },
   { key: "process", q: "Step-by-step: your practice's local process.", placeholder: "In your own words" },
