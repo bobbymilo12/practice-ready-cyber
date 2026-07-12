@@ -1078,6 +1078,24 @@ export const useApp = create<AppState>()(
         return touched;
       },
     }),
-    { name: "practice-ready-store" },
+    {
+      name: "practice-ready-store",
+      version: 2,
+      migrate: (persisted: unknown) => {
+        const p = (persisted ?? {}) as Partial<AppState>;
+        return {
+          ...p,
+          results: p.results ?? [],
+          practiceData: {
+            ...defaultPracticeData,
+            ...(p.practiceData ?? {}),
+            rolePolicies: {
+              ...defaultPracticeData.rolePolicies,
+              ...((p.practiceData as PracticeData | undefined)?.rolePolicies ?? {}),
+            },
+          },
+        } as AppState;
+      },
+    },
   ),
 );
