@@ -853,6 +853,7 @@ export const useApp = create<AppState>()(
       answers: {},
       currentDraftId: null,
       lastResult: null,
+      results: [],
       practiceData: defaultPracticeData,
 
       setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
