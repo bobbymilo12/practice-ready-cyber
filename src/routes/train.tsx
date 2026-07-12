@@ -71,7 +71,7 @@ function Train() {
     if (idx + 1 >= scenarios.length) {
       const finalAnswers = answers;
       const correct = finalAnswers.filter((a) => a.correct).length;
-      setLastResult({
+      addResult({
         moduleId: module.id,
         moduleTitle: module.title,
         correct,
