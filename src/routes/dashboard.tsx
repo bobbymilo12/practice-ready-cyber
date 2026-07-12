@@ -11,15 +11,22 @@ export const Route = createFileRoute("/dashboard")({
 
 function Dashboard() {
   const modules = useApp((s) => s.modules);
+  const results = useApp((s) => s.results);
+  const practiceData = useApp((s) => s.practiceData);
+  const clearReviewFlag = useApp((s) => s.clearReviewFlag);
+
   const drafts = modules.flatMap((m) => m.scenarios.filter((s) => s.status === "draft"));
   const published = modules.filter((m) => m.published);
   const draftModules = modules.filter((m) => !m.published);
+  const needsReview = modules.filter((m) => m.needsReview);
+
+  const dataHubEmpty = practiceData.staff.length === 0;
 
   return (
     <Shell>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm text-muted-foreground">Willow Lane Medical Practice</p>
+          <p className="text-sm text-muted-foreground">{practiceData.practiceName}</p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
             Manager dashboard
           </h1>
@@ -29,7 +36,7 @@ function Dashboard() {
             to="/data-hub"
             className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
           >
-            Data hub
+            Practice Setup / Data Hub
           </Link>
           <Link
             to="/modules/create"
@@ -40,10 +47,81 @@ function Dashboard() {
         </div>
       </div>
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
-        <Stat label="Draft scenarios" value={drafts.length || 3} tone="draft" />
-        <Stat label="Modules published" value={published.length || 1} tone="approved" />
+      {/* Gap banner */}
+      <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+          What PracticeReady is
+        </p>
+        <p className="mt-1 text-sm text-foreground">
+          <span className="font-semibold">
+            Mandatory training teaches the rules. PracticeReady teaches how your practice
+            actually works.
+          </span>{" "}
+          Use it for local onboarding — who books what, when to escalate, and the phrases
+          your team uses. Not a replacement for mandatory training or clinical protocols.
+        </p>
+      </div>
+
+      {/* First-run nudge */}
+      {dataHubEmpty && (
+        <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
+          <span className="font-semibold">Start here:</span> add your staff and local
+          rules to the{" "}
+          <Link to="/data-hub" className="font-semibold text-primary hover:underline">
+            Practice Setup / Data Hub
+          </Link>{" "}
+          before creating modules — every draft is built from what you enter there.
+        </div>
+      )}
+
+      {/* Modules needing review */}
+      {needsReview.length > 0 && (
+        <Card className="mt-6 border-warning/40 bg-warning/5">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-base font-semibold">
+              Modules needing review
+            </h3>
+            <Badge tone="draft">Local knowledge changed</Badge>
+          </div>
+          <div className="mt-3 space-y-2">
+            {needsReview.map((m) => (
+              <div
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background p-3 text-sm"
+              >
+                <div>
+                  <div className="font-medium">{m.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {m.reviewReason ??
+                      "Practice data changed — scenarios may contain outdated information."}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Link
+                    to="/modules/review"
+                    search={{ id: m.id }}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                  >
+                    Review
+                  </Link>
+                  <button
+                    onClick={() => clearReviewFlag(m.id)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <section className="mt-8 grid gap-4 md:grid-cols-4">
+        <Stat label="Draft scenarios" value={drafts.length} tone="draft" />
+        <Stat label="Modules published" value={published.length} tone="approved" />
         <Stat label="Trainees invited" value={4} tone="info" />
+        <Stat label="Completions logged" value={results.length} tone="info" />
       </section>
 
       <section className="mt-10 grid gap-6 md:grid-cols-3">
@@ -54,8 +132,8 @@ function Dashboard() {
             </div>
             <h3 className="mt-4 font-display text-lg font-semibold">Create new module</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Pick a module type and let the AI assistant draft scenarios from your local
-              process.
+              Pick a module type and answer specific questions. AI drafts scenarios you
+              approve before staff see them.
             </p>
           </Card>
         </Link>
@@ -105,6 +183,11 @@ function Dashboard() {
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {m.scenarios.length} approved scenarios
+                  {m.needsReview && (
+                    <span className="ml-2 text-[color:var(--warning-foreground)]">
+                      · review recommended
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -112,7 +195,7 @@ function Dashboard() {
         </Card>
       </section>
 
-      <section className="mt-10">
+      <section className="mt-10 grid gap-6 md:grid-cols-2">
         <Card>
           <div className="flex items-center justify-between">
             <h3 className="font-display text-lg font-semibold">Staff completion</h3>
@@ -138,6 +221,34 @@ function Dashboard() {
                 </div>
                 <div className="w-10 text-right text-sm tabular-nums text-muted-foreground">
                   {t.pct}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <h3 className="font-display text-lg font-semibold">Recent training activity</h3>
+          <div className="mt-4 space-y-2">
+            {results.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No completions yet. Once trainees finish a module, results appear here.
+              </p>
+            )}
+            {results.slice(0, 6).map((r, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
+              >
+                <div>
+                  <div className="font-medium">{r.moduleTitle}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(r.completedAt).toLocaleString()}
+                    {r.confidence ? ` · confidence ${r.confidence}/5` : ""}
+                  </div>
+                </div>
+                <div className="text-sm tabular-nums">
+                  {r.correct}/{r.total}
                 </div>
               </div>
             ))}

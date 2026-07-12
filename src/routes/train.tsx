@@ -23,7 +23,7 @@ function Train() {
   const { id } = Route.useSearch();
   const nav = useNavigate();
   const module = useApp((s) => s.modules.find((m) => m.id === id));
-  const setLastResult = useApp((s) => s.setLastResult);
+  const addResult = useApp((s) => s.addResult);
 
   const scenarios = useMemo(
     () => module?.scenarios.filter((s) => s.status === "approved") ?? [],
@@ -71,7 +71,7 @@ function Train() {
     if (idx + 1 >= scenarios.length) {
       const finalAnswers = answers;
       const correct = finalAnswers.filter((a) => a.correct).length;
-      setLastResult({
+      addResult({
         moduleId: module.id,
         moduleTitle: module.title,
         correct,

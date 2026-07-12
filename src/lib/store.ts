@@ -36,6 +36,8 @@ export interface Module {
   published: boolean;
   scenarios: Scenario[];
   createdAt: number;
+  needsReview?: boolean;
+  reviewReason?: string;
 }
 
 export interface TrainingResult {
@@ -45,6 +47,7 @@ export interface TrainingResult {
   total: number;
   wrongTitles: string[];
   completedAt: number;
+  confidence?: number; // 1-5 self-report
 }
 
 // ------------- Practice data hub -------------
@@ -56,6 +59,17 @@ export interface StaffMember {
   notes?: string;
 }
 
+export interface RolePolicies {
+  gps: string;
+  nps: string;
+  nurses: string;
+  hcas: string;
+  pharmacists: string;
+  neverPromise: string;
+  phrasesUse: string;
+  phrasesAvoid: string;
+}
+
 export interface PracticeData {
   practiceName: string;
   hours: string;
@@ -64,6 +78,7 @@ export interface PracticeData {
   urgentNumbers: string;
   extras: string;
   staff: StaffMember[];
+  rolePolicies: RolePolicies;
 }
 
 const defaultPracticeData: PracticeData = {
@@ -105,6 +120,16 @@ const defaultPracticeData: PracticeData = {
       clinics: "Medication reviews, high-risk drug monitoring, prescription queries",
     },
   ],
+  rolePolicies: {
+    gps: "GPs see: any acute presentation, safeguarding concerns, complex chronic disease, mental health same-day, under-5 illness. Book directly with a GP for: chest pain (after 999), suspected cancer 2WW, new severe headaches, mental health crisis follow-up. Escalate to duty first when unsure.",
+    nps: "Nurse Practitioners: minor illness in over-5s, UTI, ear/throat, wound review, simple rashes. NOT: under-5s, chest pain, severe mental health, complex medication reviews. If unsure — book duty triage.",
+    nurses: "Practice Nurses: asthma reviews (Priya), diabetes reviews (Priya), cervical screening (Priya), childhood imms, wound dressings, BP monitoring, travel health. Not for acute illness triage.",
+    hcas: "HCAs: bloods, BP checks, ECGs, B12 injections, NHS Health Checks, height/weight. Not for acute or new symptoms.",
+    pharmacists: "Practice Pharmacist: medication reviews, high-risk drug monitoring, polypharmacy, minor medication queries, interactions. Escalate to GP for: dose changes on high-risk meds, controlled drug requests, new symptoms.",
+    neverPromise: "A specific GP or time · Same-day slot before checking · That results are 'fine' before a clinician has reviewed · Anything clinical (diagnosis, dose, whether medication is safe).",
+    phrasesUse: "'I can hear this is frustrating, let me see what I can do' · 'I'll take some details and get the duty team to call you back' · 'I can't give clinical advice but I can get someone who can'.",
+    phrasesAvoid: "'It's just a…' · 'Everyone's waiting' · 'The doctor is too busy' · 'I'm sure it's nothing' · 'You should have called earlier'.",
+  },
 };
 
 // ------------- App state -------------
@@ -113,6 +138,7 @@ interface AppState {
   answers: Record<string, string>;
   currentDraftId: string | null;
   lastResult: TrainingResult | null;
+  results: TrainingResult[];
   practiceData: PracticeData;
 
   setAnswer: (key: string, value: string) => void;
@@ -123,10 +149,13 @@ interface AppState {
   approveScenario: (moduleId: string, scenarioId: string) => void;
   regenerateScenario: (moduleId: string, scenarioId: string) => void;
   publishModule: (moduleId: string) => void;
+  clearReviewFlag: (moduleId: string) => void;
   setLastResult: (r: TrainingResult) => void;
+  addResult: (r: TrainingResult) => void;
 
   // Practice data
-  setPracticeField: (field: keyof Omit<PracticeData, "staff">, value: string) => void;
+  setPracticeField: (field: keyof Omit<PracticeData, "staff" | "rolePolicies">, value: string) => void;
+  setRolePolicy: (field: keyof RolePolicies, value: string) => void;
   addStaff: (s: Omit<StaffMember, "id">) => void;
   updateStaff: (id: string, patch: Partial<StaffMember>) => void;
   removeStaff: (id: string) => void;
@@ -231,6 +260,41 @@ const FIRST_WEEK_QUESTIONS: SetupQuestion[] = [
   { key: "neverDo", q: "Common week-1 mistakes to prevent?", placeholder: "e.g. Booking chest pain into routine, sharing results without ID check" },
 ];
 
+const VACCINE_QUESTIONS: SetupQuestion[] = [
+  { key: "types", q: "Which vaccines does your practice commonly book?", placeholder: "e.g. Flu, COVID, childhood imms, pneumococcal, shingles, travel" },
+  { key: "whoAdministers", q: "Which clinicians administer which vaccines?", placeholder: "e.g. Priya (childhood + flu), Marcus HCA (flu, pneumo, B12), Sarah pharmacist (COVID)" },
+  { key: "clinicDays", q: "What are your vaccine clinic days / slots?", placeholder: "e.g. Flu Sat clinics Oct–Nov; childhood imms Tue mornings" },
+  { key: "eligibility", q: "How does reception check eligibility for each?", placeholder: "e.g. Age band on EMIS; at-risk register; pregnancy status" },
+  { key: "unclearEligibility", q: "What should staff do if eligibility is unclear?", placeholder: "e.g. Don't book; task duty GP or immunisation lead to confirm" },
+  { key: "escalate", q: "Which vaccine requests must be escalated (not booked)?", placeholder: "e.g. Post-exposure, immunocompromised, travel to high-risk destinations" },
+  { key: "canSay", q: "What can reception say (and what to avoid)?", placeholder: "e.g. Say: 'The nurse will discuss suitability.' Avoid: 'It's safe for you.'" },
+  { key: "commonMistakes", q: "Common vaccine booking mistakes new starters make?", placeholder: "e.g. Booking pregnant patients into wrong flu clinic; missing spacing rules" },
+  { key: "advice", q: "Which staff members should be asked when unsure?", placeholder: "e.g. Priya (imms lead), duty GP" },
+  { key: "localRules", q: "Local vaccine booking rules to include?", placeholder: "e.g. Spacing between COVID + flu, consent form process" },
+];
+
+const FIT_NOTE_QUESTIONS: SetupQuestion[] = [
+  { key: "process", q: "What is your local fit note process?", placeholder: "e.g. Request via NHS App or admin form; GP reviews within 3 working days" },
+  { key: "who", q: "Who issues fit notes at your practice?", placeholder: "e.g. Any GP; ANPs can issue for conditions they've seen" },
+  { key: "under7", q: "How are self-cert (under 7 days) enquiries handled?", placeholder: "e.g. Explain SC2, no GP note needed, signpost to employer" },
+  { key: "backdating", q: "Rules on backdating and extensions?", placeholder: "e.g. GP discretion, requires prior contact record" },
+  { key: "collection", q: "How does the patient receive it?", placeholder: "e.g. Digital via NHS App; paper collection needs ID" },
+  { key: "neverPromise", q: "What must reception never promise?", placeholder: "e.g. That a fit note will be issued, or for a specific period" },
+  { key: "urgent", q: "How are urgent (benefits, tribunal, housing) fit note requests handled?", placeholder: "e.g. Flag to duty admin lead, evidence in record" },
+  { key: "escalate", q: "Escalation route?", placeholder: "e.g. Practice manager if patient dissatisfied with GP decision" },
+];
+
+const HOME_VISIT_QUESTIONS: SetupQuestion[] = [
+  { key: "cutoff", q: "What is the daily cut-off time for home visit requests?", placeholder: "e.g. 10:30 for routine; urgent taken any time" },
+  { key: "who", q: "Who triages home visit requests?", placeholder: "e.g. Duty GP; visits allocated after morning surgery" },
+  { key: "info", q: "What information must reception collect from the caller?", placeholder: "e.g. Name, DOB, address, phone, reason, access instructions, other people at address" },
+  { key: "redFlags", q: "Red-flag symptoms that mean 999 not visit?", placeholder: "e.g. Chest pain, stroke signs, unconscious, severe bleeding" },
+  { key: "houseBound", q: "How do staff verify housebound status?", placeholder: "e.g. Housebound register in EMIS; ask about mobility" },
+  { key: "neverPromise", q: "What must reception never promise?", placeholder: "e.g. A visit time, which GP, that a visit will be agreed" },
+  { key: "escalate", q: "Escalation if duty GP declines but family are unhappy?", placeholder: "e.g. Senior partner or practice manager" },
+  { key: "afterHours", q: "What happens if request comes after cut-off?", placeholder: "e.g. Duty GP decides; if not, signpost 111" },
+];
+
 const GENERIC_QUESTIONS: SetupQuestion[] = [
   { key: "context", q: "Describe the exact situation this module should cover.", placeholder: "e.g. Handling test results enquiries by phone" },
   { key: "process", q: "Step-by-step: your practice's local process.", placeholder: "In your own words" },
@@ -271,6 +335,24 @@ export const TOPICS: {
     title: "Test results & confidentiality",
     desc: "Sharing results safely and following local protocol.",
     questions: RESULTS_QUESTIONS,
+  },
+  {
+    key: "vaccines",
+    title: "Vaccine bookings",
+    desc: "Flu, COVID, childhood imms, travel — who books what.",
+    questions: VACCINE_QUESTIONS,
+  },
+  {
+    key: "fit-notes",
+    title: "Fit notes",
+    desc: "Requests, self-cert, backdating, escalations.",
+    questions: FIT_NOTE_QUESTIONS,
+  },
+  {
+    key: "home-visits",
+    title: "Home visit requests",
+    desc: "Cut-offs, information to collect, triage handover.",
+    questions: HOME_VISIT_QUESTIONS,
   },
   {
     key: "difficult",
@@ -824,6 +906,7 @@ export const useApp = create<AppState>()(
       answers: {},
       currentDraftId: null,
       lastResult: null,
+      results: [],
       practiceData: defaultPracticeData,
 
       setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
@@ -912,8 +995,26 @@ export const useApp = create<AppState>()(
 
       setLastResult: (r) => set({ lastResult: r }),
 
+      addResult: (r) =>
+        set((state) => ({ results: [r, ...state.results].slice(0, 50), lastResult: r })),
+
+      clearReviewFlag: (moduleId) =>
+        set((state) => ({
+          modules: state.modules.map((m) =>
+            m.id === moduleId ? { ...m, needsReview: false, reviewReason: undefined } : m,
+          ),
+        })),
+
       setPracticeField: (field, value) =>
         set((state) => ({ practiceData: { ...state.practiceData, [field]: value } })),
+
+      setRolePolicy: (field, value) =>
+        set((state) => ({
+          practiceData: {
+            ...state.practiceData,
+            rolePolicies: { ...state.practiceData.rolePolicies, [field]: value },
+          },
+        })),
 
       addStaff: (s) =>
         set((state) => ({
@@ -954,18 +1055,47 @@ export const useApp = create<AppState>()(
             return { practiceData: { ...state.practiceData, staff } };
           }
           const modules = state.modules.map((m) => {
+            let moduleTouched = false;
             const scenarios = m.scenarios.map((sc) => {
               const next = replaceInScenario(sc, trimmedOld, trimmedNew);
-              if (JSON.stringify(next) !== JSON.stringify(sc)) touched += 1;
+              if (JSON.stringify(next) !== JSON.stringify(sc)) {
+                touched += 1;
+                moduleTouched = true;
+              }
               return next;
             });
-            return { ...m, scenarios };
+            return moduleTouched
+              ? {
+                  ...m,
+                  scenarios,
+                  needsReview: true,
+                  reviewReason: `Staff changed: "${trimmedOld}" → "${trimmedNew}". Re-check scenarios still reflect current practice.`,
+                }
+              : { ...m, scenarios };
           });
           return { practiceData: { ...state.practiceData, staff }, modules };
         });
         return touched;
       },
     }),
-    { name: "practice-ready-store" },
+    {
+      name: "practice-ready-store",
+      version: 2,
+      migrate: (persisted: unknown) => {
+        const p = (persisted ?? {}) as Partial<AppState>;
+        return {
+          ...p,
+          results: p.results ?? [],
+          practiceData: {
+            ...defaultPracticeData,
+            ...(p.practiceData ?? {}),
+            rolePolicies: {
+              ...defaultPracticeData.rolePolicies,
+              ...((p.practiceData as PracticeData | undefined)?.rolePolicies ?? {}),
+            },
+          },
+        } as AppState;
+      },
+    },
   ),
 );
