@@ -138,6 +138,7 @@ interface AppState {
   answers: Record<string, string>;
   currentDraftId: string | null;
   lastResult: TrainingResult | null;
+  results: TrainingResult[];
   practiceData: PracticeData;
 
   setAnswer: (key: string, value: string) => void;
@@ -148,10 +149,13 @@ interface AppState {
   approveScenario: (moduleId: string, scenarioId: string) => void;
   regenerateScenario: (moduleId: string, scenarioId: string) => void;
   publishModule: (moduleId: string) => void;
+  clearReviewFlag: (moduleId: string) => void;
   setLastResult: (r: TrainingResult) => void;
+  addResult: (r: TrainingResult) => void;
 
   // Practice data
-  setPracticeField: (field: keyof Omit<PracticeData, "staff">, value: string) => void;
+  setPracticeField: (field: keyof Omit<PracticeData, "staff" | "rolePolicies">, value: string) => void;
+  setRolePolicy: (field: keyof RolePolicies, value: string) => void;
   addStaff: (s: Omit<StaffMember, "id">) => void;
   updateStaff: (id: string, patch: Partial<StaffMember>) => void;
   removeStaff: (id: string) => void;
