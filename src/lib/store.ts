@@ -120,6 +120,16 @@ const defaultPracticeData: PracticeData = {
       clinics: "Medication reviews, high-risk drug monitoring, prescription queries",
     },
   ],
+  rolePolicies: {
+    gps: "GPs see: any acute presentation, safeguarding concerns, complex chronic disease, mental health same-day, under-5 illness. Book directly with a GP for: chest pain (after 999), suspected cancer 2WW, new severe headaches, mental health crisis follow-up. Escalate to duty first when unsure.",
+    nps: "Nurse Practitioners: minor illness in over-5s, UTI, ear/throat, wound review, simple rashes. NOT: under-5s, chest pain, severe mental health, complex medication reviews. If unsure — book duty triage.",
+    nurses: "Practice Nurses: asthma reviews (Priya), diabetes reviews (Priya), cervical screening (Priya), childhood imms, wound dressings, BP monitoring, travel health. Not for acute illness triage.",
+    hcas: "HCAs: bloods, BP checks, ECGs, B12 injections, NHS Health Checks, height/weight. Not for acute or new symptoms.",
+    pharmacists: "Practice Pharmacist: medication reviews, high-risk drug monitoring, polypharmacy, minor medication queries, interactions. Escalate to GP for: dose changes on high-risk meds, controlled drug requests, new symptoms.",
+    neverPromise: "A specific GP or time · Same-day slot before checking · That results are 'fine' before a clinician has reviewed · Anything clinical (diagnosis, dose, whether medication is safe).",
+    phrasesUse: "'I can hear this is frustrating, let me see what I can do' · 'I'll take some details and get the duty team to call you back' · 'I can't give clinical advice but I can get someone who can'.",
+    phrasesAvoid: "'It's just a…' · 'Everyone's waiting' · 'The doctor is too busy' · 'I'm sure it's nothing' · 'You should have called earlier'.",
+  },
 };
 
 // ------------- App state -------------
