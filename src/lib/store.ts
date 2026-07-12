@@ -59,6 +59,17 @@ export interface StaffMember {
   notes?: string;
 }
 
+export interface RolePolicies {
+  gps: string;
+  nps: string;
+  nurses: string;
+  hcas: string;
+  pharmacists: string;
+  neverPromise: string;
+  phrasesUse: string;
+  phrasesAvoid: string;
+}
+
 export interface PracticeData {
   practiceName: string;
   hours: string;
@@ -67,6 +78,7 @@ export interface PracticeData {
   urgentNumbers: string;
   extras: string;
   staff: StaffMember[];
+  rolePolicies: RolePolicies;
 }
 
 const defaultPracticeData: PracticeData = {
