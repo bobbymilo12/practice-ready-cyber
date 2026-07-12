@@ -36,6 +36,8 @@ export interface Module {
   published: boolean;
   scenarios: Scenario[];
   createdAt: number;
+  needsReview?: boolean;
+  reviewReason?: string;
 }
 
 export interface TrainingResult {
@@ -45,6 +47,7 @@ export interface TrainingResult {
   total: number;
   wrongTitles: string[];
   completedAt: number;
+  confidence?: number; // 1-5 self-report
 }
 
 // ------------- Practice data hub -------------
