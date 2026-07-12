@@ -337,6 +337,24 @@ export const TOPICS: {
     questions: RESULTS_QUESTIONS,
   },
   {
+    key: "vaccines",
+    title: "Vaccine bookings",
+    desc: "Flu, COVID, childhood imms, travel — who books what.",
+    questions: VACCINE_QUESTIONS,
+  },
+  {
+    key: "fit-notes",
+    title: "Fit notes",
+    desc: "Requests, self-cert, backdating, escalations.",
+    questions: FIT_NOTE_QUESTIONS,
+  },
+  {
+    key: "home-visits",
+    title: "Home visit requests",
+    desc: "Cut-offs, information to collect, triage handover.",
+    questions: HOME_VISIT_QUESTIONS,
+  },
+  {
     key: "difficult",
     title: "Difficult calls & de-escalation",
     desc: "Managing angry, distressed or complex callers.",
