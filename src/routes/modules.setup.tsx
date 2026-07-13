@@ -274,12 +274,3 @@ function Setup() {
     </Shell>
   );
 }
-
-
-        <p className="mt-4 text-xs text-muted-foreground">
-          AI-assisted draft generation. Manager review required before staff use.
-        </p>
-      </div>
-    </Shell>
-  );
-}
