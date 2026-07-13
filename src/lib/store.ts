@@ -65,11 +65,16 @@ export interface StaffMember {
 }
 
 export interface RolePolicies {
-  gps: string;
-  nps: string;
-  nurses: string;
-  hcas: string;
-  pharmacists: string;
+  gpsSameDay: string;
+  gpsRoutine: string;
+  npsSameDay: string;
+  npsRoutine: string;
+  nursesSameDay: string;
+  nursesRoutine: string;
+  hcasSameDay: string;
+  hcasRoutine: string;
+  pharmacistsSameDay: string;
+  pharmacistsRoutine: string;
   neverPromise: string;
   phrasesUse: string;
   phrasesAvoid: string;
@@ -82,6 +87,18 @@ export interface PracticeData {
   nominatedPharmacy: string;
   urgentNumbers: string;
   extras: string;
+  // Repeat prescriptions — local process
+  repeatOrderMethods: string;
+  repeatTurnaround: string;
+  repeatControlled: string;
+  repeatHighRisk: string;
+  repeatEmergency: string;
+  // Local guidelines & protocols
+  localSafeguarding: string;
+  localComplaints: string;
+  localDNA: string;
+  localInterpreter: string;
+  localConfidentiality: string;
   staff: StaffMember[];
   rolePolicies: RolePolicies;
 }
@@ -93,6 +110,26 @@ const defaultPracticeData: PracticeData = {
   nominatedPharmacy: "Willow Lane Pharmacy (EPS nominated)",
   urgentNumbers: "999 for emergencies · 111 out of hours · Local crisis team 0300 000 0000",
   extras: "PCN evening hub on Tuesdays. Safeguarding lead: Dr Patel.",
+  repeatOrderMethods:
+    "NHS App and paper slip in the reception box. Telephone repeat requests are NOT accepted (except emergency supply pathway).",
+  repeatTurnaround:
+    "Standard: 48 working hours. Add 24h after weekends / bank holidays. Urgent items flagged same day to duty pharmacist Sarah Khan.",
+  repeatControlled:
+    "Controlled drugs never taken by phone. 28-day rule. Must go through the named GP. Advance requests no more than 7 days early. Check ID at collection.",
+  repeatHighRisk:
+    "High-risk drugs (warfarin, methotrexate, lithium, DMARDs, opioids, ADHD meds) need clinician sign-off and current monitoring on file before reissue. Do NOT issue on the standard route.",
+  repeatEmergency:
+    "Emergency supply: confirm medication + last dose + any red-flag symptoms, check the patient meets emergency criteria, pass to duty pharmacist Sarah Khan (or duty GP if unavailable), signpost to nominated pharmacy once authorised, document fully.",
+  localSafeguarding:
+    "Safeguarding lead: Dr Patel. Concerns flagged same day via EMIS safeguarding template + verbal handover to Dr Patel or duty GP. Under-16 third-party requests always escalated. Any coercion cues on a call — code and escalate immediately.",
+  localComplaints:
+    "Verbal complaints: acknowledge, offer to escalate to practice manager, log on Datix. Written complaints: acknowledge in 3 working days, full response in 20. Never argue or promise a specific outcome.",
+  localDNA:
+    "Offer rebook, code DNA in EMIS, flag 3+ DNAs in 6 months to practice manager. Vulnerable / at-risk patients — welfare check task to duty GP same day.",
+  localInterpreter:
+    "Language Line — dial 0800 XXX XXXX, PIN on intranet. Book at time of appointment where possible. BSL via SignVideo. Never use family for clinical interpretation.",
+  localConfidentiality:
+    "Screen locking whenever leaving desk. No patient information discussed in the reception area. Third-party info only with written consent on file. Under-13 results to parent; 13–16 Gillick; 16+ patient only.",
   staff: [
     {
       id: "s1",
@@ -126,14 +163,32 @@ const defaultPracticeData: PracticeData = {
     },
   ],
   rolePolicies: {
-    gps: "GPs see: any acute presentation, safeguarding concerns, complex chronic disease, mental health same-day, under-5 illness. Book directly with a GP for: chest pain (after 999), suspected cancer 2WW, new severe headaches, mental health crisis follow-up. Escalate to duty first when unsure.",
-    nps: "Nurse Practitioners: minor illness in over-5s, UTI, ear/throat, wound review, simple rashes. NOT: under-5s, chest pain, severe mental health, complex medication reviews. If unsure — book duty triage.",
-    nurses: "Practice Nurses: asthma reviews (Priya), diabetes reviews (Priya), cervical screening (Priya), childhood imms, wound dressings, BP monitoring, travel health. Not for acute illness triage.",
-    hcas: "HCAs: bloods, BP checks, ECGs, B12 injections, NHS Health Checks, height/weight. Not for acute or new symptoms.",
-    pharmacists: "Practice Pharmacist: medication reviews, high-risk drug monitoring, polypharmacy, minor medication queries, interactions. Escalate to GP for: dose changes on high-risk meds, controlled drug requests, new symptoms.",
-    neverPromise: "A specific GP or time · Same-day slot before checking · That results are 'fine' before a clinician has reviewed · Anything clinical (diagnosis, dose, whether medication is safe).",
-    phrasesUse: "'I can hear this is frustrating, let me see what I can do' · 'I'll take some details and get the duty team to call you back' · 'I can't give clinical advice but I can get someone who can'.",
-    phrasesAvoid: "'It's just a…' · 'Everyone's waiting' · 'The doctor is too busy' · 'I'm sure it's nothing' · 'You should have called earlier'.",
+    gpsSameDay:
+      "Same-day with a GP: safeguarding concerns, mental health crisis, chest pain (after 999), suspected sepsis, new severe headache, suicidal ideation, cancer 2WW needing GP call, under-5 illness. When unsure — duty triage first.",
+    gpsRoutine:
+      "Routine with a GP: complex chronic disease reviews, GP-only medication reviews, ongoing mental health follow-up, results discussions clinician-only, HRT initiation, referral discussions, minor surgery review.",
+    npsSameDay:
+      "Same-day with ANP (Anna Bright): minor illness in over-5s, UTI (women 16–65 non-pregnant), ear/throat infections, wound review, simple rashes. NOT: under-5s, chest pain, mental health crisis, pregnancy issues.",
+    npsRoutine:
+      "Routine with ANP: minor illness follow-up, recurrent UTI review, wound review follow-up, simple skin rash review, medication review for stable minor conditions.",
+    nursesSameDay:
+      "Same-day with practice nurse: acute wound dressing, post-A&E asthma review (Priya — 20-min slot within 2 working days), suture / staple removal, urgent travel vaccine (if slot).",
+    nursesRoutine:
+      "Routine with practice nurse (Priya): asthma review, diabetic annual review (HCA bloods first, then 30-min nurse slot 2 weeks later), cervical screening, childhood imms Tue AM clinic, travel health, contraceptive follow-up.",
+    hcasSameDay:
+      "Same-day with HCA (Marcus): BP check, urgent bloods where a clinician has requested them, ECG for cardiology referral, simple wound dressing.",
+    hcasRoutine:
+      "Routine with HCA: pre-review bloods, NHS Health Check, B12 injection, BP monitoring, height / weight, phlebotomy. NOT for any new symptoms.",
+    pharmacistsSameDay:
+      "Same-day with pharmacist (Sarah Khan): emergency supply triage, urgent medication query, hospital discharge medication reconciliation.",
+    pharmacistsRoutine:
+      "Routine with pharmacist: full medication review, high-risk drug monitoring, polypharmacy review, minor medication query, interaction check.",
+    neverPromise:
+      "A specific GP or time · Same-day slot before checking · That results are 'fine' before a clinician has reviewed · Anything clinical (diagnosis, dose, whether medication is safe).",
+    phrasesUse:
+      "'I can hear this is frustrating, let me see what I can do' · 'I'll take some details and get the duty team to call you back' · 'I can't give clinical advice but I can get someone who can'.",
+    phrasesAvoid:
+      "'It's just a…' · 'Everyone's waiting' · 'The doctor is too busy' · 'I'm sure it's nothing' · 'You should have called earlier'.",
   },
 };
 
