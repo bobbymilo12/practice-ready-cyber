@@ -997,12 +997,22 @@ export const useApp = create<AppState>()(
       setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
       resetAnswers: () => set({ answers: {} }),
 
-      createDraftModule: (type, title, topicKey, seed) => {
+      createDraftModule: (type, title, topicKey, seed, difficulty, length) => {
         const id = uid();
         set((s) => ({
           modules: [
             ...s.modules,
-            { id, type, title, topicKey, published: false, scenarios: seed, createdAt: Date.now() },
+            {
+              id,
+              type,
+              title,
+              topicKey,
+              published: false,
+              scenarios: seed,
+              createdAt: Date.now(),
+              difficulty,
+              length,
+            },
           ],
           currentDraftId: id,
         }));
