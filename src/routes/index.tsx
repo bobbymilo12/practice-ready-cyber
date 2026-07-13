@@ -197,7 +197,7 @@ function Landing() {
             width={1280}
             height={860}
             loading="lazy"
-            className="h-64 w-full object-cover md:h-72"
+            className="h-64 w-full object-cover object-top md:h-72"
           />
           <figcaption className="border-t border-border bg-background p-4 text-sm">
             <span className="font-semibold">Scenario-based practice.</span>{" "}
@@ -209,11 +209,11 @@ function Landing() {
         <figure className="overflow-hidden rounded-2xl border border-border">
           <img
             src={IMG_DESK}
-            alt="GP reception desk with computer and admin workspace"
+            alt="Reception admin at desk with headset and computer"
             width={1280}
             height={860}
             loading="lazy"
-            className="h-64 w-full object-cover md:h-72"
+            className="h-64 w-full object-cover object-center md:h-72"
           />
           <figcaption className="border-t border-border bg-background p-4 text-sm">
             <span className="font-semibold">Local, not generic.</span>{" "}
