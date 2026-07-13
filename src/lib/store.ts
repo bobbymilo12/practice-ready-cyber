@@ -28,6 +28,9 @@ export interface OrderScenario {
 
 export type Scenario = MCQScenario | OrderScenario;
 
+export type Difficulty = "easy" | "intermediate" | "advanced";
+export type ModuleLength = "short" | "medium" | "long";
+
 export interface Module {
   id: string;
   type: string;
@@ -36,6 +39,8 @@ export interface Module {
   published: boolean;
   scenarios: Scenario[];
   createdAt: number;
+  difficulty?: Difficulty;
+  length?: ModuleLength;
   needsReview?: boolean;
   reviewReason?: string;
 }
