@@ -342,30 +342,20 @@ function DataHub() {
                 <p className="text-xs text-muted-foreground">{g.hint}</p>
               </div>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-primary">
-                    On-the-day bookings
-                  </label>
-                  <textarea
-                    value={practiceData.rolePolicies[g.sameDayKey]}
-                    onChange={(e) => setRolePolicy(g.sameDayKey, e.target.value)}
-                    rows={5}
-                    placeholder={g.sameDayPlaceholder}
-                    className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-accent">
-                    Routine appointments
-                  </label>
-                  <textarea
-                    value={practiceData.rolePolicies[g.routineKey]}
-                    onChange={(e) => setRolePolicy(g.routineKey, e.target.value)}
-                    rows={5}
-                    placeholder={g.routinePlaceholder}
-                    className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
-                  />
-                </div>
+                <BulletField
+                  label="On-the-day bookings"
+                  tone="primary"
+                  value={practiceData.rolePolicies[g.sameDayKey]}
+                  onChange={(v) => setRolePolicy(g.sameDayKey, v)}
+                  placeholder={g.sameDayPlaceholder}
+                />
+                <BulletField
+                  label="Routine appointments"
+                  tone="accent"
+                  value={practiceData.rolePolicies[g.routineKey]}
+                  onChange={(v) => setRolePolicy(g.routineKey, v)}
+                  placeholder={g.routinePlaceholder}
+                />
               </div>
             </Card>
           ))}
@@ -492,3 +482,85 @@ function DataHub() {
     </Shell>
   );
 }
+
+function BulletField({
+  label,
+  tone,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  tone: "primary" | "accent";
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const items = value ? value.split("\n") : [""];
+  const setItems = (next: string[]) => onChange(next.join("\n"));
+  const update = (i: number, v: string) => {
+    const next = [...items];
+    next[i] = v;
+    setItems(next);
+  };
+  const remove = (i: number) => {
+    const next = items.filter((_, idx) => idx !== i);
+    setItems(next.length ? next : [""]);
+  };
+  const add = () => setItems([...items, ""]);
+  const examples = placeholder
+    .replace(/^e\.g\.\s*/i, "")
+    .split(/[.;]\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  return (
+    <div>
+      <label
+        className={`text-xs font-semibold uppercase tracking-wider ${
+          tone === "primary" ? "text-primary" : "text-accent"
+        }`}
+      >
+        {label}
+      </label>
+      <div className="mt-1 space-y-1.5">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <span
+              className={`mt-2.5 h-1.5 w-1.5 flex-none rounded-full ${
+                tone === "primary" ? "bg-primary" : "bg-accent"
+              }`}
+            />
+            <input
+              value={item}
+              onChange={(e) => update(i, e.target.value)}
+              placeholder={items.length === 1 && !item ? examples[0] ?? "" : "Add another item"}
+              className="flex-1 rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm outline-none ring-primary/30 focus:ring-2"
+            />
+            {items.length > 1 && (
+              <button
+                onClick={() => remove(i)}
+                aria-label="Remove item"
+                className="mt-0.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={add}
+        className="mt-2 text-xs font-medium text-primary hover:underline"
+      >
+        + Add bullet
+      </button>
+      {examples.length > 1 && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Examples: {examples.slice(0, 3).join(" · ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
