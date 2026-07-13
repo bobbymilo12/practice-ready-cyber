@@ -70,6 +70,24 @@ function Review() {
           />
         ))}
       </div>
+
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
+        <div className="text-sm text-muted-foreground">
+          {allApproved
+            ? "All scenarios approved — ready to publish to staff."
+            : "Approve every scenario above before publishing."}
+        </div>
+        <button
+          onClick={() => {
+            publishModule(module.id);
+            nav({ to: "/dashboard" });
+          }}
+          disabled={!allApproved}
+          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+        >
+          Publish module
+        </button>
+      </div>
     </Shell>
   );
 }
