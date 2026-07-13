@@ -342,30 +342,20 @@ function DataHub() {
                 <p className="text-xs text-muted-foreground">{g.hint}</p>
               </div>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-primary">
-                    On-the-day bookings
-                  </label>
-                  <textarea
-                    value={practiceData.rolePolicies[g.sameDayKey]}
-                    onChange={(e) => setRolePolicy(g.sameDayKey, e.target.value)}
-                    rows={5}
-                    placeholder={g.sameDayPlaceholder}
-                    className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-accent">
-                    Routine appointments
-                  </label>
-                  <textarea
-                    value={practiceData.rolePolicies[g.routineKey]}
-                    onChange={(e) => setRolePolicy(g.routineKey, e.target.value)}
-                    rows={5}
-                    placeholder={g.routinePlaceholder}
-                    className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
-                  />
-                </div>
+                <BulletField
+                  label="On-the-day bookings"
+                  tone="primary"
+                  value={practiceData.rolePolicies[g.sameDayKey]}
+                  onChange={(v) => setRolePolicy(g.sameDayKey, v)}
+                  placeholder={g.sameDayPlaceholder}
+                />
+                <BulletField
+                  label="Routine appointments"
+                  tone="accent"
+                  value={practiceData.rolePolicies[g.routineKey]}
+                  onChange={(v) => setRolePolicy(g.routineKey, v)}
+                  placeholder={g.routinePlaceholder}
+                />
               </div>
             </Card>
           ))}
