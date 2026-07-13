@@ -231,40 +231,30 @@ export interface SetupQuestion {
   placeholder: string;
 }
 
+// Setup questions focus ONLY on situational specifics not already captured in the
+// Data Hub / Practice Setup. Things like practice hours, clinician lists, who
+// covers what, repeat prescription turnaround and controlled-drug rules are
+// pulled from practiceData and do not appear here.
 const APPOINTMENT_QUESTIONS: SetupQuestion[] = [
-  { key: "hours", q: "What are the practice's core appointment hours and any extended access clinics?", placeholder: "e.g. 08:00–18:30 Mon–Fri; extended access Wed 18:30–20:00" },
-  { key: "clinicianList", q: "List every clinician who takes appointments and what they see.", placeholder: "e.g. Dr Owens (GP – all); Anna Bright (ANP – minor illness, UTIs); Priya Shah (Practice Nurse – asthma & diabetes)" },
-  { key: "npEligibility", q: "Which Nurse Practitioners / ANPs do you have and what appointment types are they eligible to take?", placeholder: "e.g. Anna Bright – minor illness in over-2s, UTI, ear infection; NOT chest pain, NOT under-2s" },
-  { key: "asthmaTrained", q: "Which nurses run asthma clinics and how long is a post-A&E asthma review slot?", placeholder: "e.g. Priya Shah – 20-min slot, within 2 working days of discharge" },
-  { key: "diabetesTrained", q: "Which nurses do diabetic checks and how is an annual review structured?", placeholder: "e.g. Priya Shah – HCA bloods first, nurse review 2 weeks later, 30-min slot" },
-  { key: "hcaTasks", q: "Which HCAs are available and what appointment types can they do?", placeholder: "e.g. Marcus Lee – BP checks, bloods, ECG, B12; 10-min slots" },
-  { key: "sameDayProcess", q: "Step-by-step: how does your practice handle a same-day appointment request?", placeholder: "e.g. Ask triage questions from script → check duty list → book duty or escalate" },
+  { key: "sameDayProcess", q: "Step-by-step: how does your practice handle a same-day appointment request from first hello to booking?", placeholder: "e.g. Ask triage questions from script → check duty list → book duty or escalate" },
   { key: "urgentSymptoms", q: "Which symptoms must reception treat as same-day urgent, and who do they route to?", placeholder: "e.g. Chest pain → 999 + duty GP; suspected stroke → 999; suicidal ideation → duty GP now" },
-  { key: "under5", q: "How are appointments for children under 5 handled and which clinicians can see them?", placeholder: "e.g. Always same-day; GP only, not ANP; check safeguarding flags" },
-  { key: "mentalHealth", q: "How are mental health appointments booked? Any dedicated practitioner?", placeholder: "e.g. Duty GP triage same day; MH practitioner clinic Thu; crisis line for emergencies" },
+  { key: "under5", q: "Anything specific about how under-5 appointments are handled beyond 'always same-day with a GP'?", placeholder: "e.g. Always safeguarding flag check; take temperature history; two-hour call-back rule" },
+  { key: "mentalHealth", q: "How are mental health appointments booked in practice — and any dedicated slots?", placeholder: "e.g. Duty GP triage same day; MH practitioner clinic Thu; crisis line for emergencies" },
   { key: "homeVisits", q: "Home visits: cut-off time, who decides, what details must reception take?", placeholder: "e.g. Requests before 10:30; duty GP triages; take name, address, phone, reason" },
   { key: "telephone", q: "When do you book telephone vs face-to-face, and are there video slots?", placeholder: "e.g. Admin/results by phone; exams and children F2F; video for follow-ups" },
-  { key: "cancelDNA", q: "How are cancellations, DNAs and repeated no-shows handled?", placeholder: "e.g. Offer rebook, code DNA in EMIS, flag 3+ DNAs to manager" },
-  { key: "neverPromise", q: "What must reception never promise to a patient booking an appointment?", placeholder: "e.g. A specific GP, a same-day slot, a call-back time" },
-  { key: "escalate", q: "Who is on the escalation ladder when reception is unsure?", placeholder: "e.g. Duty GP → senior receptionist → practice manager" },
-  { key: "localExtras", q: "Any local systems, templates or extras staff must know?", placeholder: "e.g. EMIS same-day template, PCN evening hub, interpreter service" },
+  { key: "cancelDNA", q: "How are cancellations, DNAs and repeated no-shows handled locally?", placeholder: "e.g. Offer rebook, code DNA in EMIS, flag 3+ DNAs to manager" },
+  { key: "escalate", q: "Who is on the escalation ladder when reception is unsure about an appointment?", placeholder: "e.g. Duty GP → senior receptionist → practice manager" },
+  { key: "localExtras", q: "Any local systems, templates or extras staff must know for booking?", placeholder: "e.g. EMIS same-day template, PCN evening hub, interpreter service" },
 ];
 
 const PRESCRIPTION_QUESTIONS: SetupQuestion[] = [
-  { key: "turnaround", q: "What is your standard repeat prescription turnaround?", placeholder: "e.g. 48 working hours, longer after weekends and bank holidays" },
-  { key: "orderMethods", q: "Exactly how can patients order repeats (and what is NOT accepted)?", placeholder: "e.g. NHS App, patient portal, paper slip in the box; telephone ordering NOT accepted" },
-  { key: "pharmacist", q: "Who is your practice pharmacist and what queries route to them?", placeholder: "e.g. Sarah Khan – medication reviews, interactions, high-risk drug monitoring" },
-  { key: "nominatedPharmacies", q: "Which pharmacies are you set up with by default and how are urgent items handled?", placeholder: "e.g. Willow Lane Pharmacy (EPS default); Boots High St for urgent same-day" },
-  { key: "controlled", q: "How are controlled drug requests handled? What must reception never do?", placeholder: "e.g. Never accept by phone, 28-day rule, GP review required" },
-  { key: "runOut", q: "A patient has run out of essential medication today — exact steps and who authorises?", placeholder: "e.g. Confirm med and last dose, check emergency supply criteria, pass to duty pharmacist Sarah Khan or duty GP" },
-  { key: "highRisk", q: "List medications that require extra caution or clinician sign-off before reissue.", placeholder: "e.g. Warfarin, methotrexate, lithium, opioids, DMARDs" },
+  { key: "runOut", q: "A patient has run out of essential medication today — any nuances beyond your standard emergency supply process?", placeholder: "e.g. Insulin — always duty GP not pharmacist; epilepsy — same-day GP call-back within 1h" },
   { key: "acute", q: "How are acute (non-repeat) prescription requests handled?", placeholder: "e.g. Not through repeats — book duty GP call-back or pharmacist review" },
-  { key: "reviewsOverdue", q: "How do staff handle overdue medication reviews?", placeholder: "e.g. Alert on system, book with Sarah Khan (pharmacist) before reissue" },
-  { key: "safeguarding", q: "What safeguarding flags in prescription requests must reception escalate?", placeholder: "e.g. Repeated early requests, opioid escalation, mental health med queries from third parties" },
+  { key: "reviewsOverdue", q: "How do staff handle overdue medication reviews when the patient calls chasing?", placeholder: "e.g. Alert on system, book with Sarah Khan (pharmacist) before reissue" },
+  { key: "safeguarding", q: "Safeguarding flags in prescription requests that must be escalated?", placeholder: "e.g. Repeated early requests, opioid escalation, mental health med queries from third parties" },
   { key: "queries", q: "Which medication queries can reception answer vs must route on?", placeholder: "e.g. Timings/collection = reception; interactions/side effects = pharmacist; dose change = duty GP" },
-  { key: "neverPromise", q: "What should staff never promise about prescriptions?", placeholder: "e.g. Same-day issue, that a specific GP will sign, exact pharmacy timings" },
-  { key: "escalate", q: "Escalation chain for prescription problems?", placeholder: "e.g. Pharmacist Sarah Khan → duty GP → prescriptions manager" },
-  { key: "localExtras", q: "Local rules, shared care protocols, or systems staff must know?", placeholder: "e.g. Shared care with mental health team, high-risk register in EMIS" },
+  { key: "escalate", q: "Escalation chain when a prescription issue can't be resolved by reception?", placeholder: "e.g. Pharmacist Sarah Khan → duty GP → prescriptions manager" },
+  { key: "localExtras", q: "Local rules, shared care protocols or systems staff must know for prescriptions?", placeholder: "e.g. Shared care with mental health team, high-risk register in EMIS" },
 ];
 
 const URGENT_QUESTIONS: SetupQuestion[] = [
