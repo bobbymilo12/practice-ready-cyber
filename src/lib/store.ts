@@ -203,7 +203,7 @@ interface AppState {
 
   setAnswer: (key: string, value: string) => void;
   resetAnswers: () => void;
-  createDraftModule: (type: string, title: string, topicKey: string, seed: Scenario[]) => string;
+  createDraftModule: (type: string, title: string, topicKey: string, seed: Scenario[], difficulty?: Difficulty, length?: ModuleLength) => string;
   updateScenario: (moduleId: string, s: Scenario) => void;
   deleteScenario: (moduleId: string, scenarioId: string) => void;
   approveScenario: (moduleId: string, scenarioId: string) => void;
