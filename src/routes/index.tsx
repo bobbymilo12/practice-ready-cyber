@@ -1,15 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card } from "@/components/Shell";
 
-// Real Unsplash stock photography — healthcare admin / reception / teamwork.
+// Real Unsplash stock photography — office / reception admin staff (no lab coats).
 const HERO_RECEPTIONIST =
-  "https://images.unsplash.com/photo-1666214280391-8ff5bd3c0bf0?auto=format&fit=crop&w=1400&q=80";
+  "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&w=1400&q=80";
 const IMG_TEAM =
-  "https://images.unsplash.com/photo-1631815589968-fdb09a223b1e?auto=format&fit=crop&w=1400&q=80";
+  "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1400&q=80";
 const IMG_TRAINING =
-  "https://images.unsplash.com/photo-1573497491765-dccce02b29df?auto=format&fit=crop&w=1400&q=80";
+  "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1400&q=80";
 const IMG_DESK =
-  "https://images.unsplash.com/photo-1584982751601-97dcc096659c?auto=format&fit=crop&w=1400&q=80";
+  "https://images.unsplash.com/photo-1600880292089-90a7e086ee0c?auto=format&fit=crop&w=1400&q=80";
 
 export const Route = createFileRoute("/")({
   head: () => ({
