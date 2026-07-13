@@ -2,7 +2,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { Link } from "@tanstack/react-router";
-import { useApp, TOPICS, draftsForTopic, type ScenarioFormat } from "@/lib/store";
+import {
+  useApp,
+  TOPICS,
+  draftsForTopic,
+  type ScenarioFormat,
+  type Difficulty,
+  type ModuleLength,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/modules/setup")({
   head: () => ({ meta: [{ title: "AI setup assistant — PracticeReady" }] }),
@@ -12,6 +19,8 @@ export const Route = createFileRoute("/modules/setup")({
   }),
   component: Setup,
 });
+
+type Phase = "questions" | "options";
 
 function Setup() {
   const { topic, title } = Route.useSearch();
@@ -23,19 +32,28 @@ function Setup() {
 
   const [step, setStep] = useState(0);
   const [format, setFormat] = useState<ScenarioFormat>("mixed");
-  const [phase, setPhase] = useState<"questions" | "format">("questions");
+  const [difficulty, setDifficulty] = useState<Difficulty>("easy");
+  const [length, setLength] = useState<ModuleLength>("short");
+  const [phase, setPhase] = useState<Phase>("questions");
   const [generating, setGenerating] = useState(false);
 
   const current = questions[step];
   const total = questions.length;
-  const progressCount = phase === "format" ? total : step + 1;
+  const progressCount = phase === "options" ? total : step + 1;
   const progress = (progressCount / (total + 1)) * 100;
 
   const handleGenerate = () => {
     setGenerating(true);
     setTimeout(() => {
-      const seed = draftsForTopic(topic, format, title);
-      const id = createDraftModule(title, `${title} — draft`, topic, seed);
+      const seed = draftsForTopic(topic, format, title, difficulty, length);
+      const id = createDraftModule(
+        title,
+        `${title} — draft`,
+        topic,
+        seed,
+        difficulty,
+        length,
+      );
       resetAnswers();
       nav({ to: "/modules/review", search: { id } });
     }, 1200);
@@ -49,8 +67,8 @@ function Setup() {
           Tell us how your practice handles this
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Your answers shape the AI-assisted draft. All generated content is marked as draft and
-          requires manager review before staff can use it.
+          We only ask what isn't already in your Data Hub. All generated content is
+          marked as draft and requires manager review before staff can use it.
         </p>
 
         <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -64,7 +82,7 @@ function Setup() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                From your data hub · reference while answering
+                From your data hub · we won't ask about these
               </div>
               <p className="mt-1 text-sm font-medium">{practiceData.practiceName}</p>
             </div>
@@ -118,67 +136,120 @@ function Setup() {
                 </button>
               ) : (
                 <button
-                  onClick={() => setPhase("format")}
+                  onClick={() => setPhase("options")}
                   className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
                 >
-                  Choose scenario format →
+                  Choose difficulty &amp; length →
                 </button>
               )}
             </div>
           </Card>
         )}
 
-        {phase === "format" && (
-          <Card className="mt-6">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Final step
-            </div>
-            <h2 className="mt-2 font-display text-xl font-semibold">
-              Which type of scenarios should we draft?
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              You can mix formats. All drafts still require your review before publishing.
-            </p>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
-              {(
-                [
-                  {
-                    key: "mcq",
-                    title: "Multiple choice (1 of 4)",
-                    desc: "Staff pick the best of four options. Great for judgement calls.",
-                  },
-                  {
-                    key: "order",
-                    title: "Put steps in order",
-                    desc: "Staff drag steps into the correct sequence. Great for procedures.",
-                  },
-                  {
-                    key: "mixed",
-                    title: "Mix of both",
-                    desc: "Recommended — variety keeps trainees engaged and tests both skills.",
-                  },
-                ] as const
-              ).map((opt) => {
-                const active = format === opt.key;
-                return (
-                  <button
-                    key={opt.key}
-                    onClick={() => setFormat(opt.key)}
-                    className={`text-left rounded-2xl border p-4 transition ${
-                      active
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/40"
-                    }`}
-                  >
-                    <div className="font-display text-sm font-semibold">{opt.title}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{opt.desc}</div>
-                  </button>
-                );
-              })}
+        {phase === "options" && (
+          <Card className="mt-6 space-y-8">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Difficulty
+              </div>
+              <h2 className="mt-1 font-display text-xl font-semibold">
+                How challenging should the scenarios be?
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Easy keeps the correct answer clearly signalled. Intermediate and
+                advanced remove positional cues and expect closer judgement — the wrong
+                answers look more plausible.
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {(
+                  [
+                    { key: "easy", title: "New employee (Easy)", desc: "Correct choice is clearly signalled. Great for week 1." },
+                    { key: "intermediate", title: "Intermediate", desc: "Options are shuffled and closer in wording — needs real thought." },
+                    { key: "advanced", title: "Advanced", desc: "Plausible distractors, subtle differences. For confident staff." },
+                  ] as const
+                ).map((opt) => {
+                  const active = difficulty === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => setDifficulty(opt.key)}
+                      className={`text-left rounded-2xl border p-4 transition ${
+                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="font-display text-sm font-semibold">{opt.title}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{opt.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-between">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Length
+              </div>
+              <h2 className="mt-1 font-display text-xl font-semibold">
+                How long should the module be?
+              </h2>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {(
+                  [
+                    { key: "short", title: "Short", desc: "4–5 questions. ~5 minutes." },
+                    { key: "medium", title: "Medium", desc: "10 questions. ~12 minutes." },
+                    { key: "long", title: "Long", desc: "15+ questions. Full walk-through." },
+                  ] as const
+                ).map((opt) => {
+                  const active = length === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => setLength(opt.key)}
+                      className={`text-left rounded-2xl border p-4 transition ${
+                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="font-display text-sm font-semibold">{opt.title}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{opt.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Scenario format
+              </div>
+              <h2 className="mt-1 font-display text-xl font-semibold">
+                Which type of scenarios should we draft?
+              </h2>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {(
+                  [
+                    { key: "mcq", title: "Multiple choice (1 of 4)", desc: "Pick the best of four options." },
+                    { key: "order", title: "Put steps in order", desc: "Drag steps into the correct sequence." },
+                    { key: "mixed", title: "Mix of both", desc: "Recommended — variety keeps trainees engaged." },
+                  ] as const
+                ).map((opt) => {
+                  const active = format === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => setFormat(opt.key)}
+                      className={`text-left rounded-2xl border p-4 transition ${
+                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="font-display text-sm font-semibold">{opt.title}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{opt.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
               <button
                 onClick={() => setPhase("questions")}
                 className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground"

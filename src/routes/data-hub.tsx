@@ -1,53 +1,72 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
-import { useApp, type StaffMember, type RolePolicies } from "@/lib/store";
+import { useApp, type StaffMember, type RolePolicies, type PracticeData } from "@/lib/store";
 
 export const Route = createFileRoute("/data-hub")({
   head: () => ({ meta: [{ title: "Practice Setup / Data Hub — PracticeReady" }] }),
   component: DataHub,
 });
 
-const ROLE_GROUPS: {
-  key: keyof RolePolicies;
+type RoleGroup = {
   title: string;
   hint: string;
-  placeholder: string;
-}[] = [
+  sameDayKey: keyof RolePolicies;
+  routineKey: keyof RolePolicies;
+  sameDayPlaceholder: string;
+  routinePlaceholder: string;
+};
+
+const ROLE_GROUPS: RoleGroup[] = [
   {
-    key: "gps",
-    title: "GPs — what reception can book",
-    hint: "Names of GPs, and appointment types reception can book directly with a GP. Do not ask AI to decide clinical scope — describe your booking rules.",
-    placeholder:
-      "e.g. Dr Owens, Dr Patel, Dr Ahmed. Book directly with a GP: safeguarding, mental health same-day (after duty triage), under-5 illness, cancer 2WW follow-up. When unsure — book duty triage.",
+    title: "GPs",
+    hint: "What reception can book with a GP — split by same-day (on-the-day) vs routine.",
+    sameDayKey: "gpsSameDay",
+    routineKey: "gpsRoutine",
+    sameDayPlaceholder:
+      "e.g. Safeguarding concerns, mental health crisis, chest pain (after 999), suspected sepsis, new severe headache, suicidal ideation, under-5 illness.",
+    routinePlaceholder:
+      "e.g. Complex chronic disease reviews, GP-only medication reviews, HRT initiation, referral discussions, results discussions clinician-only.",
   },
   {
-    key: "nps",
     title: "Nurse Practitioners / ANPs",
-    hint: "Names and what they take (minor illness, UTI, ear/throat, wound review, etc.). Note any individual restrictions.",
-    placeholder:
-      "e.g. Anna Bright — minor illness in over-5s, UTI, ear/throat, wound review. Not: under-5s, chest pain, mental health crisis. Ask duty if unsure.",
+    hint: "What ANPs can see on-the-day vs at a routine appointment. Note who is trained.",
+    sameDayKey: "npsSameDay",
+    routineKey: "npsRoutine",
+    sameDayPlaceholder:
+      "e.g. Anna Bright — minor illness in over-5s, UTI (women 16–65 non-pregnant), ear/throat, wound review. NOT under-5s or chest pain.",
+    routinePlaceholder:
+      "e.g. Minor illness follow-up, recurrent UTI review, wound review follow-up, simple rash review.",
   },
   {
-    key: "nurses",
-    title: "Senior Nurses / Practice Nurses",
-    hint: "Names and which nurse does what: diabetes, asthma, smears, imms, wound care, BP, travel, injections.",
-    placeholder:
-      "e.g. Priya Shah — asthma reviews, diabetic reviews, cervical screening. Do not book acute illness with practice nurses.",
+    title: "Practice Nurses",
+    hint: "Named nurses and which appointments they cover, same-day vs routine.",
+    sameDayKey: "nursesSameDay",
+    routineKey: "nursesRoutine",
+    sameDayPlaceholder:
+      "e.g. Priya — post-A&E asthma review (20-min slot within 2 working days), acute wound dressing, suture / staple removal.",
+    routinePlaceholder:
+      "e.g. Priya — asthma reviews, diabetic annual reviews (HCA bloods first, then 30-min nurse slot), cervical screening, childhood imms Tue AM.",
   },
   {
-    key: "hcas",
     title: "HCAs",
-    hint: "Names and tasks: bloods, BP, NHS Health Checks, ECG, injections. Note restrictions.",
-    placeholder:
-      "e.g. Marcus Lee — bloods, BP, ECG, B12, NHS Health Checks. Do not book new symptoms with HCAs.",
+    hint: "HCA tasks split by same-day and routine. Never new symptoms.",
+    sameDayKey: "hcasSameDay",
+    routineKey: "hcasRoutine",
+    sameDayPlaceholder:
+      "e.g. Marcus — BP check, clinician-requested urgent bloods, ECG for cardiology referral, simple wound dressing.",
+    routinePlaceholder:
+      "e.g. Marcus — pre-review bloods, NHS Health Check, B12 injection, BP monitoring, phlebotomy. NOT new symptoms.",
   },
   {
-    key: "pharmacists",
     title: "Practice Pharmacists",
-    hint: "Names and what queries to route to them; what to escalate to GP instead.",
-    placeholder:
-      "e.g. Sarah Khan — medication reviews, high-risk drug monitoring, interaction queries. Escalate to GP: dose changes on high-risk meds, controlled drugs, new symptoms.",
+    hint: "What routes to the pharmacist same-day vs routinely.",
+    sameDayKey: "pharmacistsSameDay",
+    routineKey: "pharmacistsRoutine",
+    sameDayPlaceholder:
+      "e.g. Sarah Khan — emergency supply triage, urgent medication query, hospital discharge medication reconciliation.",
+    routinePlaceholder:
+      "e.g. Sarah Khan — full medication review, high-risk drug monitoring, polypharmacy, minor med queries, interaction check.",
   },
 ];
 
@@ -67,7 +86,8 @@ const RULE_GROUPS: {
     key: "phrasesUse",
     title: "Phrases staff should use",
     hint: "Warm, calm, professional wording your practice prefers.",
-    placeholder: "e.g. 'I can hear this is frustrating…', 'I'll get the duty team to call you back.'",
+    placeholder:
+      "e.g. 'I can hear this is frustrating…', 'I'll get the duty team to call you back.'",
   },
   {
     key: "phrasesAvoid",
@@ -76,6 +96,86 @@ const RULE_GROUPS: {
     placeholder: "e.g. 'It's just a…', 'Everyone's waiting.'",
   },
 ];
+
+type PracticeTextKey = keyof Omit<PracticeData, "staff" | "rolePolicies">;
+
+const REPEAT_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeholder: string }[] =
+  [
+    {
+      key: "repeatOrderMethods",
+      label: "How can patients order repeats (and what is NOT accepted)?",
+      hint: "Be very specific — this drives training on what to refuse politely.",
+      placeholder:
+        "e.g. NHS App and paper slip. Telephone orders NOT accepted (except emergency supply).",
+    },
+    {
+      key: "repeatTurnaround",
+      label: "Standard repeat turnaround and how urgent items are handled",
+      hint: "Include weekend / bank holiday rules.",
+      placeholder:
+        "e.g. 48 working hours; +24h after weekends; urgent items to duty pharmacist Sarah Khan same day.",
+    },
+    {
+      key: "repeatControlled",
+      label: "Controlled drug rules — what reception must never do",
+      hint: "Include the 28-day rule and advance-request limits.",
+      placeholder:
+        "e.g. Never taken by phone. 28-day rule. Named GP only. Advance requests no more than 7 days early. Check ID at collection.",
+    },
+    {
+      key: "repeatHighRisk",
+      label: "High-risk drugs needing clinician sign-off before reissue",
+      hint: "List each drug/class and what monitoring must be on file.",
+      placeholder:
+        "e.g. Warfarin (INR in date), methotrexate (bloods 12-weekly), lithium, DMARDs, opioids, ADHD meds — do NOT issue on standard route.",
+    },
+    {
+      key: "repeatEmergency",
+      label: "Exact emergency-supply process for run-out situations",
+      hint: "Step-by-step, including who authorises and how it's documented.",
+      placeholder:
+        "e.g. Confirm med + last dose + red flags → check criteria → duty pharmacist (or duty GP) → signpost to nominated pharmacy → document.",
+    },
+  ];
+
+const LOCAL_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeholder: string }[] =
+  [
+    {
+      key: "localSafeguarding",
+      label: "Safeguarding — lead, how concerns are raised and escalated",
+      hint: "Include lead's name, template used, third-party rules for under-16s.",
+      placeholder:
+        "e.g. Safeguarding lead: Dr Patel. Same-day EMIS template + verbal handover. Under-16 third-party requests always escalated.",
+    },
+    {
+      key: "localComplaints",
+      label: "Complaints — verbal and written process",
+      hint: "Include acknowledgement / response timelines and what reception must never say.",
+      placeholder:
+        "e.g. Verbal: acknowledge, offer escalation to practice manager, log on Datix. Written: ack in 3 wd, response in 20.",
+    },
+    {
+      key: "localDNA",
+      label: "DNA / missed appointment policy",
+      hint: "Include how many DNAs before escalation and vulnerable-patient rules.",
+      placeholder:
+        "e.g. Code DNA in EMIS; 3+ DNAs in 6 months → practice manager; vulnerable patients → welfare check to duty GP.",
+    },
+    {
+      key: "localInterpreter",
+      label: "Interpreter / BSL — how it's arranged",
+      hint: "Include service, number, PIN location, and what NOT to do.",
+      placeholder:
+        "e.g. Language Line 0800 XXX XXXX (PIN on intranet). BSL via SignVideo. Never use family for clinical interpretation.",
+    },
+    {
+      key: "localConfidentiality",
+      label: "Confidentiality — day-to-day rules for reception",
+      hint: "Screen locking, third-party rules, age-based results rules.",
+      placeholder:
+        "e.g. Screen lock on leaving desk. No info in reception area. Third party only with written consent. <13 to parent; 13–16 Gillick; 16+ patient only.",
+    },
+  ];
 
 function DataHub() {
   const {
@@ -97,11 +197,7 @@ function DataHub() {
   const [replaceNew, setReplaceNew] = useState("");
   const [replaceMsg, setReplaceMsg] = useState<string | null>(null);
 
-  const fields: {
-    key: "practiceName" | "hours" | "dutyContact" | "nominatedPharmacy" | "urgentNumbers" | "extras";
-    label: string;
-    hint: string;
-  }[] = [
+  const fields: { key: PracticeTextKey; label: string; hint: string }[] = [
     { key: "practiceName", label: "Practice name", hint: "Shown in modules and dashboards." },
     { key: "hours", label: "Appointment hours", hint: "Core and extended access." },
     { key: "dutyContact", label: "Duty team / escalation contact", hint: "How reception reaches duty." },
@@ -119,11 +215,9 @@ function DataHub() {
             Practice Setup / Data Hub
           </h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            Store your staff, clinic responsibilities and local rules once. Every module
-            you create pulls from this. When something changes — a new starter, a nurse
-            leaves, a clinic moves — update it here and use{" "}
-            <span className="font-semibold text-foreground">Update Local Knowledge</span>{" "}
-            to flag existing modules for review.
+            Store your staff, clinic responsibilities, prescription process and local
+            protocols once. Every module you create pulls from this — so you won't be
+            asked the same things again during module setup.
           </p>
         </div>
         <Link
@@ -231,24 +325,98 @@ function DataHub() {
         </Card>
       </section>
 
-      {/* Role policies */}
+      {/* Role policies split by same-day vs routine */}
       <section className="mt-10">
-        <h2 className="font-display text-xl font-semibold">Who books what — by role</h2>
+        <h2 className="font-display text-xl font-semibold">
+          Who books what — same-day vs routine
+        </h2>
         <p className="text-sm text-muted-foreground">
-          Describe your booking rules per role in plain English. The AI uses these to
-          draft accurate scenarios. Do not ask AI to decide clinical scope — write what
-          your practice already does.
+          For each role, describe what reception can book on the day of the call vs at a
+          routine appointment. The AI uses these to draft accurate scenarios.
+        </p>
+        <div className="mt-4 space-y-4">
+          {ROLE_GROUPS.map((g) => (
+            <Card key={g.title}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="font-display text-base font-semibold">{g.title}</h3>
+                <p className="text-xs text-muted-foreground">{g.hint}</p>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-primary">
+                    On-the-day bookings
+                  </label>
+                  <textarea
+                    value={practiceData.rolePolicies[g.sameDayKey]}
+                    onChange={(e) => setRolePolicy(g.sameDayKey, e.target.value)}
+                    rows={5}
+                    placeholder={g.sameDayPlaceholder}
+                    className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-accent">
+                    Routine appointments
+                  </label>
+                  <textarea
+                    value={practiceData.rolePolicies[g.routineKey]}
+                    onChange={(e) => setRolePolicy(g.routineKey, e.target.value)}
+                    rows={5}
+                    placeholder={g.routinePlaceholder}
+                    className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
+                  />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* Repeat prescription process */}
+      <section className="mt-10">
+        <h2 className="font-display text-xl font-semibold">
+          Repeat prescriptions — your local process
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Reception gets asked about prescriptions constantly. Be specific here — vague
+          answers produce vague training.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {ROLE_GROUPS.map((g) => (
-            <Card key={g.key}>
-              <label className="text-sm font-semibold">{g.title}</label>
-              <p className="mt-0.5 text-xs text-muted-foreground">{g.hint}</p>
+          {REPEAT_FIELDS.map((f) => (
+            <Card key={f.key}>
+              <label className="text-sm font-semibold">{f.label}</label>
+              <p className="mt-0.5 text-xs text-muted-foreground">{f.hint}</p>
               <textarea
-                value={practiceData.rolePolicies[g.key]}
-                onChange={(e) => setRolePolicy(g.key, e.target.value)}
-                rows={5}
-                placeholder={g.placeholder}
+                value={practiceData[f.key]}
+                onChange={(e) => setPracticeField(f.key, e.target.value)}
+                rows={4}
+                placeholder={f.placeholder}
+                className="mt-2 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
+              />
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* Local guidelines & protocols */}
+      <section className="mt-10">
+        <h2 className="font-display text-xl font-semibold">
+          Local guidelines &amp; protocols
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          The everyday operational rules new starters need to know. These feed every
+          module you generate.
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {LOCAL_FIELDS.map((f) => (
+            <Card key={f.key}>
+              <label className="text-sm font-semibold">{f.label}</label>
+              <p className="mt-0.5 text-xs text-muted-foreground">{f.hint}</p>
+              <textarea
+                value={practiceData[f.key]}
+                onChange={(e) => setPracticeField(f.key, e.target.value)}
+                rows={4}
+                placeholder={f.placeholder}
                 className="mt-2 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
               />
             </Card>

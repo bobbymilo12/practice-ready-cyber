@@ -28,6 +28,9 @@ export interface OrderScenario {
 
 export type Scenario = MCQScenario | OrderScenario;
 
+export type Difficulty = "easy" | "intermediate" | "advanced";
+export type ModuleLength = "short" | "medium" | "long";
+
 export interface Module {
   id: string;
   type: string;
@@ -36,6 +39,8 @@ export interface Module {
   published: boolean;
   scenarios: Scenario[];
   createdAt: number;
+  difficulty?: Difficulty;
+  length?: ModuleLength;
   needsReview?: boolean;
   reviewReason?: string;
 }
@@ -60,11 +65,16 @@ export interface StaffMember {
 }
 
 export interface RolePolicies {
-  gps: string;
-  nps: string;
-  nurses: string;
-  hcas: string;
-  pharmacists: string;
+  gpsSameDay: string;
+  gpsRoutine: string;
+  npsSameDay: string;
+  npsRoutine: string;
+  nursesSameDay: string;
+  nursesRoutine: string;
+  hcasSameDay: string;
+  hcasRoutine: string;
+  pharmacistsSameDay: string;
+  pharmacistsRoutine: string;
   neverPromise: string;
   phrasesUse: string;
   phrasesAvoid: string;
@@ -77,6 +87,18 @@ export interface PracticeData {
   nominatedPharmacy: string;
   urgentNumbers: string;
   extras: string;
+  // Repeat prescriptions — local process
+  repeatOrderMethods: string;
+  repeatTurnaround: string;
+  repeatControlled: string;
+  repeatHighRisk: string;
+  repeatEmergency: string;
+  // Local guidelines & protocols
+  localSafeguarding: string;
+  localComplaints: string;
+  localDNA: string;
+  localInterpreter: string;
+  localConfidentiality: string;
   staff: StaffMember[];
   rolePolicies: RolePolicies;
 }
@@ -88,6 +110,26 @@ const defaultPracticeData: PracticeData = {
   nominatedPharmacy: "Willow Lane Pharmacy (EPS nominated)",
   urgentNumbers: "999 for emergencies · 111 out of hours · Local crisis team 0300 000 0000",
   extras: "PCN evening hub on Tuesdays. Safeguarding lead: Dr Patel.",
+  repeatOrderMethods:
+    "NHS App and paper slip in the reception box. Telephone repeat requests are NOT accepted (except emergency supply pathway).",
+  repeatTurnaround:
+    "Standard: 48 working hours. Add 24h after weekends / bank holidays. Urgent items flagged same day to duty pharmacist Sarah Khan.",
+  repeatControlled:
+    "Controlled drugs never taken by phone. 28-day rule. Must go through the named GP. Advance requests no more than 7 days early. Check ID at collection.",
+  repeatHighRisk:
+    "High-risk drugs (warfarin, methotrexate, lithium, DMARDs, opioids, ADHD meds) need clinician sign-off and current monitoring on file before reissue. Do NOT issue on the standard route.",
+  repeatEmergency:
+    "Emergency supply: confirm medication + last dose + any red-flag symptoms, check the patient meets emergency criteria, pass to duty pharmacist Sarah Khan (or duty GP if unavailable), signpost to nominated pharmacy once authorised, document fully.",
+  localSafeguarding:
+    "Safeguarding lead: Dr Patel. Concerns flagged same day via EMIS safeguarding template + verbal handover to Dr Patel or duty GP. Under-16 third-party requests always escalated. Any coercion cues on a call — code and escalate immediately.",
+  localComplaints:
+    "Verbal complaints: acknowledge, offer to escalate to practice manager, log on Datix. Written complaints: acknowledge in 3 working days, full response in 20. Never argue or promise a specific outcome.",
+  localDNA:
+    "Offer rebook, code DNA in EMIS, flag 3+ DNAs in 6 months to practice manager. Vulnerable / at-risk patients — welfare check task to duty GP same day.",
+  localInterpreter:
+    "Language Line — dial 0800 XXX XXXX, PIN on intranet. Book at time of appointment where possible. BSL via SignVideo. Never use family for clinical interpretation.",
+  localConfidentiality:
+    "Screen locking whenever leaving desk. No patient information discussed in the reception area. Third-party info only with written consent on file. Under-13 results to parent; 13–16 Gillick; 16+ patient only.",
   staff: [
     {
       id: "s1",
@@ -121,14 +163,32 @@ const defaultPracticeData: PracticeData = {
     },
   ],
   rolePolicies: {
-    gps: "GPs see: any acute presentation, safeguarding concerns, complex chronic disease, mental health same-day, under-5 illness. Book directly with a GP for: chest pain (after 999), suspected cancer 2WW, new severe headaches, mental health crisis follow-up. Escalate to duty first when unsure.",
-    nps: "Nurse Practitioners: minor illness in over-5s, UTI, ear/throat, wound review, simple rashes. NOT: under-5s, chest pain, severe mental health, complex medication reviews. If unsure — book duty triage.",
-    nurses: "Practice Nurses: asthma reviews (Priya), diabetes reviews (Priya), cervical screening (Priya), childhood imms, wound dressings, BP monitoring, travel health. Not for acute illness triage.",
-    hcas: "HCAs: bloods, BP checks, ECGs, B12 injections, NHS Health Checks, height/weight. Not for acute or new symptoms.",
-    pharmacists: "Practice Pharmacist: medication reviews, high-risk drug monitoring, polypharmacy, minor medication queries, interactions. Escalate to GP for: dose changes on high-risk meds, controlled drug requests, new symptoms.",
-    neverPromise: "A specific GP or time · Same-day slot before checking · That results are 'fine' before a clinician has reviewed · Anything clinical (diagnosis, dose, whether medication is safe).",
-    phrasesUse: "'I can hear this is frustrating, let me see what I can do' · 'I'll take some details and get the duty team to call you back' · 'I can't give clinical advice but I can get someone who can'.",
-    phrasesAvoid: "'It's just a…' · 'Everyone's waiting' · 'The doctor is too busy' · 'I'm sure it's nothing' · 'You should have called earlier'.",
+    gpsSameDay:
+      "Same-day with a GP: safeguarding concerns, mental health crisis, chest pain (after 999), suspected sepsis, new severe headache, suicidal ideation, cancer 2WW needing GP call, under-5 illness. When unsure — duty triage first.",
+    gpsRoutine:
+      "Routine with a GP: complex chronic disease reviews, GP-only medication reviews, ongoing mental health follow-up, results discussions clinician-only, HRT initiation, referral discussions, minor surgery review.",
+    npsSameDay:
+      "Same-day with ANP (Anna Bright): minor illness in over-5s, UTI (women 16–65 non-pregnant), ear/throat infections, wound review, simple rashes. NOT: under-5s, chest pain, mental health crisis, pregnancy issues.",
+    npsRoutine:
+      "Routine with ANP: minor illness follow-up, recurrent UTI review, wound review follow-up, simple skin rash review, medication review for stable minor conditions.",
+    nursesSameDay:
+      "Same-day with practice nurse: acute wound dressing, post-A&E asthma review (Priya — 20-min slot within 2 working days), suture / staple removal, urgent travel vaccine (if slot).",
+    nursesRoutine:
+      "Routine with practice nurse (Priya): asthma review, diabetic annual review (HCA bloods first, then 30-min nurse slot 2 weeks later), cervical screening, childhood imms Tue AM clinic, travel health, contraceptive follow-up.",
+    hcasSameDay:
+      "Same-day with HCA (Marcus): BP check, urgent bloods where a clinician has requested them, ECG for cardiology referral, simple wound dressing.",
+    hcasRoutine:
+      "Routine with HCA: pre-review bloods, NHS Health Check, B12 injection, BP monitoring, height / weight, phlebotomy. NOT for any new symptoms.",
+    pharmacistsSameDay:
+      "Same-day with pharmacist (Sarah Khan): emergency supply triage, urgent medication query, hospital discharge medication reconciliation.",
+    pharmacistsRoutine:
+      "Routine with pharmacist: full medication review, high-risk drug monitoring, polypharmacy review, minor medication query, interaction check.",
+    neverPromise:
+      "A specific GP or time · Same-day slot before checking · That results are 'fine' before a clinician has reviewed · Anything clinical (diagnosis, dose, whether medication is safe).",
+    phrasesUse:
+      "'I can hear this is frustrating, let me see what I can do' · 'I'll take some details and get the duty team to call you back' · 'I can't give clinical advice but I can get someone who can'.",
+    phrasesAvoid:
+      "'It's just a…' · 'Everyone's waiting' · 'The doctor is too busy' · 'I'm sure it's nothing' · 'You should have called earlier'.",
   },
 };
 
@@ -143,7 +203,7 @@ interface AppState {
 
   setAnswer: (key: string, value: string) => void;
   resetAnswers: () => void;
-  createDraftModule: (type: string, title: string, topicKey: string, seed: Scenario[]) => string;
+  createDraftModule: (type: string, title: string, topicKey: string, seed: Scenario[], difficulty?: Difficulty, length?: ModuleLength) => string;
   updateScenario: (moduleId: string, s: Scenario) => void;
   deleteScenario: (moduleId: string, scenarioId: string) => void;
   approveScenario: (moduleId: string, scenarioId: string) => void;
@@ -171,40 +231,30 @@ export interface SetupQuestion {
   placeholder: string;
 }
 
+// Setup questions focus ONLY on situational specifics not already captured in the
+// Data Hub / Practice Setup. Things like practice hours, clinician lists, who
+// covers what, repeat prescription turnaround and controlled-drug rules are
+// pulled from practiceData and do not appear here.
 const APPOINTMENT_QUESTIONS: SetupQuestion[] = [
-  { key: "hours", q: "What are the practice's core appointment hours and any extended access clinics?", placeholder: "e.g. 08:00–18:30 Mon–Fri; extended access Wed 18:30–20:00" },
-  { key: "clinicianList", q: "List every clinician who takes appointments and what they see.", placeholder: "e.g. Dr Owens (GP – all); Anna Bright (ANP – minor illness, UTIs); Priya Shah (Practice Nurse – asthma & diabetes)" },
-  { key: "npEligibility", q: "Which Nurse Practitioners / ANPs do you have and what appointment types are they eligible to take?", placeholder: "e.g. Anna Bright – minor illness in over-2s, UTI, ear infection; NOT chest pain, NOT under-2s" },
-  { key: "asthmaTrained", q: "Which nurses run asthma clinics and how long is a post-A&E asthma review slot?", placeholder: "e.g. Priya Shah – 20-min slot, within 2 working days of discharge" },
-  { key: "diabetesTrained", q: "Which nurses do diabetic checks and how is an annual review structured?", placeholder: "e.g. Priya Shah – HCA bloods first, nurse review 2 weeks later, 30-min slot" },
-  { key: "hcaTasks", q: "Which HCAs are available and what appointment types can they do?", placeholder: "e.g. Marcus Lee – BP checks, bloods, ECG, B12; 10-min slots" },
-  { key: "sameDayProcess", q: "Step-by-step: how does your practice handle a same-day appointment request?", placeholder: "e.g. Ask triage questions from script → check duty list → book duty or escalate" },
+  { key: "sameDayProcess", q: "Step-by-step: how does your practice handle a same-day appointment request from first hello to booking?", placeholder: "e.g. Ask triage questions from script → check duty list → book duty or escalate" },
   { key: "urgentSymptoms", q: "Which symptoms must reception treat as same-day urgent, and who do they route to?", placeholder: "e.g. Chest pain → 999 + duty GP; suspected stroke → 999; suicidal ideation → duty GP now" },
-  { key: "under5", q: "How are appointments for children under 5 handled and which clinicians can see them?", placeholder: "e.g. Always same-day; GP only, not ANP; check safeguarding flags" },
-  { key: "mentalHealth", q: "How are mental health appointments booked? Any dedicated practitioner?", placeholder: "e.g. Duty GP triage same day; MH practitioner clinic Thu; crisis line for emergencies" },
+  { key: "under5", q: "Anything specific about how under-5 appointments are handled beyond 'always same-day with a GP'?", placeholder: "e.g. Always safeguarding flag check; take temperature history; two-hour call-back rule" },
+  { key: "mentalHealth", q: "How are mental health appointments booked in practice — and any dedicated slots?", placeholder: "e.g. Duty GP triage same day; MH practitioner clinic Thu; crisis line for emergencies" },
   { key: "homeVisits", q: "Home visits: cut-off time, who decides, what details must reception take?", placeholder: "e.g. Requests before 10:30; duty GP triages; take name, address, phone, reason" },
   { key: "telephone", q: "When do you book telephone vs face-to-face, and are there video slots?", placeholder: "e.g. Admin/results by phone; exams and children F2F; video for follow-ups" },
-  { key: "cancelDNA", q: "How are cancellations, DNAs and repeated no-shows handled?", placeholder: "e.g. Offer rebook, code DNA in EMIS, flag 3+ DNAs to manager" },
-  { key: "neverPromise", q: "What must reception never promise to a patient booking an appointment?", placeholder: "e.g. A specific GP, a same-day slot, a call-back time" },
-  { key: "escalate", q: "Who is on the escalation ladder when reception is unsure?", placeholder: "e.g. Duty GP → senior receptionist → practice manager" },
-  { key: "localExtras", q: "Any local systems, templates or extras staff must know?", placeholder: "e.g. EMIS same-day template, PCN evening hub, interpreter service" },
+  { key: "cancelDNA", q: "How are cancellations, DNAs and repeated no-shows handled locally?", placeholder: "e.g. Offer rebook, code DNA in EMIS, flag 3+ DNAs to manager" },
+  { key: "escalate", q: "Who is on the escalation ladder when reception is unsure about an appointment?", placeholder: "e.g. Duty GP → senior receptionist → practice manager" },
+  { key: "localExtras", q: "Any local systems, templates or extras staff must know for booking?", placeholder: "e.g. EMIS same-day template, PCN evening hub, interpreter service" },
 ];
 
 const PRESCRIPTION_QUESTIONS: SetupQuestion[] = [
-  { key: "turnaround", q: "What is your standard repeat prescription turnaround?", placeholder: "e.g. 48 working hours, longer after weekends and bank holidays" },
-  { key: "orderMethods", q: "Exactly how can patients order repeats (and what is NOT accepted)?", placeholder: "e.g. NHS App, patient portal, paper slip in the box; telephone ordering NOT accepted" },
-  { key: "pharmacist", q: "Who is your practice pharmacist and what queries route to them?", placeholder: "e.g. Sarah Khan – medication reviews, interactions, high-risk drug monitoring" },
-  { key: "nominatedPharmacies", q: "Which pharmacies are you set up with by default and how are urgent items handled?", placeholder: "e.g. Willow Lane Pharmacy (EPS default); Boots High St for urgent same-day" },
-  { key: "controlled", q: "How are controlled drug requests handled? What must reception never do?", placeholder: "e.g. Never accept by phone, 28-day rule, GP review required" },
-  { key: "runOut", q: "A patient has run out of essential medication today — exact steps and who authorises?", placeholder: "e.g. Confirm med and last dose, check emergency supply criteria, pass to duty pharmacist Sarah Khan or duty GP" },
-  { key: "highRisk", q: "List medications that require extra caution or clinician sign-off before reissue.", placeholder: "e.g. Warfarin, methotrexate, lithium, opioids, DMARDs" },
+  { key: "runOut", q: "A patient has run out of essential medication today — any nuances beyond your standard emergency supply process?", placeholder: "e.g. Insulin — always duty GP not pharmacist; epilepsy — same-day GP call-back within 1h" },
   { key: "acute", q: "How are acute (non-repeat) prescription requests handled?", placeholder: "e.g. Not through repeats — book duty GP call-back or pharmacist review" },
-  { key: "reviewsOverdue", q: "How do staff handle overdue medication reviews?", placeholder: "e.g. Alert on system, book with Sarah Khan (pharmacist) before reissue" },
-  { key: "safeguarding", q: "What safeguarding flags in prescription requests must reception escalate?", placeholder: "e.g. Repeated early requests, opioid escalation, mental health med queries from third parties" },
+  { key: "reviewsOverdue", q: "How do staff handle overdue medication reviews when the patient calls chasing?", placeholder: "e.g. Alert on system, book with Sarah Khan (pharmacist) before reissue" },
+  { key: "safeguarding", q: "Safeguarding flags in prescription requests that must be escalated?", placeholder: "e.g. Repeated early requests, opioid escalation, mental health med queries from third parties" },
   { key: "queries", q: "Which medication queries can reception answer vs must route on?", placeholder: "e.g. Timings/collection = reception; interactions/side effects = pharmacist; dose change = duty GP" },
-  { key: "neverPromise", q: "What should staff never promise about prescriptions?", placeholder: "e.g. Same-day issue, that a specific GP will sign, exact pharmacy timings" },
-  { key: "escalate", q: "Escalation chain for prescription problems?", placeholder: "e.g. Pharmacist Sarah Khan → duty GP → prescriptions manager" },
-  { key: "localExtras", q: "Local rules, shared care protocols, or systems staff must know?", placeholder: "e.g. Shared care with mental health team, high-risk register in EMIS" },
+  { key: "escalate", q: "Escalation chain when a prescription issue can't be resolved by reception?", placeholder: "e.g. Pharmacist Sarah Khan → duty GP → prescriptions manager" },
+  { key: "localExtras", q: "Local rules, shared care protocols or systems staff must know for prescriptions?", placeholder: "e.g. Shared care with mental health team, high-risk register in EMIS" },
 ];
 
 const URGENT_QUESTIONS: SetupQuestion[] = [
@@ -823,15 +873,50 @@ function poolForTopic(topicKey: string, topicTitle: string): Scenario[] {
   return genericPool(topicTitle);
 }
 
-export function draftsForTopic(topicKey: string, format: ScenarioFormat, topicTitle: string): Scenario[] {
-  const all = poolForTopic(topicKey, topicTitle).slice(0, 5);
-  if (format === "mcq") return all.filter((s) => s.kind === "mcq").slice(0, 4);
-  if (format === "order") {
-    const orderOnly = all.filter((s) => s.kind === "order");
-    return orderOnly.length ? orderOnly.slice(0, 3) : all.slice(0, 3);
+export function draftsForTopic(
+  topicKey: string,
+  format: ScenarioFormat,
+  topicTitle: string,
+  difficulty: Difficulty = "easy",
+  length: ModuleLength = "short",
+): Scenario[] {
+  const target = length === "long" ? 15 : length === "medium" ? 10 : 5;
+  const source = poolForTopic(topicKey, topicTitle);
+  // Repeat pool with fresh ids until we have enough
+  const pool: Scenario[] = [];
+  let k = 0;
+  while (pool.length < target * 2 && k < target * 6) {
+    const base = source[k % source.length];
+    pool.push({ ...base, id: `${base.id}-${k}` });
+    k++;
   }
-  return all;
+  let selected: Scenario[];
+  if (format === "mcq") selected = pool.filter((s) => s.kind === "mcq").slice(0, target);
+  else if (format === "order") selected = pool.filter((s) => s.kind === "order").slice(0, target);
+  else selected = pool.slice(0, target);
+  if (selected.length < target) selected = pool.slice(0, target);
+
+  // For intermediate / advanced, shuffle MCQ option positions so the correct
+  // answer isn't cued by position. Advanced also drops the most obviously
+  // absurd distractor pattern where possible.
+  if (difficulty !== "easy") {
+    selected = selected.map((s) => {
+      if (s.kind !== "mcq") return s;
+      const indexed = s.options.map((opt, i) => ({ opt, i }));
+      for (let i = indexed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+      }
+      return {
+        ...s,
+        options: indexed.map((x) => x.opt),
+        correctIndex: indexed.findIndex((x) => x.i === s.correctIndex),
+      };
+    });
+  }
+  return selected;
 }
+
 
 // ------------- Seeded example module -------------
 const seededModule: Module = {
@@ -912,12 +997,22 @@ export const useApp = create<AppState>()(
       setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
       resetAnswers: () => set({ answers: {} }),
 
-      createDraftModule: (type, title, topicKey, seed) => {
+      createDraftModule: (type, title, topicKey, seed, difficulty, length) => {
         const id = uid();
         set((s) => ({
           modules: [
             ...s.modules,
-            { id, type, title, topicKey, published: false, scenarios: seed, createdAt: Date.now() },
+            {
+              id,
+              type,
+              title,
+              topicKey,
+              published: false,
+              scenarios: seed,
+              createdAt: Date.now(),
+              difficulty,
+              length,
+            },
           ],
           currentDraftId: id,
         }));
