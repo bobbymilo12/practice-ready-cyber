@@ -873,15 +873,50 @@ function poolForTopic(topicKey: string, topicTitle: string): Scenario[] {
   return genericPool(topicTitle);
 }
 
-export function draftsForTopic(topicKey: string, format: ScenarioFormat, topicTitle: string): Scenario[] {
-  const all = poolForTopic(topicKey, topicTitle).slice(0, 5);
-  if (format === "mcq") return all.filter((s) => s.kind === "mcq").slice(0, 4);
-  if (format === "order") {
-    const orderOnly = all.filter((s) => s.kind === "order");
-    return orderOnly.length ? orderOnly.slice(0, 3) : all.slice(0, 3);
+export function draftsForTopic(
+  topicKey: string,
+  format: ScenarioFormat,
+  topicTitle: string,
+  difficulty: Difficulty = "easy",
+  length: ModuleLength = "short",
+): Scenario[] {
+  const target = length === "long" ? 15 : length === "medium" ? 10 : 5;
+  const source = poolForTopic(topicKey, topicTitle);
+  // Repeat pool with fresh ids until we have enough
+  const pool: Scenario[] = [];
+  let k = 0;
+  while (pool.length < target * 2 && k < target * 6) {
+    const base = source[k % source.length];
+    pool.push({ ...base, id: `${base.id}-${k}` });
+    k++;
   }
-  return all;
+  let selected: Scenario[];
+  if (format === "mcq") selected = pool.filter((s) => s.kind === "mcq").slice(0, target);
+  else if (format === "order") selected = pool.filter((s) => s.kind === "order").slice(0, target);
+  else selected = pool.slice(0, target);
+  if (selected.length < target) selected = pool.slice(0, target);
+
+  // For intermediate / advanced, shuffle MCQ option positions so the correct
+  // answer isn't cued by position. Advanced also drops the most obviously
+  // absurd distractor pattern where possible.
+  if (difficulty !== "easy") {
+    selected = selected.map((s) => {
+      if (s.kind !== "mcq") return s;
+      const indexed = s.options.map((opt, i) => ({ opt, i }));
+      for (let i = indexed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+      }
+      return {
+        ...s,
+        options: indexed.map((x) => x.opt),
+        correctIndex: indexed.findIndex((x) => x.i === s.correctIndex),
+      };
+    });
+  }
+  return selected;
 }
+
 
 // ------------- Seeded example module -------------
 const seededModule: Module = {
