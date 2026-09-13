@@ -15,30 +15,19 @@ export function Shell({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <nav className="hidden gap-6 text-sm text-muted-foreground md:flex">
-            <Link to="/dashboard" className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium">
-              Manager
-            </Link>
-            <Link to="/staff" className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium">
-              Trainee
-            </Link>
-            <Link to="/" className="hover:text-foreground">
-              About
+            <Link to="/about" className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium">
+              About Us
             </Link>
           </nav>
           <div className="flex items-center gap-2">
             <Link
-              to="/staff"
-              className="hidden rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface sm:inline-flex"
-            >
-              Trainee
-            </Link>
-            <Link
-              to="/dashboard"
+              to="/auth"
               className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              Manager
+              Create Account / Login
             </Link>
           </div>
+
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
