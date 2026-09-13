@@ -56,18 +56,19 @@ function Landing() {
 
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              to="/dashboard"
+              to="/auth"
               className="inline-flex items-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90"
             >
-              I'm a manager
+              Create Account / Login
             </Link>
             <Link
-              to="/staff"
+              to="/about"
               className="inline-flex items-center rounded-xl border border-border bg-background px-5 py-3 text-sm font-semibold text-foreground hover:bg-surface"
             >
-              I'm a trainee
+              About Us
             </Link>
           </div>
+
 
           <div className="mt-8 rounded-xl border border-border bg-surface p-4 text-sm text-muted-foreground">
             <strong className="font-medium text-foreground">Safety note.</strong>{" "}
