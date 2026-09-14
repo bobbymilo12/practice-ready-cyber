@@ -131,6 +131,10 @@ export interface RolePolicies {
 export interface PracticeData {
   practiceName: string;
   hours: string;
+  address: string;
+  outOfHoursTimes: string;
+  sameDayReasons: string[];
+  prescriptionOrdering: string;
   dutyContact: string;
   nominatedPharmacy: string;
   urgentNumbers: string;
