@@ -158,6 +158,19 @@ export interface PracticeData {
 const defaultPracticeData: PracticeData = {
   practiceName: "Willow Lane Medical Practice",
   hours: "08:00–18:30 Mon–Fri, extended access Wed evenings",
+  address: "14 Willow Lane, Riverbank, RB2 7QT",
+  outOfHoursTimes:
+    "18:30–08:00 weekdays, all weekend and bank holidays — NHS 111. PCN evening hub Tue 18:30–20:00, Sat AM 09:00–12:00.",
+  sameDayReasons: [
+    "Chest pain, breathlessness or stroke symptoms (999 first, then duty team)",
+    "Suspected sepsis or rapidly worsening illness",
+    "Child under 5 who is unwell",
+    "Mental health crisis or safeguarding concern",
+    "Suspected UTI in an unwell patient",
+    "Acute pain that has worsened in the last 24 hours",
+  ],
+  prescriptionOrdering:
+    "NHS App, paper slip in the reception box, or via the nominated pharmacy. Telephone requests are not accepted except through the emergency supply pathway.",
   dutyContact: "Duty GP — ext 401 / Teams channel #duty",
   nominatedPharmacy: "Willow Lane Pharmacy (EPS nominated)",
   urgentNumbers: "999 for emergencies · 111 out of hours · Local crisis team 0300 000 0000",
