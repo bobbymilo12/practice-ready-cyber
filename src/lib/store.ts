@@ -1078,6 +1078,10 @@ export const useApp = create<AppState>()(
       lastResult: null,
       results: [],
       practiceData: defaultPracticeData,
+      account: null,
+      trainees: [],
+      assignments: [],
+      setupComplete: false,
 
       setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
       resetAnswers: () => set({ answers: {} }),
