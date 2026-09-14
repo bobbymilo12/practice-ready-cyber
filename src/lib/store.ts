@@ -13,6 +13,7 @@ export interface MCQScenario {
   correctIndex: number;
   learningPoint: string;
   status: ScenarioStatus;
+  managerNote?: string;
 }
 
 export interface OrderScenario {
@@ -24,6 +25,7 @@ export interface OrderScenario {
   steps: string[];
   learningPoint: string;
   status: ScenarioStatus;
+  managerNote?: string;
 }
 
 export type Scenario = MCQScenario | OrderScenario;
