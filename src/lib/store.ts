@@ -265,6 +265,10 @@ interface AppState {
   lastResult: TrainingResult | null;
   results: TrainingResult[];
   practiceData: PracticeData;
+  account: Account | null;
+  trainees: Trainee[];
+  assignments: Assignment[];
+  setupComplete: boolean;
 
   setAnswer: (key: string, value: string) => void;
   resetAnswers: () => void;
@@ -277,9 +281,25 @@ interface AppState {
   clearReviewFlag: (moduleId: string) => void;
   setLastResult: (r: TrainingResult) => void;
   addResult: (r: TrainingResult) => void;
+  mergeModules: (moduleIds: string[], title: string) => string;
 
-  // Practice data
-  setPracticeField: (field: keyof Omit<PracticeData, "staff" | "rolePolicies">, value: string) => void;
+  // Accounts & team
+  setAccount: (a: Account) => void;
+  signOut: () => void;
+  inviteTrainee: (email: string, name?: string) => Trainee;
+  removeTrainee: (id: string) => void;
+  activateTrainee: (id: string) => void;
+  assignModule: (traineeId: string, moduleId: string, dueDate?: string) => void;
+  unassignModule: (traineeId: string, moduleId: string) => void;
+  markResult: (traineeId: string, moduleId: string, completedAt: number, emoji: string) => void;
+
+  // Practice setup
+  completeSetup: (generate: boolean) => string[];
+  setPracticeField: (
+    field: keyof Omit<PracticeData, "staff" | "rolePolicies" | "sameDayReasons">,
+    value: string,
+  ) => void;
+  setSameDayReasons: (reasons: string[]) => void;
   setRolePolicy: (field: keyof RolePolicies, value: string) => void;
   addStaff: (s: Omit<StaffMember, "id">) => void;
   updateStaff: (id: string, patch: Partial<StaffMember>) => void;
