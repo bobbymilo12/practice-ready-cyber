@@ -13,6 +13,7 @@ export interface MCQScenario {
   correctIndex: number;
   learningPoint: string;
   status: ScenarioStatus;
+  managerNote?: string;
 }
 
 export interface OrderScenario {
@@ -24,6 +25,7 @@ export interface OrderScenario {
   steps: string[];
   learningPoint: string;
   status: ScenarioStatus;
+  managerNote?: string;
 }
 
 export type Scenario = MCQScenario | OrderScenario;
@@ -53,7 +55,53 @@ export interface TrainingResult {
   wrongTitles: string[];
   completedAt: number;
   confidence?: number; // 1-5 self-report
+  traineeId?: string;
+  traineeName?: string;
+  emoji?: string;
 }
+
+// ------------- Accounts, trainees, assignments -------------
+export type AccountRole = "manager" | "trainee";
+
+export interface Account {
+  name: string;
+  email: string;
+  phone: string;
+  password: string; // demo only — stored locally, not a real security system
+  role: AccountRole;
+}
+
+export type TraineeStatus = "invited" | "active";
+
+export interface Trainee {
+  id: string;
+  name: string;
+  email: string;
+  status: TraineeStatus;
+  invitedAt: number;
+}
+
+export interface Assignment {
+  id: string;
+  traineeId: string;
+  moduleId: string;
+  assignedAt: number;
+  dueDate?: string;
+}
+
+export const STAFF_ROLE_OPTIONS = [
+  "Doctor (GP)",
+  "Nurse Practitioner",
+  "Senior Nurse",
+  "Practice Nurse",
+  "HCA",
+  "Physiotherapist",
+  "Mental Health Practitioner",
+  "Pharmacist",
+  "Reception / Admin lead",
+] as const;
+
+export const RESULT_EMOJIS = ["👍", "🎉", "💪", "👀", "🔁", "⚠️"] as const;
 
 // ------------- Practice data hub -------------
 export interface StaffMember {
@@ -83,6 +131,10 @@ export interface RolePolicies {
 export interface PracticeData {
   practiceName: string;
   hours: string;
+  address: string;
+  outOfHoursTimes: string;
+  sameDayReasons: string[];
+  prescriptionOrdering: string;
   dutyContact: string;
   nominatedPharmacy: string;
   urgentNumbers: string;
@@ -106,6 +158,19 @@ export interface PracticeData {
 const defaultPracticeData: PracticeData = {
   practiceName: "Willow Lane Medical Practice",
   hours: "08:00–18:30 Mon–Fri, extended access Wed evenings",
+  address: "14 Willow Lane, Riverbank, RB2 7QT",
+  outOfHoursTimes:
+    "18:30–08:00 weekdays, all weekend and bank holidays — NHS 111. PCN evening hub Tue 18:30–20:00, Sat AM 09:00–12:00.",
+  sameDayReasons: [
+    "Chest pain, breathlessness or stroke symptoms (999 first, then duty team)",
+    "Suspected sepsis or rapidly worsening illness",
+    "Child under 5 who is unwell",
+    "Mental health crisis or safeguarding concern",
+    "Suspected UTI in an unwell patient",
+    "Acute pain that has worsened in the last 24 hours",
+  ],
+  prescriptionOrdering:
+    "NHS App, paper slip in the reception box, or via the nominated pharmacy. Telephone requests are not accepted except through the emergency supply pathway.",
   dutyContact: "Duty GP — ext 401 / Teams channel #duty",
   nominatedPharmacy: "Willow Lane Pharmacy (EPS nominated)",
   urgentNumbers: "999 for emergencies · 111 out of hours · Local crisis team 0300 000 0000",
@@ -200,6 +265,10 @@ interface AppState {
   lastResult: TrainingResult | null;
   results: TrainingResult[];
   practiceData: PracticeData;
+  account: Account | null;
+  trainees: Trainee[];
+  assignments: Assignment[];
+  setupComplete: boolean;
 
   setAnswer: (key: string, value: string) => void;
   resetAnswers: () => void;
@@ -212,9 +281,25 @@ interface AppState {
   clearReviewFlag: (moduleId: string) => void;
   setLastResult: (r: TrainingResult) => void;
   addResult: (r: TrainingResult) => void;
+  mergeModules: (moduleIds: string[], title: string) => string;
 
-  // Practice data
-  setPracticeField: (field: keyof Omit<PracticeData, "staff" | "rolePolicies">, value: string) => void;
+  // Accounts & team
+  setAccount: (a: Account) => void;
+  signOut: () => void;
+  inviteTrainee: (email: string, name?: string) => Trainee;
+  removeTrainee: (id: string) => void;
+  activateTrainee: (id: string) => void;
+  assignModule: (traineeId: string, moduleId: string, dueDate?: string) => void;
+  unassignModule: (traineeId: string, moduleId: string) => void;
+  markResult: (traineeId: string, moduleId: string, completedAt: number, emoji: string) => void;
+
+  // Practice setup
+  completeSetup: (generate: boolean) => string[];
+  setPracticeField: (
+    field: keyof Omit<PracticeData, "staff" | "rolePolicies" | "sameDayReasons">,
+    value: string,
+  ) => void;
+  setSameDayReasons: (reasons: string[]) => void;
   setRolePolicy: (field: keyof RolePolicies, value: string) => void;
   addStaff: (s: Omit<StaffMember, "id">) => void;
   updateStaff: (id: string, patch: Partial<StaffMember>) => void;
@@ -993,6 +1078,10 @@ export const useApp = create<AppState>()(
       lastResult: null,
       results: [],
       practiceData: defaultPracticeData,
+      account: null,
+      trainees: [],
+      assignments: [],
+      setupComplete: false,
 
       setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
       resetAnswers: () => set({ answers: {} }),
@@ -1091,7 +1180,168 @@ export const useApp = create<AppState>()(
       setLastResult: (r) => set({ lastResult: r }),
 
       addResult: (r) =>
-        set((state) => ({ results: [r, ...state.results].slice(0, 50), lastResult: r })),
+        set((state) => {
+          const acc = state.account;
+          const traineeId =
+            r.traineeId ??
+            state.trainees.find(
+              (t) => t.email.toLowerCase() === (acc?.email ?? "").toLowerCase(),
+            )?.id ??
+            (acc?.role === "trainee" ? `self:${acc.email.toLowerCase()}` : "self:demo");
+          const enriched: TrainingResult = {
+            ...r,
+            traineeId,
+            traineeName: r.traineeName ?? acc?.name ?? "Demo trainee",
+          };
+          return { results: [enriched, ...state.results].slice(0, 200), lastResult: enriched };
+        }),
+
+      mergeModules: (moduleIds, title) => {
+        const id = uid();
+        set((state) => {
+          const chosen = state.modules.filter((m) => moduleIds.includes(m.id));
+          const scenarios: Scenario[] = [];
+          const seen = new Set<string>();
+          chosen.forEach((m, mi) => {
+            m.scenarios.forEach((s, si) => {
+              const key = s.title + s.question;
+              if (seen.has(key)) return;
+              seen.add(key);
+              scenarios.push({ ...s, id: `${id}-${mi}-${si}` });
+            });
+          });
+          return {
+            modules: [
+              ...state.modules,
+              {
+                id,
+                type: "Merged module",
+                title,
+                topicKey: chosen[0]?.topicKey ?? "custom",
+                published: false,
+                scenarios,
+                createdAt: Date.now(),
+              },
+            ],
+            currentDraftId: id,
+          };
+        });
+        return id;
+      },
+
+      setAccount: (a) =>
+        set((state) => {
+          const match = state.trainees.find(
+            (t) => t.email.toLowerCase() === a.email.toLowerCase(),
+          );
+          return {
+            account: a,
+            trainees: match
+              ? state.trainees.map((t) =>
+                  t.id === match.id
+                    ? { ...t, status: "active" as TraineeStatus, name: t.name || a.name }
+                    : t,
+                )
+              : state.trainees,
+          };
+        }),
+
+      signOut: () => set({ account: null }),
+
+      inviteTrainee: (email, name) => {
+        const trimmed = email.trim();
+        const existing = get().trainees.find(
+          (t) => t.email.toLowerCase() === trimmed.toLowerCase(),
+        );
+        if (existing) return existing;
+        const t: Trainee = {
+          id: uid(),
+          email: trimmed,
+          name: name?.trim() || trimmed.split("@")[0].replace(/[._-]+/g, " "),
+          status: "invited",
+          invitedAt: Date.now(),
+        };
+        set((state) => ({ trainees: [...state.trainees, t] }));
+        return t;
+      },
+
+      removeTrainee: (id) =>
+        set((state) => ({
+          trainees: state.trainees.filter((t) => t.id !== id),
+          assignments: state.assignments.filter((a) => a.traineeId !== id),
+        })),
+
+      activateTrainee: (id) =>
+        set((state) => ({
+          trainees: state.trainees.map((t) =>
+            t.id === id ? { ...t, status: "active" as TraineeStatus } : t,
+          ),
+        })),
+
+      assignModule: (traineeId, moduleId, dueDate) =>
+        set((state) =>
+          state.assignments.some((a) => a.traineeId === traineeId && a.moduleId === moduleId)
+            ? state
+            : {
+                assignments: [
+                  ...state.assignments,
+                  { id: uid(), traineeId, moduleId, assignedAt: Date.now(), dueDate },
+                ],
+              },
+        ),
+
+      unassignModule: (traineeId, moduleId) =>
+        set((state) => ({
+          assignments: state.assignments.filter(
+            (a) => !(a.traineeId === traineeId && a.moduleId === moduleId),
+          ),
+        })),
+
+      markResult: (traineeId, moduleId, completedAt, emoji) =>
+        set((state) => ({
+          results: state.results.map((r) =>
+            r.traineeId === traineeId && r.moduleId === moduleId && r.completedAt === completedAt
+              ? { ...r, emoji: r.emoji === emoji ? undefined : emoji }
+              : r,
+          ),
+        })),
+
+      completeSetup: (generate) => {
+        const created: string[] = [];
+        set((state) => {
+          if (!generate) return { setupComplete: true };
+          const starters = [
+            { key: "appointment-booking", title: "Appointment booking" },
+            { key: "urgent", title: "Urgent symptoms & escalation" },
+            { key: "prescriptions", title: "Prescription requests" },
+            { key: "results", title: "Test results & confidentiality" },
+            { key: "first-week", title: "First week on reception" },
+          ];
+          const existing = new Set(state.modules.map((m) => m.title));
+          const newModules: Module[] = [];
+          for (const s of starters) {
+            const title = `${s.title} — ${state.practiceData.practiceName}`;
+            if (existing.has(title)) continue;
+            const id = uid();
+            created.push(id);
+            newModules.push({
+              id,
+              type: s.title,
+              title,
+              topicKey: s.key,
+              published: false,
+              scenarios: draftsForTopic(s.key, "mixed", s.title, "easy", "short"),
+              createdAt: Date.now(),
+            });
+          }
+          return { setupComplete: true, modules: [...state.modules, ...newModules] };
+        });
+        return created;
+      },
+
+      setSameDayReasons: (reasons) =>
+        set((state) => ({ practiceData: { ...state.practiceData, sameDayReasons: reasons } })),
+
 
       clearReviewFlag: (moduleId) =>
         set((state) => ({
