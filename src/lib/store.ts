@@ -55,7 +55,53 @@ export interface TrainingResult {
   wrongTitles: string[];
   completedAt: number;
   confidence?: number; // 1-5 self-report
+  traineeId?: string;
+  traineeName?: string;
+  emoji?: string;
 }
+
+// ------------- Accounts, trainees, assignments -------------
+export type AccountRole = "manager" | "trainee";
+
+export interface Account {
+  name: string;
+  email: string;
+  phone: string;
+  password: string; // demo only — stored locally, not a real security system
+  role: AccountRole;
+}
+
+export type TraineeStatus = "invited" | "active";
+
+export interface Trainee {
+  id: string;
+  name: string;
+  email: string;
+  status: TraineeStatus;
+  invitedAt: number;
+}
+
+export interface Assignment {
+  id: string;
+  traineeId: string;
+  moduleId: string;
+  assignedAt: number;
+  dueDate?: string;
+}
+
+export const STAFF_ROLE_OPTIONS = [
+  "Doctor (GP)",
+  "Nurse Practitioner",
+  "Senior Nurse",
+  "Practice Nurse",
+  "HCA",
+  "Physiotherapist",
+  "Mental Health Practitioner",
+  "Pharmacist",
+  "Reception / Admin lead",
+] as const;
+
+export const RESULT_EMOJIS = ["👍", "🎉", "💪", "👀", "🔁", "⚠️"] as const;
 
 // ------------- Practice data hub -------------
 export interface StaffMember {
