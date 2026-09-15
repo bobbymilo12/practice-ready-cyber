@@ -97,7 +97,10 @@ const RULE_GROUPS: {
   },
 ];
 
-type PracticeTextKey = keyof Omit<PracticeData, "staff" | "rolePolicies">;
+type PracticeTextKey = keyof Omit<
+  PracticeData,
+  "staff" | "rolePolicies" | "sameDayReasons"
+>;
 
 const REPEAT_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeholder: string }[] =
   [

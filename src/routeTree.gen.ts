@@ -17,8 +17,12 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TraineesInviteRouteImport } from './routes/trainees.invite'
+import { Route as TraineesIdRouteImport } from './routes/trainees.$id'
+import { Route as PracticeSetupRouteImport } from './routes/practice.setup'
 import { Route as ModulesSetupRouteImport } from './routes/modules.setup'
 import { Route as ModulesReviewRouteImport } from './routes/modules.review'
+import { Route as ModulesMergeRouteImport } from './routes/modules.merge'
 import { Route as ModulesCreateRouteImport } from './routes/modules.create'
 
 const TrainRoute = TrainRouteImport.update({
@@ -61,6 +65,21 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TraineesInviteRoute = TraineesInviteRouteImport.update({
+  id: '/trainees/invite',
+  path: '/trainees/invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TraineesIdRoute = TraineesIdRouteImport.update({
+  id: '/trainees/$id',
+  path: '/trainees/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PracticeSetupRoute = PracticeSetupRouteImport.update({
+  id: '/practice/setup',
+  path: '/practice/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModulesSetupRoute = ModulesSetupRouteImport.update({
   id: '/modules/setup',
   path: '/modules/setup',
@@ -69,6 +88,11 @@ const ModulesSetupRoute = ModulesSetupRouteImport.update({
 const ModulesReviewRoute = ModulesReviewRouteImport.update({
   id: '/modules/review',
   path: '/modules/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModulesMergeRoute = ModulesMergeRouteImport.update({
+  id: '/modules/merge',
+  path: '/modules/merge',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModulesCreateRoute = ModulesCreateRouteImport.update({
@@ -87,8 +111,12 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
+  '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
+  '/practice/setup': typeof PracticeSetupRoute
+  '/trainees/$id': typeof TraineesIdRoute
+  '/trainees/invite': typeof TraineesInviteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -100,8 +128,12 @@ export interface FileRoutesByTo {
   '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
+  '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
+  '/practice/setup': typeof PracticeSetupRoute
+  '/trainees/$id': typeof TraineesIdRoute
+  '/trainees/invite': typeof TraineesInviteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -114,8 +146,12 @@ export interface FileRoutesById {
   '/staff': typeof StaffRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
+  '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
+  '/practice/setup': typeof PracticeSetupRoute
+  '/trainees/$id': typeof TraineesIdRoute
+  '/trainees/invite': typeof TraineesInviteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -129,8 +165,12 @@ export interface FileRouteTypes {
     | '/staff'
     | '/train'
     | '/modules/create'
+    | '/modules/merge'
     | '/modules/review'
     | '/modules/setup'
+    | '/practice/setup'
+    | '/trainees/$id'
+    | '/trainees/invite'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -142,8 +182,12 @@ export interface FileRouteTypes {
     | '/staff'
     | '/train'
     | '/modules/create'
+    | '/modules/merge'
     | '/modules/review'
     | '/modules/setup'
+    | '/practice/setup'
+    | '/trainees/$id'
+    | '/trainees/invite'
   id:
     | '__root__'
     | '/'
@@ -155,8 +199,12 @@ export interface FileRouteTypes {
     | '/staff'
     | '/train'
     | '/modules/create'
+    | '/modules/merge'
     | '/modules/review'
     | '/modules/setup'
+    | '/practice/setup'
+    | '/trainees/$id'
+    | '/trainees/invite'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -169,8 +217,12 @@ export interface RootRouteChildren {
   StaffRoute: typeof StaffRoute
   TrainRoute: typeof TrainRoute
   ModulesCreateRoute: typeof ModulesCreateRoute
+  ModulesMergeRoute: typeof ModulesMergeRoute
   ModulesReviewRoute: typeof ModulesReviewRoute
   ModulesSetupRoute: typeof ModulesSetupRoute
+  PracticeSetupRoute: typeof PracticeSetupRoute
+  TraineesIdRoute: typeof TraineesIdRoute
+  TraineesInviteRoute: typeof TraineesInviteRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -231,6 +283,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/trainees/invite': {
+      id: '/trainees/invite'
+      path: '/trainees/invite'
+      fullPath: '/trainees/invite'
+      preLoaderRoute: typeof TraineesInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trainees/$id': {
+      id: '/trainees/$id'
+      path: '/trainees/$id'
+      fullPath: '/trainees/$id'
+      preLoaderRoute: typeof TraineesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/practice/setup': {
+      id: '/practice/setup'
+      path: '/practice/setup'
+      fullPath: '/practice/setup'
+      preLoaderRoute: typeof PracticeSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/modules/setup': {
       id: '/modules/setup'
       path: '/modules/setup'
@@ -243,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/modules/review'
       fullPath: '/modules/review'
       preLoaderRoute: typeof ModulesReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modules/merge': {
+      id: '/modules/merge'
+      path: '/modules/merge'
+      fullPath: '/modules/merge'
+      preLoaderRoute: typeof ModulesMergeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/modules/create': {
@@ -265,8 +345,12 @@ const rootRouteChildren: RootRouteChildren = {
   StaffRoute: StaffRoute,
   TrainRoute: TrainRoute,
   ModulesCreateRoute: ModulesCreateRoute,
+  ModulesMergeRoute: ModulesMergeRoute,
   ModulesReviewRoute: ModulesReviewRoute,
   ModulesSetupRoute: ModulesSetupRoute,
+  PracticeSetupRoute: PracticeSetupRoute,
+  TraineesIdRoute: TraineesIdRoute,
+  TraineesInviteRoute: TraineesInviteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
