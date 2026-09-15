@@ -1425,18 +1425,27 @@ export const useApp = create<AppState>()(
     }),
     {
       name: "practice-ready-store",
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown) => {
         const p = (persisted ?? {}) as Partial<AppState>;
+        const pd = (p.practiceData ?? {}) as Partial<PracticeData>;
         return {
           ...p,
           results: p.results ?? [],
+          trainees: p.trainees ?? [],
+          assignments: p.assignments ?? [],
+          account: p.account ?? null,
+          setupComplete: p.setupComplete ?? false,
           practiceData: {
             ...defaultPracticeData,
-            ...(p.practiceData ?? {}),
+            ...pd,
+            sameDayReasons:
+              Array.isArray(pd.sameDayReasons) && pd.sameDayReasons.length > 0
+                ? pd.sameDayReasons
+                : defaultPracticeData.sameDayReasons,
             rolePolicies: {
               ...defaultPracticeData.rolePolicies,
-              ...((p.practiceData as PracticeData | undefined)?.rolePolicies ?? {}),
+              ...(pd.rolePolicies ?? {}),
             },
           },
         } as AppState;
