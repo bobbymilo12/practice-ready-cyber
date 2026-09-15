@@ -17,6 +17,8 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TraineesInviteRouteImport } from './routes/trainees.invite'
+import { Route as TraineesIdRouteImport } from './routes/trainees.$id'
 import { Route as ModulesSetupRouteImport } from './routes/modules.setup'
 import { Route as ModulesReviewRouteImport } from './routes/modules.review'
 import { Route as ModulesCreateRouteImport } from './routes/modules.create'
@@ -61,6 +63,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TraineesInviteRoute = TraineesInviteRouteImport.update({
+  id: '/trainees/invite',
+  path: '/trainees/invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TraineesIdRoute = TraineesIdRouteImport.update({
+  id: '/trainees/$id',
+  path: '/trainees/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModulesSetupRoute = ModulesSetupRouteImport.update({
   id: '/modules/setup',
   path: '/modules/setup',
@@ -89,6 +101,8 @@ export interface FileRoutesByFullPath {
   '/modules/create': typeof ModulesCreateRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
+  '/trainees/$id': typeof TraineesIdRoute
+  '/trainees/invite': typeof TraineesInviteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -102,6 +116,8 @@ export interface FileRoutesByTo {
   '/modules/create': typeof ModulesCreateRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
+  '/trainees/$id': typeof TraineesIdRoute
+  '/trainees/invite': typeof TraineesInviteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -116,6 +132,8 @@ export interface FileRoutesById {
   '/modules/create': typeof ModulesCreateRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
+  '/trainees/$id': typeof TraineesIdRoute
+  '/trainees/invite': typeof TraineesInviteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +149,8 @@ export interface FileRouteTypes {
     | '/modules/create'
     | '/modules/review'
     | '/modules/setup'
+    | '/trainees/$id'
+    | '/trainees/invite'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +164,8 @@ export interface FileRouteTypes {
     | '/modules/create'
     | '/modules/review'
     | '/modules/setup'
+    | '/trainees/$id'
+    | '/trainees/invite'
   id:
     | '__root__'
     | '/'
@@ -157,6 +179,8 @@ export interface FileRouteTypes {
     | '/modules/create'
     | '/modules/review'
     | '/modules/setup'
+    | '/trainees/$id'
+    | '/trainees/invite'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -171,6 +195,8 @@ export interface RootRouteChildren {
   ModulesCreateRoute: typeof ModulesCreateRoute
   ModulesReviewRoute: typeof ModulesReviewRoute
   ModulesSetupRoute: typeof ModulesSetupRoute
+  TraineesIdRoute: typeof TraineesIdRoute
+  TraineesInviteRoute: typeof TraineesInviteRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -231,6 +257,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/trainees/invite': {
+      id: '/trainees/invite'
+      path: '/trainees/invite'
+      fullPath: '/trainees/invite'
+      preLoaderRoute: typeof TraineesInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trainees/$id': {
+      id: '/trainees/$id'
+      path: '/trainees/$id'
+      fullPath: '/trainees/$id'
+      preLoaderRoute: typeof TraineesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/modules/setup': {
       id: '/modules/setup'
       path: '/modules/setup'
@@ -267,6 +307,8 @@ const rootRouteChildren: RootRouteChildren = {
   ModulesCreateRoute: ModulesCreateRoute,
   ModulesReviewRoute: ModulesReviewRoute,
   ModulesSetupRoute: ModulesSetupRoute,
+  TraineesIdRoute: TraineesIdRoute,
+  TraineesInviteRoute: TraineesInviteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
