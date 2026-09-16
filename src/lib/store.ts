@@ -77,9 +77,21 @@ export interface Trainee {
   id: string;
   name: string;
   email: string;
+  role: string;
   status: TraineeStatus;
   invitedAt: number;
 }
+
+export const TRAINEE_ROLE_OPTIONS = [
+  "Receptionist",
+  "Secretary",
+  "Prescription Team",
+  "Care Navigator",
+  "Administrator",
+  "Medical Records",
+  "Phlebotomist",
+  "Other",
+];
 
 export interface Assignment {
   id: string;
@@ -286,7 +298,7 @@ interface AppState {
   // Accounts & team
   setAccount: (a: Account) => void;
   signOut: () => void;
-  inviteTrainee: (email: string, name?: string) => Trainee;
+  inviteTrainee: (email: string, name?: string, role?: string) => Trainee;
   removeTrainee: (id: string) => void;
   activateTrainee: (id: string) => void;
   assignModule: (traineeId: string, moduleId: string, dueDate?: string) => void;
@@ -1248,7 +1260,7 @@ export const useApp = create<AppState>()(
 
       signOut: () => set({ account: null }),
 
-      inviteTrainee: (email, name) => {
+      inviteTrainee: (email, name, role) => {
         const trimmed = email.trim();
         const existing = get().trainees.find(
           (t) => t.email.toLowerCase() === trimmed.toLowerCase(),
@@ -1258,6 +1270,7 @@ export const useApp = create<AppState>()(
           id: uid(),
           email: trimmed,
           name: name?.trim() || trimmed.split("@")[0].replace(/[._-]+/g, " "),
+          role: role || "",
           status: "invited",
           invitedAt: Date.now(),
         };
