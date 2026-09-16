@@ -234,6 +234,26 @@ function ScenarioCard({
         )}
       </div>
 
+      <div className="mt-4 rounded-lg border border-accent/40 bg-accent/5 p-3">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Additional information (optional)
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Anything the draft missed. Trainees see this with the learning point.
+        </p>
+        <textarea
+          value={draft.managerNote ?? ""}
+          onChange={(e) => {
+            const next = { ...draft, managerNote: e.target.value } as Scenario;
+            setDraft(next);
+            onSave(next);
+          }}
+          rows={2}
+          placeholder="e.g. Always check the patient's preferred pharmacy before confirming."
+          className="mt-2 w-full resize-none rounded-lg border border-input bg-background p-2 text-sm outline-none focus:border-primary"
+        />
+      </div>
+
       <div className="mt-5 flex flex-wrap gap-2">
         {editing ? (
           <>
