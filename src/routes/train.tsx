@@ -24,6 +24,7 @@ function Train() {
   const nav = useNavigate();
   const module = useApp((s) => s.modules.find((m) => m.id === id));
   const addResult = useApp((s) => s.addResult);
+  const account = useApp((s) => s.account);
 
   const scenarios = useMemo(
     () => module?.scenarios.filter((s) => s.status === "approved") ?? [],
