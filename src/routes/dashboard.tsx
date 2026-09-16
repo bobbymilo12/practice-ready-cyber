@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp } from "@/lib/store";
 
@@ -14,6 +15,9 @@ function Dashboard() {
   const results = useApp((s) => s.results);
   const practiceData = useApp((s) => s.practiceData);
   const clearReviewFlag = useApp((s) => s.clearReviewFlag);
+  const trainees = useApp((s) => s.trainees);
+  const assignments = useApp((s) => s.assignments);
+  const setupComplete = useApp((s) => s.setupComplete);
 
   const drafts = modules.flatMap((m) => m.scenarios.filter((s) => s.status === "draft"));
   const published = modules.filter((m) => m.published);
@@ -32,6 +36,24 @@ function Dashboard() {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link
+            to="/practice/setup"
+            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
+          >
+            Set up practice
+          </Link>
+          <Link
+            to="/trainees/invite"
+            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
+          >
+            Create new trainee account
+          </Link>
+          <Link
+            to="/modules/merge"
+            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
+          >
+            Merge modules
+          </Link>
           <Link
             to="/data-hub"
             className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
@@ -63,14 +85,13 @@ function Dashboard() {
       </div>
 
       {/* First-run nudge */}
-      {dataHubEmpty && (
+      {(dataHubEmpty || !setupComplete) && (
         <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
-          <span className="font-semibold">Start here:</span> add your staff and local
-          rules to the{" "}
-          <Link to="/data-hub" className="font-semibold text-primary hover:underline">
-            Practice Setup / Data Hub
+          <span className="font-semibold">Start here:</span> run{" "}
+          <Link to="/practice/setup" className="font-semibold text-primary hover:underline">
+            Set up practice
           </Link>{" "}
-          before creating modules — every draft is built from what you enter there.
+          to add your team, opening times, same-day reasons and prescription process — every draft is built from what you enter there.
         </div>
       )}
 
@@ -120,7 +141,7 @@ function Dashboard() {
       <section className="mt-8 grid gap-4 md:grid-cols-4">
         <Stat label="Draft scenarios" value={drafts.length} tone="draft" />
         <Stat label="Modules published" value={published.length} tone="approved" />
-        <Stat label="Trainees invited" value={4} tone="info" />
+        <Stat label="Trainees invited" value={trainees.length} tone="info" />
         <Stat label="Completions logged" value={results.length} tone="info" />
       </section>
 
@@ -189,6 +210,7 @@ function Dashboard() {
                     </span>
                   )}
                 </div>
+                <AssignControl moduleId={m.id} />
               </div>
             ))}
           </div>
@@ -198,32 +220,50 @@ function Dashboard() {
       <section className="mt-10 grid gap-6 md:grid-cols-2">
         <Card>
           <div className="flex items-center justify-between">
-            <h3 className="font-display text-lg font-semibold">Staff completion</h3>
-            <span className="text-xs text-muted-foreground">Sample data</span>
+            <h3 className="font-display text-lg font-semibold">Trainee progress</h3>
+            <Link to="/trainees/invite" className="text-xs font-medium text-primary hover:underline">
+              + Invite
+            </Link>
           </div>
           <div className="mt-5 space-y-3">
-            {[
-              { name: "Amira K.", role: "Reception trainee", pct: 100 },
-              { name: "Jordan P.", role: "Reception trainee", pct: 66 },
-              { name: "Sam R.", role: "Admin trainee", pct: 25 },
-              { name: "Priya S.", role: "Reception trainee", pct: 0 },
-            ].map((t) => (
-              <div key={t.name} className="grid grid-cols-[1fr_2fr_auto] items-center gap-4">
-                <div>
-                  <div className="text-sm font-medium">{t.name}</div>
-                  <div className="text-xs text-muted-foreground">{t.role}</div>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-accent"
-                    style={{ width: `${t.pct}%` }}
-                  />
-                </div>
-                <div className="w-10 text-right text-sm tabular-nums text-muted-foreground">
-                  {t.pct}%
-                </div>
-              </div>
-            ))}
+            {trainees.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No trainees yet. Use &ldquo;Create new trainee account&rdquo; to invite one.
+              </p>
+            )}
+            {trainees.map((t) => {
+              const mine = assignments.filter((a) => a.traineeId === t.id);
+              const done = new Set(
+                results.filter((r) => r.traineeId === t.id).map((r) => r.moduleId),
+              );
+              const pct =
+                mine.length === 0
+                  ? 0
+                  : Math.round(
+                      (mine.filter((a) => done.has(a.moduleId)).length / mine.length) * 100,
+                    );
+              return (
+                <Link
+                  key={t.id}
+                  to="/trainees/$id"
+                  params={{ id: t.id }}
+                  className="grid grid-cols-[1fr_2fr_auto] items-center gap-4 rounded-lg p-2 hover:bg-surface"
+                >
+                  <div>
+                    <div className="text-sm font-medium">{t.name || t.email}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {t.status === "invited" ? "Invited" : "Active"} · {mine.length} assigned
+                    </div>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="w-10 text-right text-sm tabular-nums text-muted-foreground">
+                    {pct}%
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </Card>
 
@@ -276,5 +316,46 @@ function Stat({
       </div>
       <p className="mt-3 font-display text-3xl font-bold">{value}</p>
     </Card>
+  );
+}
+
+function AssignControl({ moduleId }: { moduleId: string }) {
+  const trainees = useApp((s) => s.trainees);
+  const assignments = useApp((s) => s.assignments);
+  const assignModule = useApp((s) => s.assignModule);
+  const [open, setOpen] = useState(false);
+
+  if (trainees.length === 0) return null;
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:bg-surface"
+      >
+        Assign to employees
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1">
+          {trainees.map((t) => {
+            const assigned = assignments.some(
+              (a) => a.traineeId === t.id && a.moduleId === moduleId,
+            );
+            return (
+              <div key={t.id} className="flex items-center justify-between gap-2 text-xs">
+                <span>{t.name || t.email}</span>
+                <button
+                  disabled={assigned}
+                  onClick={() => assignModule(t.id, moduleId)}
+                  className="rounded-md bg-primary px-2 py-1 font-medium text-primary-foreground disabled:opacity-40"
+                >
+                  {assigned ? "Assigned" : "Assign"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

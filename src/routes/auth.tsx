@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
+import { useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -32,8 +33,11 @@ function AuthPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [role, setRole] = useState<Role | null>(null);
   const [error, setError] = useState("");
+  const setAccount = useApp((s) => s.setAccount);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,19 +49,20 @@ function AuthPage() {
       setError("Please fill in your name, email and telephone number.");
       return;
     }
-    if (mode === "login" && !email.trim()) {
-      setError("Please enter your email.");
+    if (mode === "login" && (!email.trim() || !password)) {
+      setError("Please enter your email and password.");
+      return;
+    }
+    if (!password || password.length < 6) {
+      setError("Please choose a password of at least 6 characters.");
+      return;
+    }
+    if (mode === "create" && password !== confirm) {
+      setError("The two passwords do not match.");
       return;
     }
     setError("");
-    try {
-      localStorage.setItem(
-        "pr_account",
-        JSON.stringify({ name, email, phone, role }),
-      );
-    } catch {
-      /* ignore storage issues */
-    }
+    setAccount({ name: name.trim() || email.split("@")[0], email: email.trim(), phone, password, role });
     navigate({ to: role === "manager" ? "/dashboard" : "/staff" });
   }
 
@@ -132,6 +137,32 @@ function AuthPage() {
               </label>
             )}
 
+            <label className="block text-sm">
+              <span className="font-medium">Password</span>
+              <input
+                className={field}
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+                autoComplete={mode === "create" ? "new-password" : "current-password"}
+              />
+            </label>
+
+            {mode === "create" && (
+              <label className="block text-sm">
+                <span className="font-medium">Confirm password</span>
+                <input
+                  className={field}
+                  type="password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="Re-enter your password"
+                  autoComplete="new-password"
+                />
+              </label>
+            )}
+
             <div>
               <span className="text-sm font-medium">I am a</span>
               <div className="mt-2 grid grid-cols-2 gap-3">
@@ -168,8 +199,9 @@ function AuthPage() {
             </button>
 
             <p className="text-xs text-muted-foreground">
-              PracticeReady supports local onboarding and does not replace statutory or mandatory
-              training.
+              Demo accounts are stored on this device only — please do not use a real work
+              password. PracticeReady supports local onboarding and does not replace statutory or
+              mandatory training.
             </p>
           </form>
         </Card>
