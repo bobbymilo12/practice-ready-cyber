@@ -181,6 +181,7 @@ function MCQBlock({
         <Feedback
           isCorrect={selected === scenario.correctIndex}
           learningPoint={scenario.learningPoint}
+          managerNote={scenario.managerNote}
           onContinue={onContinue}
           isLast={isLast}
         />
@@ -316,6 +317,7 @@ function OrderBlock({
           <Feedback
             isCorrect={isCorrect}
             learningPoint={scenario.learningPoint}
+            managerNote={scenario.managerNote}
             onContinue={onContinue}
             isLast={isLast}
           />
@@ -328,11 +330,13 @@ function OrderBlock({
 function Feedback({
   isCorrect,
   learningPoint,
+  managerNote,
   onContinue,
   isLast,
 }: {
   isCorrect: boolean;
   learningPoint: string;
+  managerNote?: string;
   onContinue: () => void;
   isLast: boolean;
 }) {
@@ -349,6 +353,15 @@ function Feedback({
         Learning point
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{learningPoint}</p>
+
+      {managerNote && managerNote.trim() && (
+        <div className="mt-4 rounded-lg border border-accent/40 bg-accent/5 p-3">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Additional information from your manager
+          </div>
+          <p className="mt-1 text-sm">{managerNote}</p>
+        </div>
+      )}
 
       <button
         onClick={onContinue}
