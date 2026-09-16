@@ -78,6 +78,8 @@ function Train() {
         total: scenarios.length,
         wrongTitles: finalAnswers.filter((a) => !a.correct).map((a) => a.title),
         completedAt: Date.now(),
+        traineeId: account?.email,
+        traineeName: account?.name,
       });
       nav({ to: "/results" });
     } else {
