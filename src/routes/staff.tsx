@@ -10,7 +10,21 @@ export const Route = createFileRoute("/staff")({
 function Staff() {
   const modules = useApp((s) => s.modules);
   const results = useApp((s) => s.results);
-  const available = modules.filter((m) => m.published);
+  const account = useApp((s) => s.account);
+  const trainees = useApp((s) => s.trainees);
+  const assignments = useApp((s) => s.assignments);
+
+  const me = trainees.find(
+    (t) => t.email.toLowerCase() === (account?.email ?? "").toLowerCase(),
+  );
+  const myModuleIds = new Set(
+    assignments.filter((a) => a.traineeId === me?.id).map((a) => a.moduleId),
+  );
+  const publishedModules = modules.filter((m) => m.published);
+  const available =
+    myModuleIds.size > 0
+      ? publishedModules.filter((m) => myModuleIds.has(m.id))
+      : publishedModules;
 
   // Latest result per module
   const latestByModule = new Map<string, (typeof results)[number]>();
@@ -34,7 +48,9 @@ function Staff() {
   return (
     <Shell>
       <div>
-        <p className="text-sm text-muted-foreground">Signed in as Amira K. · Reception trainee</p>
+        <p className="text-sm text-muted-foreground">
+          Signed in as {account?.name ?? "Guest"} · Trainee
+        </p>
         <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">Your training</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Work through modules at your own pace. This is practice, not an assessment —
