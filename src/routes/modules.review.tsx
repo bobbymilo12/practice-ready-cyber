@@ -244,9 +244,9 @@ function ScenarioCard({
         <textarea
           value={draft.managerNote ?? ""}
           onChange={(e) => {
-            const next = { ...draft, managerNote: e.target.value } as Scenario;
-            setDraft(next);
-            onSave(next);
+            const note = e.target.value;
+            setDraft((d) => ({ ...d, managerNote: note }) as Scenario);
+            onSave({ ...scenario, managerNote: note } as Scenario);
           }}
           rows={2}
           placeholder="e.g. Always check the patient's preferred pharmacy before confirming."
