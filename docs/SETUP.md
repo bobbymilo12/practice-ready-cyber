@@ -107,3 +107,11 @@ npm run build
 ```
 
 The browser suite uses mocked Supabase responses and does not send email. Install its browser once with `npx playwright install chromium`.
+
+## Current connection status
+
+The supplied public configuration has been saved to the ignored `.env.local` file for project `yuatwxjnodfumvxdoydw`. A read-only check confirmed that Supabase Auth accepts the public key. The application tables and `practice-api` function returned HTTP 404 and still need deployment. No database password or Resend secret was saved in this repository.
+
+After deployment, run `npm run backend:check`. This checks the public Auth endpoint, verifies that anonymous database access is denied, and verifies that the Edge Function rejects unauthenticated requests. It does not send email or change records.
+
+Deployment still needs a Supabase CLI login, the final app URL, and a verified Resend sender. Put a fresh Resend API key into the Edge Function secrets. Also set the two public frontend variables in Lovable's hosting/build environment; the ignored local file is not deployed through Git.
