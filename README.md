@@ -198,3 +198,7 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Real accounts and trainee training
+
+The Supabase/Resend integration, required first-login password change, shared training progress and manager-reviewed follow-up practice are prepared. See [the setup guide](docs/SETUP.md) to configure and deploy the services before inviting real users.

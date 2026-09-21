@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "include": ["functions/**/*.ts", "deno.d.ts"],
+  "compilerOptions": {
+    "paths": {
+      "npm:@supabase/supabase-js@2.57.4": [
+        "../node_modules/@supabase/supabase-js/dist/module/index.d.ts"
+      ]
+    }
+  }
+}

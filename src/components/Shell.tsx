@@ -1,8 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { signOut, useConnection } from "@/lib/backend";
+import { useState } from "react";
 import { useApp } from "@/lib/store";
 
 export function Shell({ children }: { children: ReactNode }) {
+  const [error, setError] = useState("");
+  const saving = useConnection((s) => s.saving);
   const account = useApp((s) => s.account);
   const dashboardPath = account ? (account.role === "manager" ? "/dashboard" : "/staff") : "/auth";
 
@@ -14,12 +18,13 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground font-display font-bold">
               P
             </span>
-            <span className="font-display text-lg font-semibold tracking-tight">
-              PracticeReady
-            </span>
+            <span className="font-display text-lg font-semibold tracking-tight">PracticeReady</span>
           </Link>
           <nav className="hidden gap-6 text-sm text-muted-foreground md:flex">
-            <Link to="/about" className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium">
+            <Link
+              to="/about"
+              className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium"
+            >
               About Us
             </Link>
           </nav>
@@ -40,10 +45,27 @@ export function Shell({ children }: { children: ReactNode }) {
                 Dashboard
               </Link>
             )}
+            {account && (
+              <button
+                onClick={() => void signOut().catch((e) => setError(e.message))}
+                className="rounded-lg px-3 py-2 text-sm"
+              >
+                Log out
+              </button>
+            )}
           </div>
-
         </div>
       </header>
+      {saving && (
+        <p role="status" className="px-6 pt-2 text-right text-xs text-muted-foreground">
+          Saving practice changes…
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="px-6 text-destructive">
+          {error}
+        </p>
+      )}
       <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
       <footer className="mt-16 border-t border-border">
         <div className="mx-auto max-w-6xl px-6 py-8 text-xs text-muted-foreground">
@@ -55,13 +77,7 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-export function Card({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div
       className={`rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(15,30,60,0.04)] ${className}`}

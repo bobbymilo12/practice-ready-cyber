@@ -2,273 +2,231 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { useApp } from "@/lib/store";
+import { api, configured, loadWorkspace, signOut, supabase, useConnection } from "@/lib/backend";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({
-    meta: [
-      { title: "Create account or log in — PracticeReady" },
-      {
-        name: "description",
-        content:
-          "Create your PracticeReady account or log in as a practice manager or reception trainee to start local onboarding.",
-      },
-      { property: "og:title", content: "Create account or log in — PracticeReady" },
-      {
-        property: "og:description",
-        content:
-          "Join PracticeReady as a manager or trainee to build and complete practice-specific onboarding modules.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
+  head: () => ({ meta: [{ title: "Log in — PracticeReady" }] }),
+  validateSearch: (s: Record<string, unknown>): { email?: string; practice?: string } => ({
+    email: typeof s.email === "string" ? s.email : undefined,
+    practice: typeof s.practice === "string" ? s.practice : undefined,
   }),
   component: AuthPage,
 });
 
-type Role = "manager" | "trainee";
-
 function AuthPage() {
-  const navigate = useNavigate();
-  const [mode, setMode] = useState<"create" | "login">("create");
+  const search = Route.useSearch();
+  const nav = useNavigate();
+  const account = useApp((s) => s.account);
+  const connection = useConnection();
+  const [mode, setMode] = useState<"login" | "create">("login");
+  const [email, setEmail] = useState(search.email ?? "");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [role, setRole] = useState<Role | null>(null);
   const [error, setError] = useState("");
-  const setAccount = useApp((s) => s.setAccount);
-  const createAccount = useApp((s) => s.createAccount);
-  const loginAccount = useApp((s) => s.loginAccount);
-
-  const resetPasswordFields = () => {
-    setPassword("");
-    setConfirm("");
-    setShowPassword(false);
-    setShowConfirmPassword(false);
-  };
-
-  function submit(e: React.FormEvent) {
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const reset = Boolean(account?.mustResetPassword);
+  const field = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!role) {
-      setError("Please choose Manager or Trainee.");
-      return;
-    }
-    const trimmedEmail = email.trim();
-
-    if (mode === "create" && (!name.trim() || !trimmedEmail || !phone.trim())) {
-      setError("Please fill in your name, email and telephone number.");
-      return;
-    }
-    if (mode === "login" && (!trimmedEmail || !password)) {
-      setError("Please enter your email and password.");
-      return;
-    }
-    if (!password || password.length < 6) {
-      setError("Please choose a password of at least 6 characters.");
-      return;
-    }
-    if (mode === "create" && password !== confirm) {
-      setError("The two passwords do not match.");
-      return;
-    }
-
-    if (mode === "create") {
-      const ok = createAccount({
-        name: name.trim() || trimmedEmail.split("@")[0],
-        email: trimmedEmail,
-        phone,
-        password,
-        role,
-      });
-      if (!ok) {
-        setError("We could not save that account on this device. Please try a different email.");
-        return;
-      }
-    } else {
-      const ok = loginAccount(trimmedEmail, password, role);
-      if (!ok) {
-        setError("We couldn't match that account on this device. Check the role, email and password.");
-        return;
-      }
-    }
-
     setError("");
-    if (mode === "create") {
-      setAccount({
-        name: name.trim() || trimmedEmail.split("@")[0],
-        email: trimmedEmail,
-        phone,
-        password,
-        role,
-      });
-      resetPasswordFields();
+    setMessage("");
+    setBusy(true);
+    try {
+      if (!supabase)
+        throw new Error("Accounts are not configured yet. Complete docs/SETUP.md first.");
+      if ((reset || mode === "create") && (password.length < 12 || password !== confirm))
+        throw new Error("Use at least 12 characters and make sure both new passwords match.");
+      if (reset) {
+        await api("password", { currentPassword, password });
+        await loadWorkspace();
+        setPassword("");
+        setCurrentPassword("");
+        setConfirm("");
+        await nav({ to: "/staff" });
+      } else if (mode === "create") {
+        const { data, error: signupError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { name: name.trim() },
+            emailRedirectTo: `${window.location.origin}/auth`,
+          },
+        });
+        if (signupError) throw signupError;
+        if (!data.session) {
+          setMessage("Check your email to confirm your manager account, then log in.");
+          setMode("login");
+          setPassword("");
+          return;
+        }
+        await loadWorkspace();
+        await nav({ to: "/dashboard" });
+      } else {
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (loginError) throw new Error("We couldn't log you in. Check your email and password.");
+        await loadWorkspace();
+        const me = useApp.getState().account!;
+        if (search.practice && me.practiceId !== search.practice) {
+          await signOut();
+          throw new Error(
+            "This invitation belongs to a different practice. Use the email from your invitation.",
+          );
+        }
+        setCurrentPassword(password);
+        setPassword("");
+        if (!me.mustResetPassword)
+          await nav({ to: me.role === "manager" ? "/dashboard" : "/staff" });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setBusy(false);
     }
-    navigate({ to: role === "manager" ? "/dashboard" : "/staff" });
   }
-
-  const field =
-    "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary";
-
   return (
     <Shell>
       <div className="mx-auto max-w-lg">
-        <h1 className="font-display text-3xl font-bold tracking-tight">
-          {mode === "create" ? "Create your account" : "Log in"}
+        <h1 className="font-display text-3xl font-bold">
+          {reset
+            ? "Choose your own password"
+            : mode === "create"
+              ? "Create a manager account"
+              : "Welcome to PracticeReady"}
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Managers build modules for the practice. Trainees complete the modules assigned to them.
+        <p className="mt-3 text-sm text-muted-foreground">
+          {reset
+            ? "Change your temporary password to open your assigned training."
+            : "Trainees: log in with the email and temporary password in your practice invitation."}
         </p>
-
-        <div className="mt-6 inline-flex rounded-xl border border-border bg-surface p-1 text-sm">
-          {(["create", "login"] as const).map((m) => (
+        {!configured && (
+          <p role="status" className="mt-4 rounded-xl border border-border p-4 text-sm">
+            Accounts and email invitations will be available once the Supabase and Resend setup is
+            complete.
+          </p>
+        )}
+        {!reset && !search.practice && (
+          <div className="mt-6 flex gap-4 text-sm">
             <button
-              key={m}
-              type="button"
               onClick={() => {
-                setMode(m);
-                resetPasswordFields();
+                setMode("login");
+                setError("");
               }}
-              className={`rounded-lg px-4 py-2 font-medium ${
-                mode === m
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={mode === "login" ? "font-bold text-primary" : ""}
             >
-              {m === "create" ? "Create account" : "Login"}
+              Log in
             </button>
-          ))}
-        </div>
-
+            <button
+              onClick={() => {
+                setMode("create");
+                setError("");
+              }}
+              className={mode === "create" ? "font-bold text-primary" : ""}
+            >
+              New practice manager
+            </button>
+          </div>
+        )}
         <Card className="mt-6">
           <form onSubmit={submit} className="space-y-5">
-            {mode === "create" && (
+            {!reset && mode === "create" && (
               <label className="block text-sm">
-                <span className="font-medium">Full name</span>
+                Full name
                 <input
-                  className={field}
+                  required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Jane Cooper"
                   autoComplete="name"
+                  className={field}
                 />
               </label>
             )}
-
+            {!reset && (
+              <label className="block text-sm">
+                Email / username
+                <input
+                  required
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="username"
+                  className={field}
+                />
+              </label>
+            )}
+            {reset && (
+              <label className="block text-sm">
+                Temporary password
+                <input
+                  required
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className={field}
+                />
+              </label>
+            )}
             <label className="block text-sm">
-              <span className="font-medium">Email</span>
+              {reset ? "New password" : "Password"}
               <input
+                required
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={reset || mode === "create" ? 12 : undefined}
+                autoComplete={reset || mode === "create" ? "new-password" : "current-password"}
                 className={field}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="jane@practice.nhs.uk"
-                autoComplete="email"
               />
             </label>
-
-            {mode === "create" && (
-              <label className="block text-sm">
-                <span className="font-medium">Telephone number</span>
-                <input
-                  className={field}
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="01234 567890"
-                  autoComplete="tel"
-                />
-              </label>
-            )}
-
-            <label className="block text-sm">
-              <span className="font-medium">Password</span>
-              <div className="relative">
-                <input
-                  className={`${field} pr-10`}
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                  autoComplete={mode === "create" ? "new-password" : "current-password"}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-            </label>
-
-            {mode === "create" && (
-              <label className="block text-sm">
-                <span className="font-medium">Confirm password</span>
-                <div className="relative">
+            {(reset || mode === "create") && (
+              <>
+                <p className="text-xs text-muted-foreground">Use at least 12 characters.</p>
+                <label className="block text-sm">
+                  Confirm new password
                   <input
-                    className={`${field} pr-10`}
-                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    type="password"
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
-                    placeholder="Re-enter your password"
                     autoComplete="new-password"
+                    className={field}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword((v) => !v)}
-                    className="absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground hover:text-foreground"
-                    aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}
-                  >
-                    {showConfirmPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </label>
+                </label>
+              </>
             )}
-
-            <div>
-              <span className="text-sm font-medium">I am a</span>
-              <div className="mt-2 grid grid-cols-2 gap-3">
-                {(
-                  [
-                    ["manager", "Manager", "Build and publish modules"],
-                    ["trainee", "Trainee", "Complete assigned modules"],
-                  ] as const
-                ).map(([value, label, hint]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setRole(value)}
-                    className={`rounded-xl border p-4 text-left transition ${
-                      role === value
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:bg-surface"
-                    }`}
-                  >
-                    <span className="block text-sm font-semibold">{label}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
+            {(error || connection.error) && (
+              <p role="alert" className="text-sm text-destructive">
+                {error || connection.error}
+              </p>
+            )}
+            {message && (
+              <p role="status" className="text-sm text-primary">
+                {message}
+              </p>
+            )}
             <button
-              type="submit"
-              className="w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90"
+              disabled={busy || !configured}
+              className="w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
-              {mode === "create" ? "Create account" : "Log in"}
+              {busy
+                ? "Please wait…"
+                : reset
+                  ? "Save password and start training"
+                  : mode === "create"
+                    ? "Create manager account"
+                    : "Log in"}
             </button>
-
-            <p className="text-xs text-muted-foreground">
-              Demo accounts are stored on this device only — please do not use a real work
-              password. PracticeReady supports local onboarding and does not replace statutory or
-              mandatory training.
-            </p>
+            {!reset && mode === "login" && (
+              <p className="text-xs text-muted-foreground">
+                Invitation expired or missing? Ask your practice manager to resend it.
+              </p>
+            )}
           </form>
         </Card>
       </div>

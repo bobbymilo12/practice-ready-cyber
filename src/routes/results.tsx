@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
+import { trainingAction, useConnection } from "@/lib/backend";
+import { assignmentProgress } from "@/lib/training";
 import { useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/results")({
@@ -9,9 +11,19 @@ export const Route = createFileRoute("/results")({
 });
 
 function Results() {
-  const r = useApp((s) => s.lastResult);
-  const results = useApp((s) => s.results);
-  const setResults = useApp.setState;
+  const account = useApp((s) => s.account);
+  const stored = useApp((s) => s.lastResult);
+  const r = stored?.traineeId === account?.id ? stored : null;
+  const assignments = useApp((s) => s.assignments).filter((a) => a.traineeId === account?.id);
+  const modules = useApp((s) => s.modules);
+  const sessions = useConnection((s) => s.sessions);
+  const attempt = sessions.find((s) => s.id === r?.attemptId);
+  const remaining = assignments.filter((a) => !assignmentProgress(a, sessions).completed);
+  const next = remaining
+    .map((a) => modules.find((m) => m.id === a.moduleId && m.published && !m.needsReview))
+    .find(Boolean);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [confidence, setConfidence] = useState<number | null>(r?.confidence ?? null);
   const [saved, setSaved] = useState<boolean>(typeof r?.confidence === "number");
 
@@ -31,30 +43,36 @@ function Results() {
   const pct = Math.round((r.correct / r.total) * 100);
   const scoreLabel = pct >= 90 ? "Strong" : pct >= 60 ? "Building" : "Needs practice";
 
-  const saveConfidence = (value: number) => {
-    setConfidence(value);
-    // Update the most recent matching result in history + lastResult
-    const updated = { ...r, confidence: value };
-    const newResults = results.map((x) =>
-      x.completedAt === r.completedAt && x.moduleId === r.moduleId ? updated : x,
-    );
-    setResults({ lastResult: updated, results: newResults });
-    setSaved(true);
+  const saveConfidence = async (value: number) => {
+    if (!attempt || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await trainingAction("confidence", {
+        assignmentId: attempt.assignmentId,
+        sessionId: attempt.id,
+        value,
+      });
+      setConfidence(value);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save confidence.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <Shell>
       <div className="mx-auto max-w-3xl">
         <Badge tone="approved">Module completed</Badge>
-        <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">
-          {r.moduleTitle}
-        </h1>
+        <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">{r.moduleTitle}</h1>
 
         <Card className="mt-6">
           <div className="grid gap-6 sm:grid-cols-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Score
+                First-answer score
               </div>
               <div className="mt-1 font-display text-4xl font-bold">
                 {r.correct}
@@ -68,29 +86,62 @@ function Results() {
               </div>
               <div className="mt-1 font-display text-2xl font-semibold">{scoreLabel}</div>
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-accent"
-                  style={{ width: `${pct}%` }}
-                />
+                <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
               </div>
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Completed
               </div>
-              <div className="mt-1 text-sm">
-                {new Date(r.completedAt).toLocaleString()}
-              </div>
+              <div className="mt-1 text-sm">{new Date(r.completedAt).toLocaleString()}</div>
             </div>
           </div>
         </Card>
 
+        {assignments.length > 0 && remaining.length === 0 && (
+          <Card className="mt-5 border-accent">
+            <h2 className="text-xl font-semibold">All assigned training completed!</h2>
+            <p className="mt-2 text-sm">Your manager can see your progress and achievements.</p>
+          </Card>
+        )}
+        {next && (
+          <Card className="mt-5">
+            <h2 className="text-lg font-semibold">Next assigned module</h2>
+            <p className="mt-2">{next.title}</p>
+            <Link
+              to="/train"
+              search={{ id: next.id }}
+              className="mt-4 inline-block rounded-xl bg-primary px-4 py-3 text-sm text-primary-foreground"
+            >
+              Continue Training →
+            </Link>
+          </Card>
+        )}
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        {(r.recoveredTitles?.length ?? 0) > 0 && (
+          <Card className="mt-5">
+            <h2 className="text-lg font-semibold">Improved with extra practice</h2>
+            <ul className="mt-3 space-y-2 text-sm">
+              {r.recoveredTitles?.map((t) => (
+                <li key={t}>✓ {t}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Your score above records your first answers. These topics were answered correctly in a
+              different follow-up situation.
+            </p>
+          </Card>
+        )}
         {/* Confidence check */}
         <Card className="mt-5">
           <h3 className="font-display text-lg font-semibold">Confidence check</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            How confident do you feel handling this in a real call? This helps your
-            manager know where to give extra support — it is not a test score.
+            How confident do you feel handling this in a real call? This helps your manager know
+            where to give extra support — it is not a test score.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {[1, 2, 3, 4, 5].map((v) => {
@@ -98,7 +149,8 @@ function Results() {
               return (
                 <button
                   key={v}
-                  onClick={() => saveConfidence(v)}
+                  disabled={busy}
+                  onClick={() => void saveConfidence(v)}
                   className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
                     active
                       ? "border-primary bg-primary text-primary-foreground"
@@ -121,16 +173,13 @@ function Results() {
           <h3 className="font-display text-lg font-semibold">Areas to review</h3>
           {r.wrongTitles.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              You picked the best answer for every scenario. Revisit the learning points
-              to reinforce what you've practised.
+              You have no outstanding topics from this attempt. Revisit the learning points to
+              reinforce what you've practised.
             </p>
           ) : (
             <ul className="mt-3 space-y-2 text-sm">
               {r.wrongTitles.map((t) => (
-                <li
-                  key={t}
-                  className="rounded-lg border border-border bg-surface px-3 py-2"
-                >
+                <li key={t} className="rounded-lg border border-border bg-surface px-3 py-2">
                   {t}
                 </li>
               ))}
@@ -139,8 +188,8 @@ function Results() {
         </Card>
 
         <div className="mt-6 rounded-xl border border-border bg-surface p-4 text-sm text-muted-foreground">
-          Results are for learning support only. They are not a performance assessment or
-          a disciplinary measure. Speak with your manager if any topic feels unclear.
+          Results are for learning support only. They are not a performance assessment or a
+          disciplinary measure. Speak with your manager if any topic feels unclear.
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">

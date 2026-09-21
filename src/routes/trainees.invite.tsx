@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
+import { api, flushPractice, loadWorkspace } from "@/lib/backend";
 import { useApp, TRAINEE_ROLE_OPTIONS } from "@/lib/store";
 
 export const Route = createFileRoute("/trainees/invite")({
@@ -26,7 +27,7 @@ export const Route = createFileRoute("/trainees/invite")({
 
 function InvitePage() {
   const trainees = useApp((s) => s.trainees);
-  const inviteTrainee = useApp((s) => s.inviteTrainee);
+  const [busy, setBusy] = useState(false);
   const removeTrainee = useApp((s) => s.removeTrainee);
 
   const [email, setEmail] = useState("");
@@ -38,20 +39,50 @@ function InvitePage() {
   const field =
     "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary";
 
+  async function invite(value: string, traineeName: string, traineeRole: string) {
+    setBusy(true);
+    setError("");
+    setSentTo(null);
+    let canRefresh = false;
+    try {
+      await flushPractice();
+      canRefresh = true;
+      await api("invite", { email: value, name: traineeName, role: traineeRole });
+      setSentTo(value);
+      setEmail("");
+      setName("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The invitation could not be sent.");
+    } finally {
+      if (canRefresh) await loadWorkspace().catch(() => {});
+      setBusy(false);
+    }
+  }
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const value = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      setError("Please enter a valid work email address.");
-      setSentTo(null);
+    if (!name.trim()) {
+      setError("Enter the trainee's name.");
       return;
     }
+    void invite(email.trim(), name.trim(), role);
+  }
+  async function remove(id: string) {
+    if (
+      !window.confirm("Remove this trainee's account and training history? This cannot be undone.")
+    )
+      return;
+    setBusy(true);
     setError("");
-    inviteTrainee(value, name, role);
-    setSentTo(value);
-    setEmail("");
-    setName("");
-    setRole(TRAINEE_ROLE_OPTIONS[0]);
+    try {
+      await flushPractice();
+      await api("remove-trainee", { id });
+      removeTrainee(id);
+      await flushPractice();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove trainee.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -64,8 +95,8 @@ function InvitePage() {
           Create a new trainee account
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Enter the trainee's work email. They'll appear in your team list straight away and
-          can start any module you assign to them.
+          Enter the trainee's work email. They'll appear in your team list straight away and can
+          start any module you assign to them.
         </p>
 
         <Card className="mt-6">
@@ -74,6 +105,7 @@ function InvitePage() {
               <span className="font-medium">Trainee work email</span>
               <input
                 className={field}
+                required
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -95,11 +127,7 @@ function InvitePage() {
             <div className="block text-sm">
               <span className="font-medium">Role</span>
               <div className="mt-1 grid gap-2 md:grid-cols-[1fr_auto]">
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className={field}
-                >
+                <select value={role} onChange={(e) => setRole(e.target.value)} className={field}>
                   {TRAINEE_ROLE_OPTIONS.map((option) => (
                     <option key={option} value={option}>
                       {option}
@@ -112,19 +140,22 @@ function InvitePage() {
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <button
+              disabled={busy}
               type="submit"
               className="w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90"
             >
-              Invite employee
+              {busy ? "Sending…" : "Invite employee"}
             </button>
           </form>
 
           {sentTo && (
             <div className="mt-5 rounded-xl border border-[color:var(--success)]/40 bg-success/10 p-4 text-sm">
-              <p className="font-semibold text-[color:var(--success)]">Invite sent</p>
+              <p className="font-semibold text-[color:var(--success)]">
+                Invitation accepted for email delivery
+              </p>
               <p className="mt-1 text-muted-foreground">
-                {sentTo} has been added to your team. They can sign in with that email and
-                choose Trainee.
+                {sentTo} has been added to your team. The email contains their login link and
+                temporary password. They must change it before training.
               </p>
             </div>
           )}
@@ -149,8 +180,21 @@ function InvitePage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge tone={t.status === "active" ? "approved" : "draft"}>
-                      {t.status === "active" ? "Active" : "Invited"}
+                      {t.status === "active"
+                        ? "Active"
+                        : t.inviteStatus === "failed"
+                          ? "Email failed"
+                          : "Invited"}
                     </Badge>
+                    {t.status === "invited" && (
+                      <button
+                        disabled={busy}
+                        onClick={() => void invite(t.email, t.name, t.role)}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Resend invitation
+                      </button>
+                    )}
                     <Link
                       to="/trainees/$id"
                       params={{ id: t.id }}
@@ -159,7 +203,8 @@ function InvitePage() {
                       View progress →
                     </Link>
                     <button
-                      onClick={() => removeTrainee(t.id)}
+                      disabled={busy}
+                      onClick={() => void remove(t.id)}
                       className="text-xs text-destructive hover:underline"
                     >
                       Remove

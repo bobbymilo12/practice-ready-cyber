@@ -113,7 +113,11 @@ function ScenarioCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {scenario.kind === "mcq" ? "Multiple choice · 1 of 4" : "Put steps in order"}
+            {scenario.followUpFor
+              ? "Follow-up practice · shown after a missed answer"
+              : scenario.kind === "mcq"
+                ? "Multiple choice"
+                : "Put steps in order"}
           </div>
           {editing ? (
             <input

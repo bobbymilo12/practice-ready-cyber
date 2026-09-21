@@ -1,64 +1,8 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { practiceScenarios } from "./practice-scenarios";
 
-export type ScenarioStatus = "draft" | "approved";
-
-export interface MCQScenario {
-  kind: "mcq";
-  id: string;
-  title: string;
-  patientQuote: string;
-  question: string;
-  options: string[];
-  correctIndex: number;
-  learningPoint: string;
-  status: ScenarioStatus;
-  managerNote?: string;
-}
-
-export interface OrderScenario {
-  kind: "order";
-  id: string;
-  title: string;
-  patientQuote: string;
-  question: string;
-  steps: string[];
-  learningPoint: string;
-  status: ScenarioStatus;
-  managerNote?: string;
-}
-
-export type Scenario = MCQScenario | OrderScenario;
-
-export type Difficulty = "easy" | "intermediate" | "advanced";
-export type ModuleLength = "short" | "medium" | "long";
-
-export interface Module {
-  id: string;
-  type: string;
-  title: string;
-  topicKey: string;
-  published: boolean;
-  scenarios: Scenario[];
-  createdAt: number;
-  difficulty?: Difficulty;
-  length?: ModuleLength;
-  needsReview?: boolean;
-  reviewReason?: string;
-}
-
-export interface TrainingResult {
-  moduleId: string;
-  moduleTitle: string;
-  correct: number;
-  total: number;
-  wrongTitles: string[];
-  completedAt: number;
-  confidence?: number; // 1-5 self-report
-  traineeId?: string;
-  traineeName?: string;
-  emoji?: string;
-}
+import type { ScenarioStatus, MCQScenario, OrderScenario, Scenario, Difficulty, ModuleLength, Module, TrainingResult, Assignment } from "./training-types";
+export type { ScenarioStatus, MCQScenario, OrderScenario, Scenario, Difficulty, ModuleLength, Module, TrainingResult, Assignment } from "./training-types";
 
 // ------------- Accounts, trainees, assignments -------------
 export type AccountRole = "manager" | "trainee";
@@ -67,7 +11,9 @@ export interface Account {
   name: string;
   email: string;
   phone: string;
-  password: string; // demo only — stored locally, not a real security system
+  id?: string;
+  practiceId?: string;
+  mustResetPassword?: boolean;
   role: AccountRole;
 }
 
@@ -80,6 +26,7 @@ export interface Trainee {
   role: string;
   status: TraineeStatus;
   invitedAt: number;
+  inviteStatus?: string;
 }
 
 export const TRAINEE_ROLE_OPTIONS = [
@@ -112,15 +59,6 @@ export const STAFF_ROLE_OPTIONS = [
   "Reception / Admin lead",
   "GP Partner",
 ] as const;
-
-export interface Assignment {
-  id: string;
-  traineeId: string;
-  moduleId: string;
-  assignedAt: number;
-  dueDate?: string;
-  status: "assigned" | "in_progress" | "completed" | "overdue";
-}
 
 export const RESULT_EMOJIS = ["👍", "🎉", "💪", "👀", "🔁", "⚠️"] as const;
 
@@ -196,7 +134,7 @@ export interface PracticeData {
   rolePolicies: RolePolicies;
 }
 
-const defaultPracticeData: PracticeData = {
+export const defaultPracticeData: PracticeData = {
   practiceName: "Willow Lane Medical Practice",
   hours: "08:00–18:30 Mon–Fri, extended access Wed evenings",
   address: "14 Willow Lane, Riverbank, RB2 7QT",
@@ -304,7 +242,7 @@ const defaultPracticeData: PracticeData = {
 };
 
 // ------------- App state -------------
-interface AppState {
+export interface AppState {
   modules: Module[];
   answers: Record<string, string>;
   currentDraftId: string | null;
@@ -331,14 +269,10 @@ interface AppState {
   mergeModules: (moduleIds: string[], title: string) => string;
 
   // Accounts & team
-  setAccount: (a: Account) => void;
-  createAccount: (a: Account) => boolean;
-  loginAccount: (email: string, password: string, role?: AccountRole) => boolean;
-  signOut: () => void;
-  inviteTrainee: (email: string, name?: string, role?: string) => Trainee;
   removeTrainee: (id: string) => void;
   activateTrainee: (id: string) => void;
   assignModule: (traineeId: string, moduleId: string, dueDate?: string, status?: Assignment["status"]) => void;
+  reassignModule: (traineeId: string, moduleId: string) => void;
   unassignModule: (traineeId: string, moduleId: string) => void;
   markResult: (traineeId: string, moduleId: string, completedAt: number, emoji: string) => void;
 
@@ -1015,40 +949,24 @@ export function draftsForTopic(
   length: ModuleLength = "short",
 ): Scenario[] {
   const target = length === "long" ? 15 : length === "medium" ? 10 : 5;
-  const source = poolForTopic(topicKey, topicTitle);
-  // Repeat pool with fresh ids until we have enough
-  const pool: Scenario[] = [];
-  let k = 0;
-  while (pool.length < target * 2 && k < target * 6) {
-    const base = source[k % source.length];
-    pool.push({ ...base, id: `${base.id}-${k}` });
-    k++;
-  }
-  let selected: Scenario[];
-  if (format === "mcq") selected = pool.filter((s) => s.kind === "mcq").slice(0, target);
-  else if (format === "order") selected = pool.filter((s) => s.kind === "order").slice(0, target);
-  else selected = pool.slice(0, target);
-  if (selected.length < target) selected = pool.slice(0, target);
-
-  // For intermediate / advanced, shuffle MCQ option positions so the correct
-  // answer isn't cued by position. Advanced also drops the most obviously
-  // absurd distractor pattern where possible.
-  if (difficulty !== "easy") {
-    selected = selected.map((s) => {
-      if (s.kind !== "mcq") return s;
-      const indexed = s.options.map((opt, i) => ({ opt, i }));
-      for (let i = indexed.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
-      }
-      return {
-        ...s,
-        options: indexed.map((x) => x.opt),
-        correctIndex: indexed.findIndex((x) => x.i === s.correctIndex),
-      };
-    });
-  }
-  return selected;
+  const { practiceData, answers } = useApp.getState();
+  const source = practiceScenarios(topicKey, topicTitle, practiceData, answers);
+  const mainIds = new Set(source.filter((s) => !s.followUpFor).slice(0, target).map((s) => s.id));
+  return source.filter((s) => mainIds.has(s.followUpFor ?? s.id)).map((s, index): Scenario => {
+    if (s.kind !== "mcq") return s;
+    if (format === "order" || (format === "mixed" && Math.floor(index / 2) % 2 === 1)) {
+      return { kind: "order", id: s.id, title: s.title, patientQuote: s.patientQuote,
+        question: "Put these steps for applying the recorded practice guidance in order.",
+        steps: ["Identify which recorded local procedure applies to this request.",
+          `Check the local instructions: ${s.options[s.correctIndex]}`,
+          "Follow those instructions, seeking the named team's help if anything is unclear.",
+          "Document the action taken and the outcome according to the practice process."],
+        learningPoint: s.learningPoint, status: "draft", followUpFor: s.followUpFor };
+    }
+    const offset = difficulty === "easy" && !s.followUpFor ? 0 : Math.floor(Math.random() * s.options.length);
+    return { ...s, options: [...s.options.slice(offset), ...s.options.slice(0, offset)],
+      correctIndex: (s.correctIndex - offset + s.options.length) % s.options.length };
+  });
 }
 
 
@@ -1118,10 +1036,8 @@ const replaceInScenario = (s: Scenario, from: string, to: string): Scenario => {
   return { ...(base as OrderScenario), steps: s.steps.map((o) => replaceInText(o, from, to)) };
 };
 
-export const useApp = create<AppState>()(
-  persist(
-    (set, get) => ({
-      modules: [seededModule],
+export const useApp = create<AppState>()((set, get) => ({
+      modules: [],
       answers: {},
       currentDraftId: null,
       lastResult: null,
@@ -1162,7 +1078,7 @@ export const useApp = create<AppState>()(
         set((state) => ({
           modules: state.modules.map((m) =>
             m.id === moduleId
-              ? { ...m, scenarios: m.scenarios.map((x) => (x.id === s.id ? s : x)) }
+              ? { ...m, needsReview: m.published || m.needsReview, scenarios: m.scenarios.map((x) => (x.id === s.id ? s : x)) }
               : m,
           ),
         })),
@@ -1171,7 +1087,7 @@ export const useApp = create<AppState>()(
         set((state) => ({
           modules: state.modules.map((m) =>
             m.id === moduleId
-              ? { ...m, scenarios: m.scenarios.filter((x) => x.id !== scenarioId) }
+              ? { ...m, needsReview: m.published || m.needsReview, scenarios: m.scenarios.filter((x) => x.id !== scenarioId && x.followUpFor !== scenarioId) }
               : m,
           ),
         })),
@@ -1196,7 +1112,7 @@ export const useApp = create<AppState>()(
           if (!mod) return state;
           const current = mod.scenarios.find((x) => x.id === scenarioId);
           if (!current) return state;
-          const pool = poolForTopic(mod.topicKey, mod.title);
+          const pool = practiceScenarios(mod.topicKey, mod.title, state.practiceData, state.answers).filter((s) => !s.followUpFor);
           const usedTitles = new Set(mod.scenarios.map((s) => s.title));
           const sameKind = pool.filter(
             (p) => p.kind === current.kind && !usedTitles.has(p.title),
@@ -1207,13 +1123,14 @@ export const useApp = create<AppState>()(
             anyKind[Math.floor(Math.random() * anyKind.length)] ??
             pool[Math.floor(Math.random() * pool.length)];
           if (!pick) return state;
-          const replacement: Scenario = { ...pick, id: current.id, status: "draft" };
+          const replacement: Scenario = { ...pick, id: current.id, followUpFor: current.followUpFor, status: "draft" };
           return {
             modules: state.modules.map((m) =>
               m.id === moduleId
                 ? {
                     ...m,
-                    scenarios: m.scenarios.map((x) => (x.id === scenarioId ? replacement : x)),
+                    needsReview: m.published || m.needsReview,
+                    scenarios: m.scenarios.filter((x) => x.followUpFor !== scenarioId).map((x) => (x.id === scenarioId ? replacement : x)),
                   }
                 : m,
             ),
@@ -1223,7 +1140,7 @@ export const useApp = create<AppState>()(
       publishModule: (moduleId) =>
         set((state) => ({
           modules: state.modules.map((m) =>
-            m.id === moduleId ? { ...m, published: true } : m,
+            m.id === moduleId && m.scenarios.length > 0 && m.scenarios.every((s) => s.status === "approved") ? { ...m, published: true, needsReview: false } : m,
           ),
         })),
 
@@ -1257,7 +1174,7 @@ export const useApp = create<AppState>()(
               const key = s.title + s.question;
               if (seen.has(key)) return;
               seen.add(key);
-              scenarios.push({ ...s, id: `${id}-${mi}-${si}` });
+              scenarios.push({ ...s, id: `${id}-${mi}-${s.id}`, followUpFor: s.followUpFor ? `${id}-${mi}-${s.followUpFor}` : undefined });
             });
           });
           return {
@@ -1277,78 +1194,6 @@ export const useApp = create<AppState>()(
           };
         });
         return id;
-      },
-
-      setAccount: (a) =>
-        set((state) => {
-          const match = state.trainees.find(
-            (t) => t.email.toLowerCase() === a.email.toLowerCase(),
-          );
-          return {
-            account: a,
-            trainees: match
-              ? state.trainees.map((t) =>
-                  t.id === match.id
-                    ? { ...t, status: "active" as TraineeStatus, name: t.name || a.name }
-                    : t,
-                )
-              : state.trainees,
-          };
-        }),
-
-      createAccount: (a) => {
-        const key = a.email.trim().toLowerCase();
-        if (!key || !a.password || a.password.length < 6) return false;
-        set((state) => {
-          const existing = state.trainees.find((t) => t.email.toLowerCase() === key);
-          return {
-            account: a,
-            trainees: existing
-              ? state.trainees.map((t) =>
-                  t.id === existing.id
-                    ? { ...t, status: "active" as TraineeStatus, name: t.name || a.name }
-                    : t,
-                )
-              : state.trainees,
-          };
-        });
-        return true;
-      },
-
-      loginAccount: (email, password, role) => {
-        const key = email.trim().toLowerCase();
-        const current = get().account;
-        if (current && current.email.toLowerCase() === key && current.password === password) {
-          if (role && current.role !== role) return false;
-          return true;
-        }
-        const account = get().account;
-        if (!account || account.email.toLowerCase() !== key || account.password !== password) {
-          return false;
-        }
-        if (role && account.role !== role) return false;
-        set({ account });
-        return true;
-      },
-
-      signOut: () => set({ account: null }),
-
-      inviteTrainee: (email, name, role) => {
-        const trimmed = email.trim();
-        const existing = get().trainees.find(
-          (t) => t.email.toLowerCase() === trimmed.toLowerCase(),
-        );
-        if (existing) return existing;
-        const t: Trainee = {
-          id: uid(),
-          email: trimmed,
-          name: name?.trim() || trimmed.split("@")[0].replace(/[._-]+/g, " "),
-          role: role || "",
-          status: "invited",
-          invitedAt: Date.now(),
-        };
-        set((state) => ({ trainees: [...state.trainees, t] }));
-        return t;
       },
 
       removeTrainee: (id) =>
@@ -1382,6 +1227,11 @@ export const useApp = create<AppState>()(
                 ],
               },
         ),
+
+      reassignModule: (traineeId, moduleId) => set((state) => ({
+        assignments: state.assignments.map((a) => a.traineeId === traineeId && a.moduleId === moduleId
+          ? { ...a, id: uid(), assignedAt: Date.now(), status: "assigned" as const } : a),
+      })),
 
       unassignModule: (traineeId, moduleId) =>
         set((state) => ({
@@ -1519,41 +1369,4 @@ export const useApp = create<AppState>()(
         });
         return touched;
       },
-    }),
-    {
-      name: "practice-ready-store",
-      version: 3,
-      migrate: (persisted: unknown) => {
-        const p = (persisted ?? {}) as Partial<AppState>;
-        const pd = (p.practiceData ?? {}) as Partial<PracticeData>;
-        return {
-          ...p,
-          results: p.results ?? [],
-          trainees: p.trainees ?? [],
-          assignments: p.assignments ?? [],
-          account: p.account ?? null,
-          setupComplete: p.setupComplete ?? false,
-          emojiMarks: (p.emojiMarks as Record<string, string>) ?? {},
-          practiceData: {
-            ...defaultPracticeData,
-            ...pd,
-            staff: (pd.staff ?? defaultPracticeData.staff).map((member) => ({
-              ...member,
-              capabilities: Array.isArray(member.capabilities)
-                ? member.capabilities
-                : [],
-            })),
-            sameDayReasons:
-              Array.isArray(pd.sameDayReasons) && pd.sameDayReasons.length > 0
-                ? pd.sameDayReasons
-                : defaultPracticeData.sameDayReasons,
-            rolePolicies: {
-              ...defaultPracticeData.rolePolicies,
-              ...(pd.rolePolicies ?? {}),
-            },
-          },
-        } as AppState;
-      },
-    },
-  ),
-);
+    }));

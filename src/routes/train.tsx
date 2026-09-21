@@ -1,373 +1,337 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useMemo, useEffect } from "react";
-import { Shell, Card } from "@/components/Shell";
+import { useState } from "react";
+import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp, type Scenario } from "@/lib/store";
+import { trainingAction, useConnection } from "@/lib/backend";
+import { type SavedAnswer, type TrainingSession, primaryScenarios } from "@/lib/training";
 
 export const Route = createFileRoute("/train")({
   head: () => ({ meta: [{ title: "Training module — PracticeReady" }] }),
-  validateSearch: (s: Record<string, unknown>) => ({ id: (s.id as string) || "" }),
+  validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : "" }),
   component: Train,
 });
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  // ensure not identical when possible
-  return a;
-}
-
 function Train() {
   const { id } = Route.useSearch();
-  const nav = useNavigate();
-  const module = useApp((s) => s.modules.find((m) => m.id === id));
-  const addResult = useApp((s) => s.addResult);
   const account = useApp((s) => s.account);
+  return <Training key={`${account?.id}:${id}`} id={id} />;
+}
 
-  const scenarios = useMemo(
-    () => module?.scenarios.filter((s) => s.status === "approved") ?? [],
-    [module],
+function Training({ id }: { id: string }) {
+  const nav = useNavigate();
+  const state = useApp();
+  const sessions = useConnection((s) => s.sessions);
+  const module = state.modules.find((m) => m.id === id);
+  const assignment = state.assignments.find(
+    (a) => a.moduleId === id && a.traineeId === state.account?.id,
   );
+  const open = sessions.find((s) => s.assignmentId === assignment?.id && !s.result);
+  const [session, setSession] = useState<TrainingSession | undefined>(open);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const preview = state.account?.role === "manager";
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const previewScenarios = module ? module.scenarios.filter((s) => s.status === "approved") : [];
+  const scenario = preview
+    ? previewScenarios[previewIndex]
+    : session?.scenarios.find((s) => s.id === session.queue[session.index]);
+  const answer = session?.answers.find((a) => a.scenarioId === scenario?.id);
 
-  const [idx, setIdx] = useState(0);
-  const [answers, setAnswers] = useState<
-    { id: string; correct: boolean; title: string }[]
-  >([]);
-
-  if (!module) {
-    return (
-      <Shell>
-        <Card>
-          <p>Module not found.</p>
-          <Link to="/dashboard" className="mt-3 inline-block text-primary hover:underline">
-            Back to dashboard
-          </Link>
-        </Card>
-      </Shell>
-    );
-  }
-
-  if (scenarios.length === 0) {
-    return (
-      <Shell>
-        <Card>
-          <p className="text-sm">No approved scenarios in this module yet.</p>
-          <Link to="/dashboard" className="mt-3 inline-block text-primary hover:underline">
-            Back to dashboard
-          </Link>
-        </Card>
-      </Shell>
-    );
-  }
-
-  const current = scenarios[idx];
-
-  const handleAnswered = (correct: boolean) => {
-    setAnswers((prev) => [...prev, { id: current.id, correct, title: current.title }]);
-  };
-
-  const handleContinue = () => {
-    if (idx + 1 >= scenarios.length) {
-      const finalAnswers = answers;
-      const correct = finalAnswers.filter((a) => a.correct).length;
-      addResult({
-        moduleId: module.id,
-        moduleTitle: module.title,
-        correct,
-        total: scenarios.length,
-        wrongTitles: finalAnswers.filter((a) => !a.correct).map((a) => a.title),
-        completedAt: Date.now(),
-        traineeName: account?.name,
+  async function act(action: string, value?: number | string[]) {
+    if (busy || !assignment) return;
+    setBusy(true);
+    setError("");
+    try {
+      const next = await trainingAction(action, {
+        assignmentId: assignment.id,
+        sessionId: session?.id,
+        scenarioId: scenario?.id,
+        value,
       });
-      nav({ to: "/results" });
-    } else {
-      setIdx((i) => i + 1);
+      setSession(next);
+      if (next.result) await nav({ to: "/results" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save your progress. Please retry.");
+    } finally {
+      setBusy(false);
     }
-  };
+  }
 
-  const progress = (idx / scenarios.length) * 100;
-
+  if (!module || (!preview && !assignment))
+    return (
+      <Shell>
+        <Card>
+          <h1 className="text-xl font-bold">Module unavailable</h1>
+          <p className="mt-2">This module is not assigned to you.</p>
+          <Link to="/staff" className="mt-4 block text-primary">
+            Back to your training
+          </Link>
+        </Card>
+      </Shell>
+    );
+  if (!preview && (!module.published || module.needsReview || !primaryScenarios(module).length))
+    return (
+      <Shell>
+        <Card>
+          <p>Your manager is reviewing this module. Your progress is saved; please return later.</p>
+          <Link to="/staff" className="mt-3 block text-primary">
+            Back to your training
+          </Link>
+        </Card>
+      </Shell>
+    );
+  if (!preview && !session)
+    return (
+      <Shell>
+        <Card>
+          <h1 className="font-display text-2xl font-bold">{module.title}</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {primaryScenarios(module).length} scenarios. Each checked answer saves automatically. If
+            you miss a topic, you may receive an approved follow-up scenario for extra practice.
+          </p>
+          {error && (
+            <p role="alert" className="mt-3 text-destructive">
+              {error}
+            </p>
+          )}
+          <button
+            disabled={busy}
+            onClick={() => void act("start")}
+            className="mt-5 rounded-xl bg-primary px-5 py-3 text-primary-foreground disabled:opacity-50"
+          >
+            {busy ? "Starting…" : "Begin training"}
+          </button>
+        </Card>
+      </Shell>
+    );
+  if (!scenario)
+    return (
+      <Shell>
+        <Card>
+          <p>No approved scenarios to preview.</p>
+          <Link to="/dashboard">Back to dashboard</Link>
+        </Card>
+      </Shell>
+    );
+  const index = preview ? previewIndex : session!.index;
+  const total = preview ? previewScenarios.length : session!.queue.length;
+  const answered = preview ? index : session!.answers.length;
   return (
     <Shell>
       <div className="mx-auto max-w-3xl">
-        <p className="text-sm text-muted-foreground">
-          {module.title} · Scenario {idx + 1} of {scenarios.length}
-        </p>
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link to={preview ? "/dashboard" : "/staff"} className="text-sm text-primary">
+            ← {preview ? "Back to manager dashboard" : "Save and exit"}
+          </Link>
+          <span role="status" className="text-xs text-muted-foreground">
+            {preview
+              ? "Manager preview · no results recorded"
+              : busy
+                ? "Saving…"
+                : "Checked answers saved to your account"}
+          </span>
         </div>
-
-        {current.kind === "mcq" ? (
-          <MCQBlock
-            key={current.id}
-            scenario={current}
-            onAnswered={handleAnswered}
-            onContinue={handleContinue}
-            isLast={idx + 1 >= scenarios.length}
-          />
-        ) : (
-          <OrderBlock
-            key={current.id}
-            scenario={current}
-            onAnswered={handleAnswered}
-            onContinue={handleContinue}
-            isLast={idx + 1 >= scenarios.length}
-          />
+        <h1 className="mt-5 font-display text-2xl font-bold">{module.title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {state.practiceData.practiceName} · Scenario {index + 1} of {total}
+        </p>
+        <progress
+          aria-label="Module progress"
+          value={answered}
+          max={total}
+          className="mt-3 h-2 w-full accent-primary"
+        />
+        {scenario.followUpFor && (
+          <div className="mt-4">
+            <Badge tone="info">Extra practice</Badge>
+            <p className="mt-2 text-sm">
+              Try a different situation using the topic you found difficult. Your original score
+              stays separate.
+            </p>
+          </div>
         )}
+        {error && (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-destructive/40 p-4 text-sm text-destructive"
+          >
+            {error} Your last saved answer is safe. Retry the action or return to your training.
+          </div>
+        )}
+        <ScenarioBlock
+          key={`${session?.id ?? "preview"}:${scenario.id}`}
+          scenario={scenario}
+          answer={answer}
+          busy={busy}
+          preview={preview}
+          onAnswer={(value) => void act("answer", value)}
+          onContinue={() => {
+            if (preview) {
+              if (previewIndex + 1 < total) setPreviewIndex((i) => i + 1);
+              else void nav({ to: "/dashboard" });
+            } else void act("continue");
+          }}
+          isLast={index + 1 === total}
+        />
       </div>
     </Shell>
   );
 }
 
-function MCQBlock({
+function ScenarioBlock({
   scenario,
-  onAnswered,
+  answer,
+  busy,
+  preview,
+  onAnswer,
   onContinue,
   isLast,
 }: {
-  scenario: Extract<Scenario, { kind: "mcq" }>;
-  onAnswered: (correct: boolean) => void;
+  scenario: Scenario;
+  answer?: SavedAnswer;
+  busy: boolean;
+  preview: boolean;
+  onAnswer: (value: number | string[]) => void;
   onContinue: () => void;
   isLast: boolean;
 }) {
-  const [selected, setSelected] = useState<number | null>(null);
-  const revealed = selected !== null;
-
-  const handleSelect = (i: number) => {
-    if (revealed) return;
-    setSelected(i);
-    onAnswered(i === scenario.correctIndex);
-  };
-
-  return (
-    <Card className="mt-6">
-      <h2 className="font-display text-2xl font-bold">{scenario.title}</h2>
-      <blockquote className="mt-4 rounded-lg border-l-4 border-accent bg-surface p-4 italic text-foreground">
-        &ldquo;{scenario.patientQuote}&rdquo;
-      </blockquote>
-      <p className="mt-5 font-medium">{scenario.question}</p>
-
-      <div className="mt-4 space-y-3">
-        {scenario.options.map((opt, i) => {
-          const isCorrect = i === scenario.correctIndex;
-          const isPicked = selected === i;
-          let classes = "border-border hover:border-primary/40";
-          if (revealed && isCorrect) classes = "border-accent bg-accent/10";
-          else if (revealed && isPicked && !isCorrect)
-            classes = "border-destructive/50 bg-destructive/5";
-          return (
-            <button
-              key={i}
-              onClick={() => handleSelect(i)}
-              disabled={revealed}
-              className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left text-sm transition ${classes}`}
-            >
-              <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-md bg-muted text-xs font-semibold">
-                {String.fromCharCode(65 + i)}
-              </span>
-              <span>{opt}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {revealed && (
-        <Feedback
-          isCorrect={selected === scenario.correctIndex}
-          learningPoint={scenario.learningPoint}
-          managerNote={scenario.managerNote}
-          onContinue={onContinue}
-          isLast={isLast}
-        />
-      )}
-    </Card>
-  );
-}
-
-function OrderBlock({
-  scenario,
-  onAnswered,
-  onContinue,
-  isLast,
-}: {
-  scenario: Extract<Scenario, { kind: "order" }>;
-  onAnswered: (correct: boolean) => void;
-  onContinue: () => void;
-  isLast: boolean;
-}) {
+  const [localAnswer, setLocalAnswer] = useState<SavedAnswer>();
+  const saved = preview ? localAnswer : answer;
   const [items, setItems] = useState<string[]>(() => {
-    let shuffled = shuffle(scenario.steps);
-    if (shuffled.every((v, i) => v === scenario.steps[i]) && shuffled.length > 1) {
-      shuffled = [shuffled[shuffled.length - 1], ...shuffled.slice(0, -1)];
-    }
-    return shuffled;
+    if (Array.isArray(answer?.value)) return answer.value;
+    if (scenario.kind !== "order") return [];
+    return [...scenario.steps.slice(1), scenario.steps[0]];
   });
-  const [checked, setChecked] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false);
-
-  useEffect(() => {
-    setItems(() => {
-      let shuffled = shuffle(scenario.steps);
-      if (shuffled.every((v, i) => v === scenario.steps[i]) && shuffled.length > 1) {
-        shuffled = [shuffled[shuffled.length - 1], ...shuffled.slice(0, -1)];
-      }
-      return shuffled;
-    });
-    setChecked(false);
-    setIsCorrect(false);
-  }, [scenario.id, scenario.steps]);
-
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= items.length) return;
+  const check = (value: number | string[]) => {
+    if (busy || saved) return;
+    if (preview)
+      setLocalAnswer({
+        scenarioId: scenario.id,
+        title: scenario.title,
+        value,
+        correct:
+          scenario.kind === "mcq"
+            ? value === scenario.correctIndex
+            : Array.isArray(value) && value.every((s, i) => s === scenario.steps[i]),
+      });
+    else onAnswer(value);
+  };
+  const move = (index: number, direction: number) => {
     const next = [...items];
-    const [x] = next.splice(from, 1);
-    next.splice(to, 0, x);
+    [next[index], next[index + direction]] = [next[index + direction], next[index]];
     setItems(next);
   };
-
-  const handleCheck = () => {
-    const correct = items.every((v, i) => v === scenario.steps[i]);
-    setIsCorrect(correct);
-    setChecked(true);
-    onAnswered(correct);
-  };
-
   return (
     <Card className="mt-6">
-      <h2 className="font-display text-2xl font-bold">{scenario.title}</h2>
-      <blockquote className="mt-4 rounded-lg border-l-4 border-accent bg-surface p-4 italic text-foreground">
-        &ldquo;{scenario.patientQuote}&rdquo;
+      <h2 className="font-display text-xl font-bold">{scenario.title}</h2>
+      <blockquote className="mt-4 rounded-lg border-l-4 border-accent bg-surface p-4 italic">
+        “{scenario.patientQuote}”
       </blockquote>
       <p className="mt-5 font-medium">{scenario.question}</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Use the arrows to put the steps in the correct order.
-      </p>
-
-      <ol className="mt-4 space-y-2">
-        {items.map((step, i) => {
-          const rightPos = checked && step === scenario.steps[i];
-          const wrongPos = checked && step !== scenario.steps[i];
-          return (
-            <li
-              key={step}
-              className={`flex items-start gap-3 rounded-xl border p-3 text-sm ${
-                rightPos
-                  ? "border-accent bg-accent/10"
-                  : wrongPos
-                    ? "border-destructive/50 bg-destructive/5"
-                    : "border-border"
-              }`}
+      {scenario.kind === "mcq" ? (
+        <div className="mt-4 space-y-3">
+          {scenario.options.map((option, i) => (
+            <button
+              key={i}
+              disabled={busy || Boolean(saved)}
+              onClick={() => check(i)}
+              className={`flex w-full gap-3 rounded-xl border p-4 text-left text-sm disabled:cursor-default ${saved && i === scenario.correctIndex ? "border-accent bg-accent/10" : saved?.value === i ? "border-destructive bg-destructive/5" : "border-border hover:border-primary"}`}
             >
-              <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
-                {i + 1}
+              <span className="font-semibold">{String.fromCharCode(65 + i)}.</span>
+              <span>
+                {option}
+                {saved && i === scenario.correctIndex && (
+                  <strong className="ml-2">Best answer</strong>
+                )}
+                {saved?.value === i && <span className="ml-2">(Your answer)</span>}
               </span>
-              <span className="flex-1">{step}</span>
-              {!checked && (
-                <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => move(i, i - 1)}
-                    disabled={i === 0}
-                    aria-label="Move up"
-                    className="rounded-md border border-border px-2 text-xs disabled:opacity-30"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    onClick={() => move(i, i + 1)}
-                    disabled={i === items.length - 1}
-                    aria-label="Move down"
-                    className="rounded-md border border-border px-2 text-xs disabled:opacity-30"
-                  >
-                    ↓
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-
-      {!checked ? (
-        <button
-          onClick={handleCheck}
-          className="mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
-        >
-          Check my order
-        </button>
+            </button>
+          ))}
+        </div>
       ) : (
         <>
-          {!isCorrect && (
-            <div className="mt-5 rounded-xl border border-border bg-surface p-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Correct order
-              </div>
-              <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
-                {scenario.steps.map((s) => (
-                  <li key={s}>{s}</li>
-                ))}
-              </ol>
-            </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Use the arrows to arrange the steps, then check your answer.
+          </p>
+          <ol className="mt-4 space-y-2">
+            {items.map((step, i) => (
+              <li
+                key={`${i}:${step}`}
+                className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm"
+              >
+                <span>{i + 1}.</span>
+                <span className="flex-1">{step}</span>
+                {!saved && (
+                  <div className="flex gap-2">
+                    <button
+                      aria-label={`Move step ${i + 1} up`}
+                      disabled={busy || i === 0}
+                      onClick={() => move(i, -1)}
+                      className="rounded border px-3 py-2 disabled:opacity-30"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      aria-label={`Move step ${i + 1} down`}
+                      disabled={busy || i === items.length - 1}
+                      onClick={() => move(i, 1)}
+                      className="rounded border px-3 py-2 disabled:opacity-30"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+          {!saved && (
+            <button
+              disabled={busy}
+              onClick={() => check(items)}
+              className="mt-4 rounded-xl bg-primary px-4 py-3 text-sm text-primary-foreground disabled:opacity-50"
+            >
+              Check my order
+            </button>
           )}
-          <Feedback
-            isCorrect={isCorrect}
-            learningPoint={scenario.learningPoint}
-            managerNote={scenario.managerNote}
-            onContinue={onContinue}
-            isLast={isLast}
-          />
         </>
       )}
-    </Card>
-  );
-}
-
-function Feedback({
-  isCorrect,
-  learningPoint,
-  managerNote,
-  onContinue,
-  isLast,
-}: {
-  isCorrect: boolean;
-  learningPoint: string;
-  managerNote?: string;
-  onContinue: () => void;
-  isLast: boolean;
-}) {
-  return (
-    <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-      <div
-        className={`text-xs font-semibold uppercase tracking-wider ${
-          isCorrect ? "text-[color:var(--success)]" : "text-destructive"
-        }`}
-      >
-        {isCorrect ? "Correct" : "Not quite"}
-      </div>
-      <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Learning point
-      </div>
-      <p className="mt-1 text-sm text-muted-foreground">{learningPoint}</p>
-
-      {managerNote && managerNote.trim() && (
-        <div className="mt-4 rounded-lg border border-accent/40 bg-accent/5 p-3">
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Additional information from your manager
-          </div>
-          <p className="mt-1 text-sm">{managerNote}</p>
+      {saved && (
+        <div role="status" className="mt-6 rounded-xl border border-border bg-surface p-4">
+          <h3 className={`font-semibold ${saved.correct ? "text-primary" : "text-destructive"}`}>
+            {saved.correct ? "Correct" : "Not quite — let's learn from it"}
+          </h3>
+          {!saved.correct && scenario.kind === "order" && (
+            <>
+              <p className="mt-3 font-medium">Correct order</p>
+              <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm">
+                {scenario.steps.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+            </>
+          )}
+          <p className="mt-3 text-sm">{scenario.learningPoint}</p>
+          {scenario.managerNote && (
+            <div className="mt-4 rounded-lg border border-accent/40 p-3 text-sm">
+              <strong>From your manager</strong>
+              <p className="mt-1 whitespace-pre-line">{scenario.managerNote}</p>
+            </div>
+          )}
+          <button
+            disabled={busy}
+            onClick={onContinue}
+            className="mt-5 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            {busy
+              ? "Saving…"
+              : isLast
+                ? preview
+                  ? "Finish preview"
+                  : "Finish module"
+                : "Continue →"}
+          </button>
         </div>
       )}
-
-      <button
-        onClick={onContinue}
-        className="mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
-      >
-        {isLast ? "Finish module" : "Continue →"}
-      </button>
-    </div>
+    </Card>
   );
 }

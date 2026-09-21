@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card, Badge } from "@/components/Shell";
+import { useConnection } from "@/lib/backend";
+import { assignmentProgress } from "@/lib/training";
 import { useApp, RESULT_EMOJIS } from "@/lib/store";
 
 export const Route = createFileRoute("/trainees/$id")({
@@ -26,10 +28,12 @@ export const Route = createFileRoute("/trainees/$id")({
 function TraineeDetail() {
   const { id } = Route.useParams();
   const trainee = useApp((s) => s.trainees.find((t) => t.id === id));
+  const sessions = useConnection((s) => s.sessions);
   const modules = useApp((s) => s.modules);
   const results = useApp((s) => s.results);
   const assignments = useApp((s) => s.assignments);
   const assignModule = useApp((s) => s.assignModule);
+  const reassignModule = useApp((s) => s.reassignModule);
   const markResult = useApp((s) => s.markResult);
 
   if (!trainee) {
@@ -55,20 +59,18 @@ function TraineeDetail() {
     const attempts = myResults
       .filter((r) => r.moduleId === m.id)
       .sort((a, b) => b.completedAt - a.completedAt);
-    const best = attempts.reduce(
-      (acc, r) => Math.max(acc, r.total ? r.correct / r.total : 0),
-      0,
-    );
+    const best = attempts.reduce((acc, r) => Math.max(acc, r.total ? r.correct / r.total : 0), 0);
     const failedCount = attempts.filter((r) => (r.total ? r.correct / r.total : 0) < 0.7).length;
     return { module: m, attempts, best, failedCount };
   });
 
-  const overall =
-    perModule.length > 0
-      ? Math.round(
-          (perModule.reduce((a, p) => a + p.best, 0) / perModule.length) * 100,
-        )
-      : 0;
+  const overall = assigned.length
+    ? Math.round(
+        (assigned.reduce((sum, a) => sum + assignmentProgress(a, sessions).fraction, 0) /
+          assigned.length) *
+          100,
+      )
+    : 0;
 
   const unassigned = modules.filter(
     (m) => m.published && !assigned.some((a) => a.moduleId === m.id),
@@ -124,6 +126,14 @@ function TraineeDetail() {
                     {module.type}
                   </div>
                   <h3 className="mt-1 font-display text-lg font-semibold">{module.title}</h3>
+                  <p className="mt-1 text-sm font-medium">
+                    {
+                      assignmentProgress(
+                        assigned.find((a) => a.moduleId === module.id)!,
+                        sessions,
+                      ).status
+                    }
+                  </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {attempts.length === 0
                       ? "Not started"
@@ -133,7 +143,7 @@ function TraineeDetail() {
                   </p>
                 </div>
                 <button
-                  onClick={() => assignModule(trainee.id, module.id)}
+                  onClick={() => reassignModule(trainee.id, module.id)}
                   className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface"
                 >
                   Redo — reassign module
@@ -142,8 +152,8 @@ function TraineeDetail() {
 
               {failedCount >= 3 && (
                 <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-                  Flagged: scored below 70% on this module {failedCount} times. Worth a
-                  conversation or a side-by-side run-through.
+                  Flagged: scored below 70% on this module {failedCount} times. Worth a conversation
+                  or a side-by-side run-through.
                 </div>
               )}
 
@@ -172,12 +182,12 @@ function TraineeDetail() {
                         {RESULT_EMOJIS.map((e) => (
                           <button
                             key={e}
-                            onClick={() =>
-                              markResult(trainee.id, r.moduleId, r.completedAt, e)
-                            }
+                            onClick={() => markResult(trainee.id, r.moduleId, r.completedAt, e)}
                             aria-label={`Mark with ${e}`}
                             className={`rounded-md px-1.5 py-1 text-base transition ${
-                              r.emoji === e ? "bg-primary/10 ring-1 ring-primary" : "opacity-50 hover:opacity-100"
+                              r.emoji === e
+                                ? "bg-primary/10 ring-1 ring-primary"
+                                : "opacity-50 hover:opacity-100"
                             }`}
                           >
                             {e}

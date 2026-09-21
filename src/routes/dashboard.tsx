@@ -1,6 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
+import {
+  flushPractice,
+  importLegacyPractice,
+  loadWorkspace,
+  readLegacyPractice,
+  useConnection,
+} from "@/lib/backend";
+import { assignmentProgress } from "@/lib/training";
 import { useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/dashboard")({
@@ -11,6 +19,12 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function Dashboard() {
+  const [legacyAvailable, setLegacyAvailable] = useState(false);
+  const [importError, setImportError] = useState("");
+  useEffect(() => {
+    setLegacyAvailable(Boolean(readLegacyPractice()));
+  }, []);
+  const sessions = useConnection((s) => s.sessions);
   const modules = useApp((s) => s.modules);
   const results = useApp((s) => s.results);
   const practiceData = useApp((s) => s.practiceData);
@@ -31,11 +45,19 @@ function Dashboard() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">{practiceData.practiceName}</p>
-          <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
-            Manager dashboard
-          </h1>
+          <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">Manager dashboard</h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() =>
+              void flushPractice()
+                .then(() => loadWorkspace())
+                .catch((e) => setImportError(e.message))
+            }
+            className="rounded-xl border border-border px-4 py-2.5 text-sm"
+          >
+            Refresh progress
+          </button>
           {!setupComplete && (
             <Link
               to="/practice/setup"
@@ -71,6 +93,31 @@ function Dashboard() {
         </div>
       </div>
 
+      {legacyAvailable && modules.length === 0 && (
+        <Card className="mt-6">
+          <h2 className="font-semibold">Keep your existing practice setup</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This browser has a saved demo practice. Import its practice information and modules into
+            this new account. Invite trainees again to create real accounts; demo passwords and
+            results are not imported.
+          </p>
+          <button
+            onClick={() =>
+              void importLegacyPractice()
+                .then(() => setLegacyAvailable(false))
+                .catch((e) => setImportError(e.message))
+            }
+            className="mt-3 rounded-xl border border-border px-4 py-2 text-sm"
+          >
+            Import saved demo practice
+          </button>
+        </Card>
+      )}
+      {importError && (
+        <p role="alert" className="mt-4 text-sm text-destructive">
+          {importError}
+        </p>
+      )}
       {/* Gap banner */}
       <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-primary">
@@ -78,11 +125,11 @@ function Dashboard() {
         </p>
         <p className="mt-1 text-sm text-foreground">
           <span className="font-semibold">
-            Mandatory training teaches the rules. PracticeReady teaches how your practice
-            actually works.
+            Mandatory training teaches the rules. PracticeReady teaches how your practice actually
+            works.
           </span>{" "}
-          Use it for local onboarding — who books what, when to escalate, and the phrases
-          your team uses. Not a replacement for mandatory training or clinical protocols.
+          Use it for local onboarding — who books what, when to escalate, and the phrases your team
+          uses. Not a replacement for mandatory training or clinical protocols.
         </p>
       </div>
 
@@ -93,7 +140,8 @@ function Dashboard() {
           <Link to="/practice/setup" className="font-semibold text-primary hover:underline">
             Set up practice
           </Link>{" "}
-          to add your team, opening times, same-day reasons and prescription process — every draft is built from what you enter there.
+          to add your team, opening times, same-day reasons and prescription process — every draft
+          is built from what you enter there.
         </div>
       )}
 
@@ -101,9 +149,7 @@ function Dashboard() {
       {needsReview.length > 0 && (
         <Card className="mt-6 border-warning/40 bg-warning/5">
           <div className="flex items-center justify-between">
-            <h3 className="font-display text-base font-semibold">
-              Modules needing review
-            </h3>
+            <h3 className="font-display text-base font-semibold">Modules needing review</h3>
             <Badge tone="draft">Local knowledge changed</Badge>
           </div>
           <div className="mt-3 space-y-2">
@@ -155,8 +201,8 @@ function Dashboard() {
             </div>
             <h3 className="mt-4 font-display text-lg font-semibold">Create new module</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Pick a module type and answer specific questions. AI drafts scenarios you
-              approve before staff see them.
+              Pick a module type and answer specific questions. AI drafts scenarios you approve
+              before staff see them.
             </p>
           </Card>
         </Link>
@@ -223,7 +269,10 @@ function Dashboard() {
         <Card>
           <div className="flex items-center justify-between">
             <h3 className="font-display text-lg font-semibold">Trainee progress</h3>
-            <Link to="/trainees/invite" className="text-xs font-medium text-primary hover:underline">
+            <Link
+              to="/trainees/invite"
+              className="text-xs font-medium text-primary hover:underline"
+            >
               + Invite
             </Link>
           </div>
@@ -242,7 +291,9 @@ function Dashboard() {
                 mine.length === 0
                   ? 0
                   : Math.round(
-                      (mine.filter((a) => done.has(a.moduleId)).length / mine.length) * 100,
+                      (mine.reduce((sum, a) => sum + assignmentProgress(a, sessions).fraction, 0) /
+                        mine.length) *
+                        100,
                     );
               return (
                 <Link
@@ -314,7 +365,9 @@ function Stat({
     <Card>
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{label}</p>
-        <Badge tone={tone}>{tone === "draft" ? "Review" : tone === "approved" ? "Live" : "Team"}</Badge>
+        <Badge tone={tone}>
+          {tone === "draft" ? "Review" : tone === "approved" ? "Live" : "Team"}
+        </Badge>
       </div>
       <p className="mt-3 font-display text-3xl font-bold">{value}</p>
     </Card>

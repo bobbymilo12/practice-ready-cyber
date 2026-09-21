@@ -1,178 +1,226 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp } from "@/lib/store";
+import { useConnection, loadWorkspace } from "@/lib/backend";
+import { assignmentProgress, primaryScenarios } from "@/lib/training";
 
 export const Route = createFileRoute("/staff")({
-  head: () => ({ meta: [{ title: "Trainee dashboard — PracticeReady" }] }),
+  head: () => ({ meta: [{ title: "Your training — PracticeReady" }] }),
   component: Staff,
 });
 
 function Staff() {
-  const modules = useApp((s) => s.modules);
-  const results = useApp((s) => s.results);
-  const account = useApp((s) => s.account);
-  const trainees = useApp((s) => s.trainees);
-  const assignments = useApp((s) => s.assignments);
-
-  const me = trainees.find(
-    (t) => t.email.toLowerCase() === (account?.email ?? "").toLowerCase(),
+  const state = useApp();
+  const sessions = useConnection((s) => s.sessions);
+  const mine = state.assignments.filter((a) => a.traineeId === state.account?.id);
+  const rows = mine.map((a) => ({
+    assignment: a,
+    module: state.modules.find((m) => m.id === a.moduleId),
+    ...assignmentProgress(a, sessions),
+  }));
+  const completed = rows.filter((r) => r.completed).length;
+  const overall = rows.length
+    ? Math.round((rows.reduce((sum, r) => sum + r.fraction, 0) / rows.length) * 100)
+    : 0;
+  const ready = rows.filter(
+    (r) =>
+      !r.completed &&
+      r.module?.published &&
+      !r.module.needsReview &&
+      primaryScenarios(r.module).length,
   );
-  const myModuleIds = new Set(
-    assignments.filter((a) => a.traineeId === me?.id).map((a) => a.moduleId),
-  );
-  const publishedModules = modules.filter((m) => m.published);
-  const available =
-    myModuleIds.size > 0
-      ? publishedModules.filter((m) => myModuleIds.has(m.id))
-      : publishedModules;
-
-  // Latest result per module
-  const latestByModule = new Map<string, (typeof results)[number]>();
-  for (const r of results) {
-    if (!latestByModule.has(r.moduleId)) latestByModule.set(r.moduleId, r);
-  }
-
-  const completed = available.filter((m) => latestByModule.has(m.id));
-  const todo = available.filter((m) => !latestByModule.has(m.id));
-
-  const confidenceValues = results
-    .map((r) => r.confidence)
-    .filter((c): c is number => typeof c === "number");
-  const avgConfidence =
-    confidenceValues.length > 0
-      ? (
-          confidenceValues.reduce((a, b) => a + b, 0) / confidenceValues.length
-        ).toFixed(1)
-      : "—";
-
+  const next = [...ready].sort(
+    (a, b) => (b.latest?.updatedAt ?? 0) - (a.latest?.updatedAt ?? 0),
+  )[0];
+  const allDone = rows.length > 0 && completed === rows.length;
+  const latestResults = rows.flatMap((row) => {
+    const result = [...sessions]
+      .filter((s) => s.assignmentId === row.assignment.id && s.result)
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0]?.result;
+    return result ? [result] : [];
+  });
   return (
     <Shell>
-      <div>
-        <p className="text-sm text-muted-foreground">
-          Signed in as {account?.name ?? "Guest"} · Trainee
-        </p>
-        <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">Your training</h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          Work through modules at your own pace. This is practice, not an assessment —
-          you can retake any module and results are only shared with your manager to
-          support your learning.
-        </p>
-      </div>
-
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
+      <p className="text-sm text-muted-foreground">
+        {state.practiceData.practiceName} · {state.account?.name}
+      </p>
+      <h1 className="mt-2 font-display text-3xl font-bold">Your training</h1>
+      <p className="mt-3 text-muted-foreground">
+        Build confidence with your practice's everyday situations. Take a break whenever you need
+        to.
+      </p>
+      <section className="mt-8 grid gap-4 sm:grid-cols-3">
         <Card>
-          <div className="text-sm text-muted-foreground">Assigned</div>
-          <div className="mt-2 font-display text-3xl font-bold">{available.length}</div>
+          <p className="text-sm text-muted-foreground">Assigned modules</p>
+          <p className="mt-2 text-3xl font-bold">{rows.length}</p>
         </Card>
         <Card>
-          <div className="text-sm text-muted-foreground">Completed</div>
-          <div className="mt-2 font-display text-3xl font-bold">{completed.length}</div>
+          <p className="text-sm text-muted-foreground">Completed</p>
+          <p className="mt-2 text-3xl font-bold">
+            {completed} <span className="text-lg text-muted-foreground">of {rows.length}</span>
+          </p>
         </Card>
         <Card>
-          <div className="text-sm text-muted-foreground">Average confidence</div>
-          <div className="mt-2 font-display text-3xl font-bold">{avgConfidence}<span className="text-lg text-muted-foreground">/5</span></div>
+          <p className="text-sm text-muted-foreground">Overall training progress</p>
+          <p className="mt-2 text-3xl font-bold">{overall}%</p>
+          <progress
+            aria-label="Overall training progress"
+            value={overall}
+            max={100}
+            className="mt-3 h-2 w-full accent-primary"
+          />
         </Card>
       </section>
-
-      {/* Available */}
-      <h2 className="mt-10 font-display text-xl font-semibold">Available modules</h2>
+      {allDone && (
+        <div role="status" className="mt-6 rounded-2xl border border-accent bg-accent/10 p-6">
+          <h2 className="text-xl font-bold">All assigned training completed!</h2>
+          <p className="mt-2 text-sm">
+            You've finished all the onboarding and training currently assigned to you. Your manager
+            can see your achievements. You can still revisit areas that need practice.
+          </p>
+        </div>
+      )}
+      {next?.module && (
+        <Card className="mt-6 border-primary/30">
+          <p className="text-sm text-muted-foreground">
+            {next.latest ? "Pick up where you left off" : "Your next module"}
+          </p>
+          <h2 className="mt-2 text-xl font-semibold">{next.module.title}</h2>
+          <Link
+            to="/train"
+            search={{ id: next.module.id }}
+            className="mt-4 inline-block rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+          >
+            Continue Training →
+          </Link>
+        </Card>
+      )}
+      <div className="mt-10 flex items-center justify-between">
+        <h2 className="font-display text-xl font-semibold">Assigned modules</h2>
+        <button
+          onClick={() => void loadWorkspace().catch(() => {})}
+          className="text-sm text-primary"
+        >
+          Refresh assignments
+        </button>
+      </div>
+      {!rows.length && (
+        <Card className="mt-4">
+          <h3 className="font-semibold">You're ready for your first assignment</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your manager hasn't assigned any modules yet. Check back once they have prepared your
+            training.
+          </p>
+        </Card>
+      )}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {todo.length === 0 && (
-          <Card>
-            <p className="text-sm text-muted-foreground">
-              {available.length === 0
-                ? "No modules published yet. Your manager will let you know when training is ready."
-                : "You've started every module — nice work. Retake any from Completed to keep it fresh."}
-            </p>
-          </Card>
-        )}
-        {todo.map((m) => {
-          const mcqCount = m.scenarios.filter((s) => s.kind === "mcq").length;
-          const orderCount = m.scenarios.filter((s) => s.kind === "order").length;
+        {rows.map((row) => {
+          const m = row.module;
+          const available = m?.published && !m.needsReview && primaryScenarios(m).length > 0;
+          const result = [...sessions]
+            .filter((s) => s.assignmentId === row.assignment.id && s.result)
+            .sort((a, b) => b.updatedAt - a.updatedAt)[0]?.result;
           return (
-            <Card key={m.id}>
+            <Card key={row.assignment.id}>
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {m.type}
-                  </div>
-                  <h3 className="mt-1 font-display text-lg font-semibold">{m.title}</h3>
-                </div>
-                <Badge tone="approved">Ready</Badge>
+                <h3 className="font-display text-lg font-semibold">
+                  {m?.title ?? "Assigned module"}
+                </h3>
+                <Badge tone={row.completed ? "approved" : row.latest ? "info" : "neutral"}>
+                  {row.status}
+                </Badge>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {m.scenarios.length} scenarios
-                {mcqCount > 0 && ` · ${mcqCount} multiple choice`}
-                {orderCount > 0 && ` · ${orderCount} order-the-steps`}
+              <p className="mt-3 text-sm text-muted-foreground">
+                {m ? `${primaryScenarios(m).length} scenarios` : "Waiting for your manager"}
+                {row.assignment.dueDate ? ` · Due ${row.assignment.dueDate}` : ""}
               </p>
-              <div className="mt-4 flex gap-2">
-                <Link
-                  to="/train"
-                  search={{ id: m.id }}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
-                >
-                  Start module →
-                </Link>
+              {row.latest && !row.completed && (
+                <p className="mt-2 text-sm">
+                  {row.latest.answers.length} of {row.latest.queue.length} answers saved
+                </p>
+              )}
+              {result && (
+                <p className="mt-2 text-sm">
+                  Score: {result.correct}/{result.total} ·{" "}
+                  {Math.round((result.correct / Math.max(result.total, 1)) * 100)}%
+                  {state.emojiMarks[`${state.account?.id}:${result.moduleId}:${result.completedAt}`]
+                    ? ` · Manager: ${state.emojiMarks[`${state.account?.id}:${result.moduleId}:${result.completedAt}`]}`
+                    : ""}
+                </p>
+              )}
+              <progress
+                aria-label={`${m?.title ?? "Module"} progress`}
+                value={row.fraction * 100}
+                max={100}
+                className="mt-3 h-2 w-full accent-primary"
+              />
+              <div className="mt-4 flex flex-wrap gap-3">
+                {available ? (
+                  <Link
+                    to="/train"
+                    search={{ id: m.id }}
+                    className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                  >
+                    {row.completed
+                      ? "Practise again"
+                      : row.latest
+                        ? "Continue module"
+                        : "Start module"}
+                  </Link>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Awaiting manager review</p>
+                )}
+                {result && (
+                  <Link
+                    to="/results"
+                    onClick={() => useApp.setState({ lastResult: result })}
+                    className="rounded-xl border border-border px-4 py-2 text-sm"
+                  >
+                    View results
+                  </Link>
+                )}
               </div>
             </Card>
           );
         })}
       </div>
-
-      {/* Completed */}
-      {completed.length > 0 && (
-        <>
-          <h2 className="mt-10 font-display text-xl font-semibold">Completed</h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {completed.map((m) => {
-              const r = latestByModule.get(m.id)!;
-              const pct = Math.round((r.correct / r.total) * 100);
-              return (
-                <Card key={m.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {m.type}
-                      </div>
-                      <h3 className="mt-1 font-display text-lg font-semibold">{m.title}</h3>
-                    </div>
-                    <Badge tone="approved">Done</Badge>
-                  </div>
-                  <div className="mt-3 flex items-center gap-4 text-sm">
-                    <div>
-                      <span className="font-semibold">{r.correct}/{r.total}</span>{" "}
-                      <span className="text-muted-foreground">({pct}%)</span>
-                    </div>
-                    {r.confidence && (
-                      <div className="text-muted-foreground">
-                        Confidence {r.confidence}/5
-                      </div>
-                    )}
-                    <div className="text-muted-foreground">
-                      {new Date(r.completedAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Link
-                      to="/train"
-                      search={{ id: m.id }}
-                      className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface"
-                    >
-                      Retake
-                    </Link>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </>
+      {latestResults.length > 0 && (
+        <section className="mt-10 grid gap-4 md:grid-cols-2">
+          <Card>
+            <h2 className="text-lg font-semibold">Your strengths</h2>
+            <ul className="mt-3 space-y-2 text-sm">
+              {[
+                ...new Set(
+                  latestResults.flatMap((r) => [
+                    ...(r.strongTitles ?? []),
+                    ...(r.recoveredTitles ?? []),
+                  ]),
+                ),
+              ].map((t) => (
+                <li key={t}>✓ {t}</li>
+              ))}
+            </ul>
+            {!latestResults.some((r) => r.strongTitles?.length || r.recoveredTitles?.length) && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Keep practising to build confidence in these topics.
+              </p>
+            )}
+          </Card>
+          <Card>
+            <h2 className="text-lg font-semibold">Areas to practise</h2>
+            <ul className="mt-3 space-y-2 text-sm">
+              {[...new Set(latestResults.flatMap((r) => r.wrongTitles))].map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+            {latestResults.every((r) => !r.wrongTitles.length) && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                No outstanding topics from your latest attempts.
+              </p>
+            )}
+          </Card>
+        </section>
       )}
-
-      <div className="mt-10 rounded-xl border border-border bg-surface p-4 text-xs text-muted-foreground">
-        PracticeReady supports local onboarding. Always follow your practice's real
-        protocols and your manager's instructions in live situations. Not a substitute
-        for mandatory training or clinical advice.
-      </div>
     </Shell>
   );
 }
