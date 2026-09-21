@@ -7,6 +7,7 @@ import {
   loadWorkspace,
   useConnection,
 } from "@/lib/backend";
+import { devRole } from "@/lib/dev-mode";
 import { useApp } from "@/lib/store";
 
 export function AccountGate({ children }: { children: ReactNode }) {
@@ -24,7 +25,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
         Loading your practice…
       </p>
     );
-  if (!publicPage && !configured)
+  if (!publicPage && !configured && !devRole())
     return (
       <div className="mx-auto max-w-xl p-10">
         <h1 className="text-2xl font-bold">PracticeReady setup required</h1>
@@ -51,6 +52,15 @@ export function AccountGate({ children }: { children: ReactNode }) {
   if (!publicPage && !traineePage && account?.role === "trainee") return <Navigate to="/staff" />;
   return (
     <>
+      {connection.ready && devRole() && (
+        <div className="border-b border-warning bg-warning/10 px-6 py-2 text-sm">
+          Development only · Mock {account?.role} · Fake data in this tab. No emails or live
+          database changes.{" "}
+          <Link to="/auth" className="ml-2 underline">
+            Switch mock role
+          </Link>
+        </div>
+      )}
       {connection.ready && connection.error && (
         <div
           role="alert"

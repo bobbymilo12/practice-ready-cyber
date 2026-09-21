@@ -42,6 +42,31 @@ export function practiceScenarios(
       "Can you check how my medication request will be reviewed?",
       "My medication needs monitoring. Can reception send the request through the usual route?",
     );
+  } else if (topic === "first-week") {
+    add(
+      "Safeguarding concerns",
+      practice.localSafeguarding,
+      "A caller shares something that raises a safeguarding concern. What is the local process?",
+      "A colleague is unsure how to raise a safeguarding concern. Who should they contact?",
+    );
+    add(
+      "Confidentiality",
+      practice.localConfidentiality,
+      "Someone asks reception for another patient's information.",
+      "A caller wants to collect information on behalf of a relative.",
+    );
+    add(
+      "Opening hours",
+      practice.hours,
+      "When is your practice open?",
+      "I need to plan a visit to reception. What are the opening hours?",
+    );
+    add(
+      "Outside normal hours",
+      practice.outOfHoursTimes,
+      "Where should I seek help when you are closed?",
+      "What is the local process outside opening hours?",
+    );
   } else if (topic === "results") {
     add(
       "Protecting confidential information",

@@ -1,3 +1,4 @@
+import { devRole, leaveDevSession } from "./dev-mode";
 import { createClient } from "@supabase/supabase-js";
 import { create } from "zustand";
 import { defaultPracticeData, useApp, type Account, type AppState, type Trainee } from "./store";
@@ -6,9 +7,10 @@ import type { TrainingSession } from "./training";
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const configured = Boolean(url && key);
-export const supabase = configured ? createClient(url, key) : null;
+export const supabase =
+  configured && !(import.meta.env.DEV && devRole()) ? createClient(url, key) : null;
 
-type PracticeState = Pick<
+export type PracticeState = Pick<
   AppState,
   | "modules"
   | "assignments"
@@ -18,7 +20,7 @@ type PracticeState = Pick<
   | "answers"
   | "currentDraftId"
 >;
-type Snapshot = {
+export type Snapshot = {
   account: Account;
   state: Partial<PracticeState>;
   version: number;
@@ -67,6 +69,10 @@ export function emptyPractice() {
 }
 
 export async function api<T>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+  if (import.meta.env.DEV && devRole()) {
+    const { devApi } = await import("./dev-backend");
+    return (await devApi(action, body)) as T;
+  }
   if (!supabase)
     throw new Error("PracticeReady is not connected yet. Complete the Supabase setup first.");
   const { data, error } = await supabase.auth.getSession();
@@ -117,7 +123,10 @@ export function loadWorkspace(): Promise<void> {
 }
 async function fetchWorkspace() {
   const ticket = generation;
-  useConnection.setState({ loading: true, error: "" });
+  useConnection.setState({
+    loading: devRole() ? !useConnection.getState().ready : true,
+    error: "",
+  });
   try {
     const snapshot = await api<Snapshot>("load");
     if (ticket !== generation) return;
@@ -190,11 +199,6 @@ export async function flushPractice() {
 export function initializeBackend() {
   if (started) return;
   started = true;
-  if (!supabase) {
-    clearWorkspace();
-    useConnection.setState({ loading: false });
-    return;
-  }
   clearWorkspace();
   useApp.subscribe((state, previous) => {
     if (applying || !useConnection.getState().ready || state.account?.role !== "manager") return;
@@ -211,6 +215,14 @@ export function initializeBackend() {
       void flushPractice().catch(() => {});
     }
   });
+  if (import.meta.env.DEV && devRole()) {
+    void loadWorkspace().catch(() => {});
+    return;
+  }
+  if (!supabase) {
+    useConnection.setState({ loading: false });
+    return;
+  }
   let userId: string | undefined;
   supabase.auth.onAuthStateChange((_event, session) => {
     if (session?.user.id === userId && useConnection.getState().ready) return;
@@ -237,6 +249,10 @@ export function initializeBackend() {
 
 export async function signOut() {
   await flushPractice();
+  if (import.meta.env.DEV && devRole()) {
+    leaveDevSession();
+    return;
+  }
   const { error } = await supabase!.auth.signOut();
   if (error) throw error;
   generation++;

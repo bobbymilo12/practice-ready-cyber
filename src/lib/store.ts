@@ -947,10 +947,11 @@ export function draftsForTopic(
   topicTitle: string,
   difficulty: Difficulty = "easy",
   length: ModuleLength = "short",
+  setupAnswers?: Record<string, string>,
 ): Scenario[] {
   const target = length === "long" ? 15 : length === "medium" ? 10 : 5;
   const { practiceData, answers } = useApp.getState();
-  const source = practiceScenarios(topicKey, topicTitle, practiceData, answers);
+  const source = practiceScenarios(topicKey, topicTitle, practiceData, setupAnswers ?? answers);
   const mainIds = new Set(source.filter((s) => !s.followUpFor).slice(0, target).map((s) => s.id));
   return source.filter((s) => mainIds.has(s.followUpFor ?? s.id)).map((s, index): Scenario => {
     if (s.kind !== "mcq") return s;
@@ -1277,7 +1278,7 @@ export const useApp = create<AppState>()((set, get) => ({
               title,
               topicKey: s.key,
               published: false,
-              scenarios: draftsForTopic(s.key, "mixed", s.title, "easy", "short"),
+              scenarios: draftsForTopic(s.key, "mixed", s.title, "easy", "short", {}),
               createdAt: Date.now(),
             });
           }

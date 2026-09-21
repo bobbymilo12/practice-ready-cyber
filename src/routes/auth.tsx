@@ -1,12 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { devAuthAvailable, devRole, enterDevSession } from "@/lib/dev-mode";
+import { useEffect, useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { useApp } from "@/lib/store";
 import { api, configured, loadWorkspace, signOut, supabase, useConnection } from "@/lib/backend";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Log in — PracticeReady" }] }),
-  validateSearch: (s: Record<string, unknown>): { email?: string; practice?: string } => ({
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { email?: string; practice?: string; mode?: "login" | "create" } => ({
+    mode: s.mode === "create" ? "create" : "login",
     email: typeof s.email === "string" ? s.email : undefined,
     practice: typeof s.practice === "string" ? s.practice : undefined,
   }),
@@ -14,11 +18,15 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
+  const [showDev, setShowDev] = useState(false);
+  useEffect(() => setShowDev(devAuthAvailable()), []);
   const search = Route.useSearch();
   const nav = useNavigate();
   const account = useApp((s) => s.account);
   const connection = useConnection();
-  const [mode, setMode] = useState<"login" | "create">("login");
+  const mode = search.practice ? "login" : (search.mode ?? "login");
+  const setMode = (mode: "login" | "create") =>
+    void nav({ to: "/auth", search: { ...search, mode } });
   const [email, setEmail] = useState(search.email ?? "");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -36,7 +44,7 @@ function AuthPage() {
     setBusy(true);
     try {
       if (!supabase)
-        throw new Error("Accounts are not configured yet. Complete docs/SETUP.md first.");
+        throw new Error("Accounts are not available yet. Please contact the site administrator.");
       if ((reset || mode === "create") && (password.length < 12 || password !== confirm))
         throw new Error("Use at least 12 characters and make sure both new passwords match.");
       if (reset) {
@@ -63,7 +71,7 @@ function AuthPage() {
           return;
         }
         await loadWorkspace();
-        await nav({ to: "/dashboard" });
+        await nav({ to: useApp.getState().setupComplete ? "/dashboard" : "/practice/setup" });
       } else {
         const { error: loginError } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -81,7 +89,14 @@ function AuthPage() {
         setCurrentPassword(password);
         setPassword("");
         if (!me.mustResetPassword)
-          await nav({ to: me.role === "manager" ? "/dashboard" : "/staff" });
+          await nav({
+            to:
+              me.role === "manager"
+                ? useApp.getState().setupComplete
+                  ? "/dashboard"
+                  : "/practice/setup"
+                : "/staff",
+          });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Please try again.");
@@ -97,17 +112,51 @@ function AuthPage() {
             ? "Choose your own password"
             : mode === "create"
               ? "Create a manager account"
-              : "Welcome to PracticeReady"}
+              : "Log in"}
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
           {reset
             ? "Change your temporary password to open your assigned training."
-            : "Trainees: log in with the email and temporary password in your practice invitation."}
+            : mode === "create"
+              ? "Set up training for your practice. Invite your team once your modules are ready."
+              : "Use your account details or the login details in your practice invitation."}
         </p>
-        {!configured && (
+        {showDev && (
+          <Card className="mt-6 border-dashed">
+            <p className="text-sm font-semibold">Local development</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Use fake accounts and data. No emails are sent.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {(["manager", "trainee"] as const).map((role) => (
+                <button
+                  key={role}
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void (
+                      devRole()
+                        ? import("@/lib/backend").then((m) => m.flushPractice())
+                        : Promise.resolve()
+                    )
+                      .then(() => enterDevSession(role))
+                      .catch((e) => {
+                        setError(e.message);
+                        setBusy(false);
+                      });
+                  }}
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  Continue as {role === "manager" ? "Manager" : "Trainee"}
+                </button>
+              ))}
+            </div>
+            {devRole() && <p className="mt-3 text-xs">Log out to return to real authentication.</p>}
+          </Card>
+        )}
+        {!configured && !devRole() && (
           <p role="status" className="mt-4 rounded-xl border border-border p-4 text-sm">
-            Accounts and email invitations will be available once the Supabase and Resend setup is
-            complete.
+            Accounts are not available yet. Please contact the site administrator.
           </p>
         )}
         {!reset && !search.practice && (
@@ -148,7 +197,7 @@ function AuthPage() {
             )}
             {!reset && (
               <label className="block text-sm">
-                Email / username
+                Email
                 <input
                   required
                   type="email"
@@ -211,7 +260,7 @@ function AuthPage() {
               </p>
             )}
             <button
-              disabled={busy || !configured}
+              disabled={busy || !configured || Boolean(devRole())}
               className="w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
               {busy

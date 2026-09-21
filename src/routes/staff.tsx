@@ -46,8 +46,7 @@ function Staff() {
       </p>
       <h1 className="mt-2 font-display text-3xl font-bold">Your training</h1>
       <p className="mt-3 text-muted-foreground">
-        Build confidence with your practice's everyday situations. Take a break whenever you need
-        to.
+        Choose a module below. Your progress saves after each checked answer.
       </p>
       <section className="mt-8 grid gap-4 sm:grid-cols-3">
         <Card>

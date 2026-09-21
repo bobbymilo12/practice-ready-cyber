@@ -10,7 +10,7 @@ import {
 } from "@/lib/store";
 
 export const Route = createFileRoute("/data-hub")({
-  head: () => ({ meta: [{ title: "Practice Setup / Data Hub — PracticeReady" }] }),
+  head: () => ({ meta: [{ title: "Practice information — PracticeReady" }] }),
   component: DataHub,
 });
 
@@ -199,7 +199,7 @@ function DataHub() {
 
   const [newStaff, setNewStaff] = useState<Omit<StaffMember, "id">>({
     name: "",
-    role: "",
+    role: ROLE_OPTIONS[0],
     clinics: "",
   });
   const [replaceOld, setReplaceOld] = useState("");
@@ -221,12 +221,11 @@ function DataHub() {
         <div>
           <p className="text-sm text-muted-foreground">Central knowledge base for your practice</p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
-            Practice Setup / Data Hub
+            Practice information
           </h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            Store your staff, clinic responsibilities, prescription process and local
-            protocols once. Every module you create pulls from this — so you won't be
-            asked the same things again during module setup.
+            Keep your team and local procedures up to date. Review existing modules separately
+            when procedures change.
           </p>
         </div>
         <Link
@@ -236,6 +235,10 @@ function DataHub() {
           ← Back to dashboard
         </Link>
       </div>
+
+      <Link to="/practice/setup" className="mt-6 inline-block font-semibold text-primary">
+        Open guided setup →
+      </Link>
 
       {/* Practice basics */}
       <h2 className="mt-10 font-display text-xl font-semibold">Practice basics</h2>
@@ -340,7 +343,7 @@ function DataHub() {
               disabled={!newStaff.name.trim() || !newStaff.role.trim()}
               onClick={() => {
                 addStaff(newStaff);
-                setNewStaff({ name: "", role: "", clinics: "" });
+                setNewStaff({ name: "", role: ROLE_OPTIONS[0], clinics: "" });
               }}
               className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
             >
@@ -357,7 +360,7 @@ function DataHub() {
         </h2>
         <p className="text-sm text-muted-foreground">
           For each role, describe what reception can book on the day of the call vs at a
-          routine appointment. The AI uses these to draft accurate scenarios.
+          routine appointment. These details support your module drafts.
         </p>
         <div className="mt-4 space-y-4">
           {ROLE_GROUPS.map((g) => (

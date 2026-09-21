@@ -38,8 +38,6 @@ function Dashboard() {
   const draftModules = modules.filter((m) => !m.published);
   const needsReview = modules.filter((m) => m.needsReview);
 
-  const dataHubEmpty = practiceData.staff.length === 0;
-
   return (
     <Shell>
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -58,26 +56,13 @@ function Dashboard() {
           >
             Refresh progress
           </button>
-          {!setupComplete && (
-            <Link
-              to="/practice/setup"
-              className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
-            >
-              Set up practice
-            </Link>
-          )}
           <Link
             to="/trainees/invite"
             className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
           >
-            Create new trainee account
+            Invite trainees
           </Link>
-          <Link
-            to="/modules/merge"
-            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
-          >
-            Merge modules
-          </Link>
+
           <Link
             to="/data-hub"
             className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
@@ -118,32 +103,43 @@ function Dashboard() {
           {importError}
         </p>
       )}
-      {/* Gap banner */}
-      <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-          What PracticeReady is
+      <Card className="mt-6 border-primary/20 bg-primary/5">
+        <h2 className="font-display text-lg font-semibold">
+          {!setupComplete
+            ? "Start with your practice setup"
+            : draftModules.length
+              ? "Next: review your draft modules"
+              : !trainees.length
+                ? "Next: invite your team"
+                : "Your team’s training"}
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {!setupComplete
+            ? "Add your team and local procedures to create starter training drafts."
+            : draftModules.length
+              ? "Check the scenarios, then publish and assign the modules."
+              : !trainees.length
+                ? "Send invitations and assign your published modules."
+                : "Review progress below or create additional training."}
         </p>
-        <p className="mt-1 text-sm text-foreground">
-          <span className="font-semibold">
-            Mandatory training teaches the rules. PracticeReady teaches how your practice actually
-            works.
-          </span>{" "}
-          Use it for local onboarding — who books what, when to escalate, and the phrases your team
-          uses. Not a replacement for mandatory training or clinical protocols.
-        </p>
-      </div>
-
-      {/* First-run nudge */}
-      {dataHubEmpty && !setupComplete && (
-        <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
-          <span className="font-semibold">Start here:</span> run{" "}
-          <Link to="/practice/setup" className="font-semibold text-primary hover:underline">
-            Set up practice
-          </Link>{" "}
-          to add your team, opening times, same-day reasons and prescription process — every draft
-          is built from what you enter there.
-        </div>
-      )}
+        {!setupComplete ? (
+          <Link to="/practice/setup" className="mt-4 inline-block font-semibold text-primary">
+            Continue setup →
+          </Link>
+        ) : draftModules[0] ? (
+          <Link
+            to="/modules/review"
+            search={{ id: draftModules[0].id }}
+            className="mt-4 inline-block font-semibold text-primary"
+          >
+            Review a draft →
+          </Link>
+        ) : (
+          <Link to="/trainees/invite" className="mt-4 inline-block font-semibold text-primary">
+            Invite trainees →
+          </Link>
+        )}
+      </Card>
 
       {/* Modules needing review */}
       {needsReview.length > 0 && (
@@ -201,8 +197,7 @@ function Dashboard() {
             </div>
             <h3 className="mt-4 font-display text-lg font-semibold">Create new module</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Pick a module type and answer specific questions. AI drafts scenarios you approve
-              before staff see them.
+              Choose a topic, add local details and review the draft scenarios.
             </p>
           </Card>
         </Link>
@@ -279,7 +274,7 @@ function Dashboard() {
           <div className="mt-5 space-y-3">
             {trainees.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No trainees yet. Use &ldquo;Create new trainee account&rdquo; to invite one.
+                No trainees yet. Use &ldquo;Invite trainees&rdquo; to invite one.
               </p>
             )}
             {trainees.map((t) => {

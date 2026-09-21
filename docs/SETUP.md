@@ -1,6 +1,6 @@
 # Connect PracticeReady to Supabase and Resend
 
-The integration is prepared but is not deployed or connected to live services. Without the two public frontend variables, the app displays setup guidance and disables account submission. It does not simulate successful invitations.
+The frontend has local public configuration. The database/API deployment and email configuration still need to be completed. Without the two public frontend variables, the app displays setup guidance and disables account submission. It does not simulate successful invitations.
 
 ## 1. Create the services
 
@@ -115,3 +115,28 @@ The supplied public configuration has been saved to the ignored `.env.local` fil
 After deployment, run `npm run backend:check`. This checks the public Auth endpoint, verifies that anonymous database access is denied, and verifies that the Edge Function rejects unauthenticated requests. It does not send email or change records.
 
 Deployment still needs a Supabase CLI login, the final app URL, and a verified Resend sender. Put a fresh Resend API key into the Edge Function secrets. Also set the two public frontend variables in Lovable's hosting/build environment; the ignored local file is not deployed through Git.
+
+## Manager’s first setup
+
+Once the service setup above is complete:
+
+1. Create and confirm a manager account. Log in to open guided practice setup.
+2. Add practice hours, out-of-hours instructions and your team’s responsibilities.
+3. Record the agreed booking, escalation, prescription, confidentiality and safeguarding procedures. Optional details can be added now or later in **Practice information**.
+4. Check the review screen and choose **Create starter drafts**. Use **Save and exit** if you need to collect missing information.
+5. Review each module, including follow-up scenarios, then approve and publish.
+6. Invite trainees and assign the published modules.
+
+Existing practice information is retained. Changes to local procedures require a separate review of existing modules. See [the product review](./PRODUCT-REVIEW.md) for remaining work.
+
+## Local development without Supabase
+
+Run `npm run dev` and open the local server at `http://localhost:5173/auth` (or the port Vite prints). Choose **Continue as Manager** or **Continue as Trainee**. No Supabase project or environment variables are needed for this mode.
+
+- The fictional practice includes a manager, Jamie Example as the assigned trainee, two published modules and one draft. Manager edits and trainee results share the same mock workspace in this tab.
+- The development banner links back to the role selector. Switching roles reloads the app to isolate mock and real authentication. **Log out** exits mock mode; any pre-existing real Supabase session is left untouched.
+- Mock invitations create local records only and explicitly report that no email was sent. The built-in trainee cannot be removed, so role switching remains usable. Newly invited mock records do not create real accounts.
+- Data survives refresh in `sessionStorage`, not the real database. Clear the `practiceready-dev-workspace-v1` session-storage entry and reload to reset the sample data. Clear `practiceready-dev-role-v1` to exit mock mode manually. Closing the tab normally clears both.
+- Only Vite development builds on `localhost`, `127.0.0.1` or IPv6 loopback allow this bypass. It is unavailable on hosted/forwarded preview domains, production builds and `npm run preview`, even if a mock role is stored. To use it from a remote development environment, forward the port to localhost on your machine.
+
+The removable implementation is in `src/lib/dev-mode.ts` and the dynamically loaded `src/lib/dev-backend.ts`. Integration points are marked by `devRole`/`devAuthAvailable` in the backend, account gate, login and invitation pages. The Supabase API, database permissions and real account types are unchanged. Remove those hooks, the two files and its tests (`tests/browser/dev-auth.spec.ts`, `tests/dev-mode.test.mjs` and the corresponding npm test command) when the bypass is no longer needed.

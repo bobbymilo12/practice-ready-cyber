@@ -37,7 +37,7 @@ function Review() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">
-            {module.type} · AI-assisted draft generation
+            {module.type} · Draft review
           </p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
             Review draft scenarios

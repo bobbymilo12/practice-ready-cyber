@@ -25,7 +25,7 @@ export function Shell({ children }: { children: ReactNode }) {
               to="/about"
               className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium"
             >
-              About Us
+              About
             </Link>
           </nav>
           <div className="flex items-center gap-2">
@@ -34,7 +34,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 to="/auth"
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
               >
-                Create Account / Login
+                Log in
               </Link>
             )}
             {account && (

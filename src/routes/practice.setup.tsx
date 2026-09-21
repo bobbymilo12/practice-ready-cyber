@@ -1,450 +1,380 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
-import { useApp, ROLE_OPTIONS, STAFF_CAPABILITY_OPTIONS } from "@/lib/store";
+import { useApp, ROLE_OPTIONS, STAFF_CAPABILITY_OPTIONS, type PracticeData } from "@/lib/store";
+import { flushPractice } from "@/lib/backend";
+import { setupMissing, setupSteps } from "@/lib/practice-setup";
 
 export const Route = createFileRoute("/practice/setup")({
-  head: () => ({
-    meta: [
-      { title: "Set up your practice — PracticeReady" },
-      {
-        name: "description",
-        content:
-          "First-time setup: add your practice basics, your clinical and admin team, same-day appointment reasons and how patients order prescriptions.",
-      },
-      { property: "og:title", content: "Set up your practice — PracticeReady" },
-      {
-        property: "og:description",
-        content:
-          "Capture your local practice knowledge once, then PracticeReady drafts onboarding modules from it.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
+  head: () => ({ meta: [{ title: "Set up your practice — PracticeReady" }] }),
+  validateSearch: (s: Record<string, unknown>): { step?: number } => ({
+    step: Math.min(5, Math.max(0, Math.floor(Number(s.step) || 0))),
   }),
   component: PracticeSetup,
 });
-
-const field =
-  "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary";
-
-const sameDayQuickPicks = [
-  "Chest pain, breathing difficulty or stroke symptoms",
-  "Suspected sepsis or rapidly worsening illness",
-  "Child under five who is unwell",
-  "Mental health crisis or safeguarding concern",
-  "Acute pain that has worsened in the last 24 hours",
-  "Medication run-out with concern about safety",
-];
-
+const field = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
+type TextField = keyof Omit<PracticeData, "staff" | "rolePolicies" | "sameDayReasons">;
 function PracticeSetup() {
+  const { step = 0 } = Route.useSearch();
   const nav = useNavigate();
-  const practiceData = useApp((s) => s.practiceData);
-  const setPracticeField = useApp((s) => s.setPracticeField);
-  const setSameDayReasons = useApp((s) => s.setSameDayReasons);
-  const addStaff = useApp((s) => s.addStaff);
-  const updateStaff = useApp((s) => s.updateStaff);
-  const removeStaff = useApp((s) => s.removeStaff);
-  const completeSetup = useApp((s) => s.completeSetup);
-
-  const [step, setStep] = useState(0);
-  const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState<string>(ROLE_OPTIONS[0]);
-  const [customRole, setCustomRole] = useState("");
-  const [created, setCreated] = useState<number | null>(null);
-
-  const steps = [
-    "Your team",
-    "Clinician coverage",
-    "Practice basics",
-    "Same-day appointments",
-    "Prescriptions",
-  ];
-  const reasons = practiceData.sameDayReasons;
-  const isDoctorRole = (role: string) => /doctor|gp|partner/i.test(role);
-
-  const setReason = (i: number, value: string) =>
-    setSameDayReasons(reasons.map((r, idx) => (idx === i ? value : r)));
-
-  const finish = () => {
-    const ids = completeSetup(true);
-    setCreated(ids.length);
+  const p = useApp((s) => s.practiceData);
+  const store = useApp();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const missing = setupMissing(p);
+  const go = (next: number) => {
+    setError("");
+    void nav({ to: "/practice/setup", search: { step: next } });
   };
-
-  if (created !== null) {
+  const input = (key: TextField, label: string, hint?: string) => (
+    <label className="block text-sm font-medium">
+      {label}
+      {hint && <span className="mt-1 block font-normal text-muted-foreground">{hint}</span>}
+      <textarea
+        rows={key === "practiceName" ? 1 : 3}
+        className={field}
+        value={p[key]}
+        onChange={(e) => store.setPracticeField(key, e.target.value)}
+      />
+    </label>
+  );
+  const policy = (key: keyof PracticeData["rolePolicies"], label: string) => (
+    <label className="block text-sm font-medium">
+      {label}
+      <textarea
+        rows={3}
+        className={field}
+        value={p.rolePolicies[key]}
+        onChange={(e) => store.setRolePolicy(key, e.target.value)}
+      />
+    </label>
+  );
+  async function save(exit = false) {
+    const gaps = step === 5 ? missing.flat() : missing[step];
+    if (!exit && gaps.length) {
+      setError(`Complete these details: ${gaps.join("; ")}.`);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      if (!exit && step === 5) store.completeSetup(true);
+      await flushPractice();
+      if (exit) await nav({ to: "/dashboard" });
+      else if (step === 5) setDone(true);
+      else go(step + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (done)
     return (
       <Shell>
-        <div className="mx-auto max-w-2xl">
-          <Card>
-            <h1 className="font-display text-2xl font-bold">Practice setup saved</h1>
-            <p className="mt-3 text-sm text-muted-foreground">
-              {created > 0
-                ? `We've drafted ${created} starter modules from your answers — appointment booking, urgent requests, prescriptions, test results and first week on reception.`
-                : "Your starter modules are already in place and have been left as they are."}{" "}
-              Every scenario is a draft until you approve it, so nothing reaches your team
-              before you've read it.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                to="/dashboard"
-                className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
-              >
-                Go to dashboard
-              </Link>
-              <Link
-                to="/data-hub"
-                className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold hover:bg-surface"
-              >
-                Add more detail in the Data Hub
-              </Link>
-            </div>
-          </Card>
-        </div>
+        <Card>
+          <h1 className="font-display text-2xl font-bold">Your practice is set up</h1>
+          <p className="mt-3 text-muted-foreground">
+            Next, review your starter modules before publishing and assigning them. Existing modules
+            have been kept.
+          </p>
+          <Link
+            to="/dashboard"
+            className="mt-6 inline-block rounded-xl bg-primary px-5 py-3 text-primary-foreground"
+          >
+            Review modules
+          </Link>
+        </Card>
       </Shell>
     );
-  }
-
   return (
     <Shell>
       <div className="mx-auto max-w-3xl">
-        <p className="text-sm text-muted-foreground">First-time setup</p>
-        <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
-          Set up your practice
+        <p className="text-sm text-muted-foreground">Practice setup · Step {step + 1} of 6</p>
+        <h1 className="mt-2 font-display text-3xl font-bold">
+          {
+            [
+              "Start with your practice",
+              "Who does what?",
+              "How are appointments handled?",
+              "How do prescriptions work?",
+              "How does your team handle sensitive requests?",
+              "Check your practice information",
+            ][step]
+          }
         </h1>
-        <p className="mt-2 text-muted-foreground">
-          Answer these once. Every training module is drafted from what you enter here, and
-          you can change any of it later in the Data Hub.
+        <p className="mt-2 text-sm text-muted-foreground">
+          Use your agreed local procedures. These details will be used to draft training for your
+          review.
         </p>
-
-        <div className="mt-6 flex flex-wrap gap-2 text-xs">
-          {steps.map((s, i) => (
+        <nav aria-label="Setup steps" className="my-6 flex flex-wrap gap-2">
+          {setupSteps.map((label, i) => (
             <button
-              key={s}
-              onClick={() => setStep(i)}
-              className={`rounded-full px-3 py-1.5 font-medium ${
-                i === step
-                  ? "bg-primary text-primary-foreground"
-                  : "border border-border text-muted-foreground hover:text-foreground"
-              }`}
+              key={label}
+              disabled={busy}
+              aria-current={step === i ? "step" : undefined}
+              onClick={() => go(i)}
+              className={`rounded-lg border px-3 py-2 text-sm ${step === i ? "border-primary bg-primary/10 font-semibold" : "border-border"}`}
             >
-              {i + 1}. {s}
+              {i + 1}. {label}
             </button>
           ))}
-        </div>
-
-        {step === 0 && (
-          <Card className="mt-6">
-            <h2 className="font-display text-xl font-semibold">Who works here?</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Add each clinician and admin lead with their role. Reception staff need to know
-              who does what before they can book correctly.
-            </p>
-
-            <div className="mt-5 space-y-2">
-              {practiceData.staff.map((s) => (
-                <div
-                  key={s.id}
-                  className="grid gap-2 rounded-xl border border-border p-3 md:grid-cols-[1fr_1fr_auto]"
-                >
-                  <input
-                    value={s.name}
-                    onChange={(e) => updateStaff(s.id, { name: e.target.value })}
-                    className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="Name"
-                  />
-                  <select
-                    value={ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number]) ? s.role : "custom"}
-                    onChange={(e) => {
-                      const next = e.target.value === "custom" ? s.role : e.target.value;
-                      updateStaff(s.id, { role: next });
-                    }}
-                    className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    {!ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number]) && (
-                      <option value="custom">{s.role || "Choose a role"}</option>
-                    )}
-                    {ROLE_OPTIONS.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => removeStaff(s.id)}
-                    className="rounded-lg border border-destructive/40 px-3 py-2 text-xs text-destructive hover:bg-destructive/5"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 grid gap-2 rounded-xl border border-dashed border-border p-3 md:grid-cols-[1fr_1fr_auto]">
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Add a name"
-                className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-              />
-              <div className="space-y-2">
-                <select
-                  value={newRole === "Other" ? "Other" : newRole}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setNewRole(next);
-                    if (next !== "Other") setCustomRole("");
-                  }}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {ROLE_OPTIONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                  <option value="Other">Other</option>
-                </select>
-                {newRole === "Other" && (
-                  <input
-                    value={customRole}
-                    onChange={(e) => setCustomRole(e.target.value)}
-                    placeholder="Custom role"
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                  />
+        </nav>
+        <Card>
+          <fieldset disabled={busy} className="space-y-5">
+            {step === 0 && (
+              <>
+                {input("practiceName", "Practice name")}
+                {input("hours", "Opening hours")}
+                {input(
+                  "outOfHoursTimes",
+                  "Out-of-hours process",
+                  "Include where staff should direct callers when the practice is closed.",
                 )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newName.trim()) return;
-                  const resolvedRole = newRole === "Other" ? customRole.trim() || "Other" : newRole;
-                  addStaff({ name: newName.trim(), role: resolvedRole, clinics: "", capabilities: [] });
-                  setNewName("");
-                  setCustomRole("");
-                  setNewRole(ROLE_OPTIONS[0]);
-                }}
-                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
-              >
-                Add
-              </button>
-            </div>
-          </Card>
-        )}
-
-        {step === 1 && (
-          <Card className="mt-6">
-            <h2 className="font-display text-xl font-semibold">Which tasks can each clinician carry out?</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Tick the tasks each person is trained to do. Doctors are usually kept simple unless you specifically want extra detail.
-            </p>
-
-            <div className="mt-5 space-y-4">
-              {practiceData.staff.map((s) => (
-                <div key={s.id} className="rounded-xl border border-border p-4">
-                  <div className="font-medium text-foreground">
-                    {s.name || "Unnamed staff member"} · {s.role || "Unassigned role"}
-                  </div>
-
-                  {isDoctorRole(s.role) ? (
-                    <div className="mt-3 rounded-lg border border-dashed border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-                      Doctors are covered by the practice's clinical lead rules, so individual task boxes are not needed here.
-                    </div>
-                  ) : (
-                    <div className="mt-3 grid gap-2 md:grid-cols-2">
-                      {STAFF_CAPABILITY_OPTIONS.map((option) => {
-                        const checked = (s.capabilities ?? []).includes(option);
-                        return (
-                          <label
-                            key={`${s.id}-${option}`}
-                            className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                          >
+                <details>
+                  <summary className="cursor-pointer text-sm">Add address (optional)</summary>
+                  <div className="mt-4">{input("address", "Practice address")}</div>
+                </details>
+              </>
+            )}
+            {step === 1 && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Add the people trainees need to know. Include their clinics or responsibilities.
+                </p>
+                {p.staff.map((person) => (
+                  <div key={person.id} className="space-y-3 rounded-xl border border-border p-4">
+                    <label className="block text-sm">
+                      Name
+                      <input
+                        className={field}
+                        value={person.name}
+                        onChange={(e) => store.updateStaff(person.id, { name: e.target.value })}
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Role
+                      <input
+                        list="team-roles"
+                        className={field}
+                        value={person.role}
+                        onChange={(e) => store.updateStaff(person.id, { role: e.target.value })}
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Clinics or responsibilities
+                      <textarea
+                        className={field}
+                        value={person.clinics}
+                        onChange={(e) => store.updateStaff(person.id, { clinics: e.target.value })}
+                      />
+                    </label>
+                    <details>
+                      <summary className="cursor-pointer text-sm">
+                        Choose additional responsibilities (optional)
+                      </summary>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {STAFF_CAPABILITY_OPTIONS.map((task) => (
+                          <label key={task} className="flex gap-2 text-sm">
                             <input
                               type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                const nextCapabilities = e.target.checked
-                                  ? [...(s.capabilities ?? []), option].filter((value, index, arr) => arr.indexOf(value) === index)
-                                  : (s.capabilities ?? []).filter((value) => value !== option);
-                                updateStaff(s.id, { capabilities: nextCapabilities });
-                              }}
+                              checked={person.capabilities?.includes(task) ?? false}
+                              onChange={(e) =>
+                                store.updateStaff(person.id, {
+                                  capabilities: e.target.checked
+                                    ? [...(person.capabilities ?? []), task]
+                                    : person.capabilities?.filter((t) => t !== task),
+                                })
+                              }
                             />
-                            <span>{option}</span>
+                            {task}
                           </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {step === 2 && (
-          <Card className="mt-6 space-y-4">
-            <h2 className="font-display text-xl font-semibold">Practice basics</h2>
-            <label className="block text-sm">
-              <span className="font-medium">Practice name</span>
-              <input
-                className={field}
-                value={practiceData.practiceName}
-                onChange={(e) => setPracticeField("practiceName", e.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">Address</span>
-              <input
-                className={field}
-                value={practiceData.address}
-                onChange={(e) => setPracticeField("address", e.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">Opening times</span>
-              <input
-                className={field}
-                value={practiceData.hours}
-                onChange={(e) => setPracticeField("hours", e.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">Out-of-hours appointment times</span>
-              <textarea
-                rows={3}
-                className={field}
-                value={practiceData.outOfHoursTimes}
-                onChange={(e) => setPracticeField("outOfHoursTimes", e.target.value)}
-              />
-            </label>
-          </Card>
-        )}
-
-        {step === 3 && (
-          <Card className="mt-6">
-            <h2 className="font-display text-xl font-semibold">
-              What counts as a same-day appointment?
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              One reason per line. New starters use this list to decide what to offer and what
-              to pass to the duty team.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {sameDayQuickPicks.map((pick) => (
+                        ))}
+                      </div>
+                    </details>
+                    <button
+                      className="text-sm text-destructive"
+                      onClick={() => store.removeStaff(person.id)}
+                    >
+                      Remove {person.name || "team member"}
+                    </button>
+                  </div>
+                ))}
+                <datalist id="team-roles">
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role} />
+                  ))}
+                </datalist>
                 <button
-                  key={pick}
-                  type="button"
-                  onClick={() => {
-                    const cleaned = pick.trim();
-                    if (!reasons.includes(cleaned)) {
-                      const next = [...reasons, cleaned];
-                      setSameDayReasons(next.filter(Boolean));
-                    }
-                  }}
-                  className="rounded-full border border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+                  onClick={() =>
+                    store.addStaff({
+                      name: "",
+                      role: ROLE_OPTIONS[0],
+                      clinics: "",
+                      capabilities: [],
+                    })
+                  }
+                  className="rounded-xl border border-border px-4 py-2 text-sm"
                 >
-                  {pick}
+                  Add team member
                 </button>
-              ))}
-            </div>
-            <div className="mt-4 space-y-2">
-              {reasons.map((r, i) => (
-                <div key={i} className="flex gap-2">
-                  <input
-                    value={r}
-                    onChange={(e) => setReason(i, e.target.value)}
-                    className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              </>
+            )}
+            {step === 2 && (
+              <>
+                <label className="block text-sm font-medium">
+                  Same-day criteria
+                  <span className="mt-1 block font-normal text-muted-foreground">
+                    Enter your local criteria, one per line. Include escalation rules rather than
+                    assuming every urgent request should be booked.
+                  </span>
+                  <textarea
+                    rows={4}
+                    className={field}
+                    value={p.sameDayReasons.join("\n")}
+                    onChange={(e) => store.setSameDayReasons(e.target.value.split("\n"))}
                   />
-                  <button
-                    onClick={() => setSameDayReasons(reasons.filter((_, idx) => idx !== i))}
-                    className="rounded-lg border border-border px-3 text-sm text-muted-foreground hover:text-destructive"
-                    aria-label="Remove reason"
+                </label>
+                {input(
+                  "dutyContact",
+                  "Escalation contact",
+                  "Who should reception contact, and how?",
+                )}
+                {policy("gpsSameDay", "Same-day booking process")}
+                {policy("gpsRoutine", "Routine booking process")}
+                <p className="text-sm text-muted-foreground">
+                  You can add separate booking rules for other roles in Practice information.
+                </p>
+              </>
+            )}
+            {step === 3 && (
+              <>
+                {input(
+                  "prescriptionOrdering",
+                  "Prescription ordering",
+                  "How should patients submit a request?",
+                )}
+                {input("repeatTurnaround", "Prescription turnaround")}
+                {input(
+                  "repeatEmergency",
+                  "Medication run-out process",
+                  "Who should reception contact and what should they tell the patient?",
+                )}
+                <details>
+                  <summary className="cursor-pointer text-sm">
+                    More prescription details (optional)
+                  </summary>
+                  <div className="mt-4 space-y-5">
+                    {input("repeatControlled", "Controlled drug requests")}
+                    {input("repeatHighRisk", "Medication monitoring")}
+                    {input("nominatedPharmacy", "Nominated pharmacy process")}
+                  </div>
+                </details>
+              </>
+            )}
+            {step === 4 && (
+              <>
+                {input(
+                  "localConfidentiality",
+                  "Confidentiality process",
+                  "Include identity checks and requests for another person’s information.",
+                )}
+                {input(
+                  "localSafeguarding",
+                  "Safeguarding process",
+                  "Include the named contact and how to raise a concern.",
+                )}
+                <details>
+                  <summary className="cursor-pointer text-sm">
+                    More local policies (optional)
+                  </summary>
+                  <div className="mt-4 space-y-5">
+                    {input("localComplaints", "Complaints")}
+                    {input("localDNA", "Missed appointments")}
+                    {input("localInterpreter", "Interpreters")}
+                    {input("urgentNumbers", "Urgent contact numbers")}
+                    {input("extras", "Other practice guidance")}
+                  </div>
+                </details>
+              </>
+            )}
+            {step === 5 && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  We’ll create starter drafts for bookings, urgent requests, prescriptions, results
+                  and reception onboarding. Review every scenario before publishing.
+                </p>
+                {setupSteps.slice(0, 5).map((label, i) => (
+                  <div
+                    key={label}
+                    className="flex items-start justify-between gap-4 border-b border-border pb-4"
                   >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setSameDayReasons([...reasons, ""])}
-              className="mt-3 rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface"
-            >
-              + Add a reason
-            </button>
-          </Card>
+                    <div>
+                      <h2 className="font-semibold">{label}</h2>
+                      <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
+                        {
+                          [
+                            `${p.practiceName}\n${p.hours}\n${p.outOfHoursTimes}`,
+                            p.staff
+                              .map(
+                                (s) =>
+                                  `${s.name} · ${s.role}: ${[s.clinics, ...(s.capabilities ?? [])].filter(Boolean).join(", ")}`,
+                              )
+                              .join("\n"),
+                            `Same-day: ${p.rolePolicies.gpsSameDay}\nRoutine: ${p.rolePolicies.gpsRoutine}\nCriteria: ${p.sameDayReasons.join("; ")}\nEscalation: ${p.dutyContact}`,
+                            `${p.prescriptionOrdering}\n${p.repeatTurnaround}\nRun-out: ${p.repeatEmergency}`,
+                            `Confidentiality: ${p.localConfidentiality}\nSafeguarding: ${p.localSafeguarding}`,
+                          ][i]
+                        }
+                      </p>
+                      {missing[i].length > 0 && (
+                        <p className="mt-2 text-sm text-destructive">
+                          Missing: {missing[i].join("; ")}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => go(i)}
+                      className="text-sm font-semibold text-primary"
+                      aria-label={`Edit ${label.toLowerCase()}`}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+          </fieldset>
+        </Card>
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {error}
+          </p>
         )}
-
-        {step === 4 && (
-          <Card className="mt-6 space-y-4">
-            <h2 className="font-display text-xl font-semibold">
-              How do patients order prescriptions?
-            </h2>
-            <textarea
-              rows={5}
-              className={field}
-              value={practiceData.prescriptionOrdering}
-              onChange={(e) => setPracticeField("prescriptionOrdering", e.target.value)}
-              placeholder="e.g. NHS App, paper slip at reception, nominated pharmacy. Telephone requests not accepted."
-            />
-            <label className="block text-sm">
-              <span className="font-medium">Normal turnaround</span>
-              <input
-                className={field}
-                value={practiceData.repeatTurnaround}
-                onChange={(e) => setPracticeField("repeatTurnaround", e.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">If a patient has run out completely</span>
-              <textarea
-                rows={3}
-                className={field}
-                value={practiceData.repeatEmergency}
-                onChange={(e) => setPracticeField("repeatEmergency", e.target.value)}
-              />
-            </label>
-          </Card>
-        )}
-
-        <div className="mt-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => {
-              if (step === 0) {
-                nav({ to: "/dashboard" });
-                return;
-              }
-              setStep((s) => Math.max(0, s - 1));
-            }}
-            className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-40"
-          >
-            ← Back
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <button disabled={busy} onClick={() => void save(true)} className="text-sm text-primary">
+            Save and exit
           </button>
-          {step < steps.length - 1 ? (
+          <div className="flex gap-3">
+            {step > 0 && (
+              <button
+                disabled={busy}
+                onClick={() => go(step - 1)}
+                className="rounded-xl border border-border px-5 py-3 text-sm"
+              >
+                Back
+              </button>
+            )}
             <button
-              type="button"
-              onClick={() => setStep((s) => s + 1)}
-              className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
+              disabled={busy}
+              onClick={() => void save()}
+              className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
-              Next →
+              {busy ? "Saving…" : step === 5 ? "Create starter drafts" : "Save and continue"}
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={finish}
-              className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground hover:opacity-90"
-            >
-              Finish setup &amp; draft starter modules
-            </button>
-          )}
+          </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => nav({ to: "/dashboard" })}
-          className="mt-4 text-xs text-muted-foreground hover:underline"
-        >
-          Skip for now
-        </button>
       </div>
     </Shell>
   );

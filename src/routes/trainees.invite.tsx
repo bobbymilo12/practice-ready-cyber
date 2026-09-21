@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { api, flushPractice, loadWorkspace } from "@/lib/backend";
+import { devRole } from "@/lib/dev-mode";
 import { useApp, TRAINEE_ROLE_OPTIONS } from "@/lib/store";
 
 export const Route = createFileRoute("/trainees/invite")({
@@ -91,12 +92,9 @@ function InvitePage() {
         <Link to="/dashboard" className="text-sm text-primary hover:underline">
           ← Back to dashboard
         </Link>
-        <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">
-          Create a new trainee account
-        </h1>
+        <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">Invite a trainee</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Enter the trainee's work email. They'll appear in your team list straight away and can
-          start any module you assign to them.
+          Send login details to the trainee’s work email, then assign their training.
         </p>
 
         <Card className="mt-6">
@@ -151,11 +149,17 @@ function InvitePage() {
           {sentTo && (
             <div className="mt-5 rounded-xl border border-[color:var(--success)]/40 bg-success/10 p-4 text-sm">
               <p className="font-semibold text-[color:var(--success)]">
-                Invitation accepted for email delivery
+                {devRole() ? "Mock trainee added" : "Invitation accepted for email delivery"}
               </p>
               <p className="mt-1 text-muted-foreground">
-                {sentTo} has been added to your team. The email contains their login link and
-                temporary password. They must change it before training.
+                {devRole() ? (
+                  `${sentTo} was added to the mock team. No email was sent.`
+                ) : (
+                  <>
+                    {sentTo} has been added to your team. The email contains their login link and
+                    temporary password. They must change it before training.
+                  </>
+                )}
               </p>
             </div>
           )}

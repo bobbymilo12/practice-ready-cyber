@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { flushPractice } from "@/lib/backend";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { Link } from "@tanstack/react-router";
@@ -12,7 +13,7 @@ import {
 } from "@/lib/store";
 
 export const Route = createFileRoute("/modules/setup")({
-  head: () => ({ meta: [{ title: "AI setup assistant — PracticeReady" }] }),
+  head: () => ({ meta: [{ title: "Module setup — PracticeReady" }] }),
   validateSearch: (s: Record<string, unknown>) => ({
     topic: (s.topic as string) || "custom",
     title: (s.title as string) || "Custom module",
@@ -36,39 +37,47 @@ function Setup() {
   const [length, setLength] = useState<ModuleLength>("short");
   const [phase, setPhase] = useState<Phase>("questions");
   const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
+  const [draftId, setDraftId] = useState<string | null>(null);
 
   const current = questions[step];
   const total = questions.length;
   const progressCount = phase === "options" ? total : step + 1;
   const progress = (progressCount / (total + 1)) * 100;
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setGenerating(true);
-    setTimeout(() => {
-      const seed = draftsForTopic(topic, format, title, difficulty, length);
-      const id = createDraftModule(
-        title,
-        `${title} — draft`,
-        topic,
-        seed,
-        difficulty,
-        length,
-      );
-      resetAnswers();
-      nav({ to: "/modules/review", search: { id } });
-    }, 1200);
+    setError("");
+    try {
+      let id = draftId;
+      if (!id) {
+        const topicAnswers = Object.fromEntries(
+          questions.map((q) => [q.key, answers[q.key] ?? ""]),
+        );
+        const seed = draftsForTopic(topic, format, title, difficulty, length, topicAnswers);
+        id = createDraftModule(title, `${title} — draft`, topic, seed, difficulty, length);
+        setDraftId(id);
+        resetAnswers();
+      }
+      await flushPractice();
+      await nav({ to: "/modules/review", search: { id } });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save. Please retry.");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
     <Shell>
       <div className="mx-auto max-w-3xl">
-        <p className="text-sm text-muted-foreground">AI setup assistant · {title}</p>
+        <p className="text-sm text-muted-foreground">Module setup · {title}</p>
         <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
           Tell us how your practice handles this
         </h1>
         <p className="mt-2 text-muted-foreground">
-          We only ask what isn't already in your Data Hub. All generated content is
-          marked as draft and requires manager review before staff can use it.
+          Add topic-specific details to your saved practice information. You’ll review the draft
+          before publishing.
         </p>
 
         <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -82,12 +91,12 @@ function Setup() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                From your data hub · we won't ask about these
+                Practice information
               </div>
               <p className="mt-1 text-sm font-medium">{practiceData.practiceName}</p>
             </div>
             <Link to="/data-hub" className="text-xs font-medium text-primary hover:underline">
-              Edit data hub →
+              Edit practice information →
             </Link>
           </div>
           {practiceData.staff.length > 0 && (
@@ -102,16 +111,19 @@ function Setup() {
           )}
         </Card>
 
-
         {phase === "questions" && current && (
           <Card className="mt-6">
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Question {step + 1} of {total}
             </div>
-            <label className="mt-2 block font-display text-xl font-semibold">
+            <label
+              htmlFor="module-answer"
+              className="mt-2 block font-display text-xl font-semibold"
+            >
               {current.q}
             </label>
             <textarea
+              id="module-answer"
               value={answers[current.key] ?? ""}
               onChange={(e) => setAnswer(current.key, e.target.value)}
               placeholder={current.placeholder}
@@ -139,7 +151,7 @@ function Setup() {
                   onClick={() => setPhase("options")}
                   className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
                 >
-                  Choose difficulty &amp; length →
+                  Choose training options →
                 </button>
               )}
             </div>
@@ -150,31 +162,39 @@ function Setup() {
           <Card className="mt-6 space-y-8">
             <div>
               <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Difficulty
+                Answer order
               </div>
               <h2 className="mt-1 font-display text-xl font-semibold">
-                How challenging should the scenarios be?
+                How should answer choices appear?
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Easy keeps the correct answer clearly signalled. Intermediate and
-                advanced remove positional cues and expect closer judgement — the wrong
-                answers look more plausible.
+                Choose a fixed or shuffled answer order for multiple-choice questions.
               </p>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {(
                   [
-                    { key: "easy", title: "New employee (Easy)", desc: "Correct choice is clearly signalled. Great for week 1." },
-                    { key: "intermediate", title: "Intermediate", desc: "Options are shuffled and closer in wording — needs real thought." },
-                    { key: "advanced", title: "Advanced", desc: "Plausible distractors, subtle differences. For confident staff." },
+                    {
+                      key: "easy",
+                      title: "Fixed order",
+                      desc: "Keep the original answer order for primary questions.",
+                    },
+                    {
+                      key: "intermediate",
+                      title: "Shuffled order",
+                      desc: "Vary answer positions across questions.",
+                    },
                   ] as const
                 ).map((opt) => {
                   const active = difficulty === opt.key;
                   return (
                     <button
                       key={opt.key}
+                      disabled={generating || Boolean(draftId)}
                       onClick={() => setDifficulty(opt.key)}
                       className={`text-left rounded-2xl border p-4 transition ${
-                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                        active
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/40"
                       }`}
                     >
                       <div className="font-display text-sm font-semibold">{opt.title}</div>
@@ -195,18 +215,21 @@ function Setup() {
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {(
                   [
-                    { key: "short", title: "Short", desc: "4–5 questions. ~5 minutes." },
-                    { key: "medium", title: "Medium", desc: "10 questions. ~12 minutes." },
-                    { key: "long", title: "Long", desc: "15+ questions. Full walk-through." },
+                    { key: "short", title: "Short", desc: "Up to 5 primary questions." },
+                    { key: "medium", title: "Medium", desc: "Up to 10 primary questions." },
+                    { key: "long", title: "Long", desc: "Up to 15 primary questions." },
                   ] as const
                 ).map((opt) => {
                   const active = length === opt.key;
                   return (
                     <button
                       key={opt.key}
+                      disabled={generating || Boolean(draftId)}
                       onClick={() => setLength(opt.key)}
                       className={`text-left rounded-2xl border p-4 transition ${
-                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                        active
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/40"
                       }`}
                     >
                       <div className="font-display text-sm font-semibold">{opt.title}</div>
@@ -227,18 +250,33 @@ function Setup() {
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {(
                   [
-                    { key: "mcq", title: "Multiple choice (1 of 4)", desc: "Pick the best of four options." },
-                    { key: "order", title: "Put steps in order", desc: "Drag steps into the correct sequence." },
-                    { key: "mixed", title: "Mix of both", desc: "Recommended — variety keeps trainees engaged." },
+                    {
+                      key: "mcq",
+                      title: "Multiple choice (1 of 4)",
+                      desc: "Pick the best of four options.",
+                    },
+                    {
+                      key: "order",
+                      title: "Put steps in order",
+                      desc: "Move steps into the correct sequence.",
+                    },
+                    {
+                      key: "mixed",
+                      title: "Mix of both",
+                      desc: "Recommended — variety keeps trainees engaged.",
+                    },
                   ] as const
                 ).map((opt) => {
                   const active = format === opt.key;
                   return (
                     <button
                       key={opt.key}
+                      disabled={generating || Boolean(draftId)}
                       onClick={() => setFormat(opt.key)}
                       className={`text-left rounded-2xl border p-4 transition ${
-                        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                        active
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/40"
                       }`}
                     >
                       <div className="font-display text-sm font-semibold">{opt.title}</div>
@@ -251,6 +289,7 @@ function Setup() {
 
             <div className="flex items-center justify-between">
               <button
+                disabled={generating || Boolean(draftId)}
                 onClick={() => setPhase("questions")}
                 className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
               >
@@ -261,14 +300,24 @@ function Setup() {
                 disabled={generating}
                 className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground hover:opacity-90 disabled:opacity-60"
               >
-                {generating ? "Drafting scenarios…" : "Generate draft scenarios"}
+                {generating
+                  ? "Saving draft…"
+                  : draftId
+                    ? "Retry saving draft"
+                    : "Generate draft scenarios"}
               </button>
             </div>
           </Card>
         )}
 
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <p className="mt-4 text-xs text-muted-foreground">
-          AI-assisted draft generation. Manager review required before staff use.
+          Drafts use your saved rules. Question counts depend on the details provided; follow-up
+          questions revisit mistakes.
         </p>
       </div>
     </Shell>

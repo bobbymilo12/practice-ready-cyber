@@ -1,97 +1,67 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
-import { TOPICS } from "@/lib/store";
-
+import { TOPICS, useApp } from "@/lib/store";
 export const Route = createFileRoute("/modules/create")({
   head: () => ({ meta: [{ title: "Create module — PracticeReady" }] }),
   component: CreateModule,
 });
-
 function CreateModule() {
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState("");
   const [customTitle, setCustomTitle] = useState("");
   const nav = useNavigate();
-
-  const selectedTopics = TOPICS.filter((t) => selected.includes(t.key));
-  const selectedTopic = selectedTopics[0];
-  const canContinue = selectedTopics.length > 0;
-
+  const topic = TOPICS.find((t) => t.key === selected);
   return (
     <Shell>
-      <div>
-        <p className="text-sm text-muted-foreground">Step 1 of 3 · Create a new module</p>
-        <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
-          What module do you want to create?
-        </h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          Pick one topic to build a new module, or select multiple topics to merge them into one combined module.
-        </p>
-      </div>
-
+      <p className="text-sm text-muted-foreground">Create a module · Step 1 of 3</p>
+      <h1 className="mt-1 font-display text-3xl font-bold">Choose a training topic</h1>
+      <p className="mt-2 text-muted-foreground">
+        Create one module at a time, or{" "}
+        <Link to="/modules/merge" className="text-primary underline">
+          combine existing modules
+        </Link>
+        .
+      </p>
       <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {TOPICS.map((t) => {
-          const active = selected.includes(t.key);
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() =>
-                setSelected((current) =>
-                  current.includes(t.key)
-                    ? current.filter((item) => item !== t.key)
-                    : [...current, t.key],
-                )
-              }
-              className={`text-left rounded-2xl border p-5 transition ${
-                active
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "border-border bg-card hover:border-primary/40"
-              }`}
-            >
-              <div className="font-display text-base font-semibold">{t.title}</div>
-              <div className="mt-1 text-sm text-muted-foreground">{t.desc}</div>
-              <div className="mt-3 text-xs text-muted-foreground">
-                {t.questions.length} setup questions
-              </div>
-            </button>
-          );
-        })}
+        {TOPICS.map((t) => (
+          <button
+            key={t.key}
+            aria-pressed={selected === t.key}
+            onClick={() => setSelected(t.key)}
+            className={`rounded-2xl border p-5 text-left ${selected === t.key ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+          >
+            <span className="block font-semibold">{t.title}</span>
+            <span className="mt-1 block text-sm text-muted-foreground">{t.desc}</span>
+          </button>
+        ))}
       </div>
-
-      {selected.length > 1 && (
-        <Card className="mt-6">
-          <p className="text-sm text-muted-foreground">
-            Multiple topics are selected. PracticeReady will merge them into one module draft.
-          </p>
-        </Card>
-      )}
-
-      <Card className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {selectedTopics.length === 0
-            ? "Select one or more topics to continue."
-            : selectedTopics.length === 1
-              ? `Selected: ${selectedTopic?.title}`
-              : `${selectedTopics.length} topics selected for a merged module`}
-        </p>
+      <Card className="mt-6">
+        {selected === "custom" && (
+          <label className="mb-4 block text-sm">
+            Module title
+            <input
+              className="mt-1 block w-full rounded-xl border border-border bg-background px-3 py-2"
+              value={customTitle}
+              onChange={(e) => setCustomTitle(e.target.value)}
+            />
+          </label>
+        )}
         <button
-          type="button"
-          disabled={!canContinue}
+          disabled={!topic || (selected === "custom" && !customTitle.trim())}
           onClick={() => {
-            if (selectedTopics.length > 1) {
-              nav({ to: "/modules/merge" });
-              return;
-            }
-            if (!selectedTopic) return;
-            nav({
+            if (!topic) return;
+            useApp.getState().resetAnswers();
+            void nav({
               to: "/modules/setup",
-              search: { topic: selectedTopic.key, title: selectedTopic.title },
+              search: {
+                topic: topic.key,
+                title: selected === "custom" ? customTitle.trim() : topic.title,
+              },
             });
           }}
-          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+          className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-40"
         >
-          {selectedTopics.length > 1 ? "Merge selected topics →" : "Continue →"}
+          Continue →
         </button>
       </Card>
     </Shell>
