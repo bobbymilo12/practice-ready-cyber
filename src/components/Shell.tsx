@@ -1,7 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { useApp } from "@/lib/store";
 
 export function Shell({ children }: { children: ReactNode }) {
+  const account = useApp((s) => s.account);
+  const dashboardPath = account ? (account.role === "manager" ? "/dashboard" : "/staff") : "/auth";
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border bg-background/80 backdrop-blur">
@@ -20,12 +24,22 @@ export function Shell({ children }: { children: ReactNode }) {
             </Link>
           </nav>
           <div className="flex items-center gap-2">
-            <Link
-              to="/auth"
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Create Account / Login
-            </Link>
+            {!account && (
+              <Link
+                to="/auth"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Create Account / Login
+              </Link>
+            )}
+            {account && (
+              <Link
+                to={dashboardPath}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface"
+              >
+                Dashboard
+              </Link>
+            )}
           </div>
 
         </div>

@@ -9,12 +9,13 @@ export const Route = createFileRoute("/modules/create")({
 });
 
 function CreateModule() {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
   const [customTitle, setCustomTitle] = useState("");
   const nav = useNavigate();
 
-  const selectedTopic = TOPICS.find((t) => t.key === selected);
-  const canContinue = selectedTopic && (selected !== "custom" || customTitle.trim().length > 2);
+  const selectedTopics = TOPICS.filter((t) => selected.includes(t.key));
+  const selectedTopic = selectedTopics[0];
+  const canContinue = selectedTopics.length > 0;
 
   return (
     <Shell>
@@ -24,19 +25,24 @@ function CreateModule() {
           What module do you want to create?
         </h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
-          Pick the topic your new reception or admin staff should practise. The next step will ask
-          you specific questions about how your practice handles it — the more detail, the better
-          the training.
+          Pick one topic to build a new module, or select multiple topics to merge them into one combined module.
         </p>
       </div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {TOPICS.map((t) => {
-          const active = selected === t.key;
+          const active = selected.includes(t.key);
           return (
             <button
               key={t.key}
-              onClick={() => setSelected(t.key)}
+              type="button"
+              onClick={() =>
+                setSelected((current) =>
+                  current.includes(t.key)
+                    ? current.filter((item) => item !== t.key)
+                    : [...current, t.key],
+                )
+              }
               className={`text-left rounded-2xl border p-5 transition ${
                 active
                   ? "border-primary bg-primary/5 shadow-sm"
@@ -53,35 +59,39 @@ function CreateModule() {
         })}
       </div>
 
-      {selected === "custom" && (
+      {selected.length > 1 && (
         <Card className="mt-6">
-          <label className="text-sm font-medium">Name your custom module</label>
-          <input
-            value={customTitle}
-            onChange={(e) => setCustomTitle(e.target.value)}
-            placeholder="e.g. Registering a new patient at Willow Lane"
-            className="mt-2 w-full rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
-          />
+          <p className="text-sm text-muted-foreground">
+            Multiple topics are selected. PracticeReady will merge them into one module draft.
+          </p>
         </Card>
       )}
 
       <Card className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {selectedTopic
-            ? `Selected: ${selected === "custom" && customTitle ? customTitle : selectedTopic.title}`
-            : "Select a topic to continue."}
+          {selectedTopics.length === 0
+            ? "Select one or more topics to continue."
+            : selectedTopics.length === 1
+              ? `Selected: ${selectedTopic?.title}`
+              : `${selectedTopics.length} topics selected for a merged module`}
         </p>
         <button
+          type="button"
           disabled={!canContinue}
           onClick={() => {
+            if (selectedTopics.length > 1) {
+              nav({ to: "/modules/merge" });
+              return;
+            }
             if (!selectedTopic) return;
-            const title =
-              selected === "custom" && customTitle ? customTitle : selectedTopic.title;
-            nav({ to: "/modules/setup", search: { topic: selectedTopic.key, title } });
+            nav({
+              to: "/modules/setup",
+              search: { topic: selectedTopic.key, title: selectedTopic.title },
+            });
           }}
           className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
         >
-          Continue →
+          {selectedTopics.length > 1 ? "Merge selected topics →" : "Continue →"}
         </button>
       </Card>
     </Shell>

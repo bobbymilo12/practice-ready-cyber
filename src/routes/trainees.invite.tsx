@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
-import { useApp } from "@/lib/store";
+import { useApp, TRAINEE_ROLE_OPTIONS } from "@/lib/store";
 
 export const Route = createFileRoute("/trainees/invite")({
   head: () => ({
@@ -31,6 +31,7 @@ function InvitePage() {
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [role, setRole] = useState<string>(TRAINEE_ROLE_OPTIONS[0]);
   const [error, setError] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
 
@@ -46,10 +47,11 @@ function InvitePage() {
       return;
     }
     setError("");
-    inviteTrainee(value, name);
+    inviteTrainee(value, name, role);
     setSentTo(value);
     setEmail("");
     setName("");
+    setRole(TRAINEE_ROLE_OPTIONS[0]);
   }
 
   return (
@@ -81,7 +83,7 @@ function InvitePage() {
             </label>
 
             <label className="block text-sm">
-              <span className="font-medium">Name (optional)</span>
+              <span className="font-medium">Name</span>
               <input
                 className={field}
                 value={name}
@@ -89,6 +91,23 @@ function InvitePage() {
                 placeholder="Jordan Price"
               />
             </label>
+
+            <div className="block text-sm">
+              <span className="font-medium">Role</span>
+              <div className="mt-1 grid gap-2 md:grid-cols-[1fr_auto]">
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className={field}
+                >
+                  {TRAINEE_ROLE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 

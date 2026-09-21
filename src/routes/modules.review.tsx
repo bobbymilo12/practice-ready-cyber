@@ -301,7 +301,7 @@ function ScenarioCard({
               onClick={onDelete}
               className="ml-auto rounded-lg border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5"
             >
-              Delete
+              Delete draft
             </button>
           </>
         )}

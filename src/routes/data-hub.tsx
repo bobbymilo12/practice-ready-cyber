@@ -1,7 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
-import { useApp, type StaffMember, type RolePolicies, type PracticeData } from "@/lib/store";
+import {
+  useApp,
+  ROLE_OPTIONS,
+  type StaffMember,
+  type RolePolicies,
+  type PracticeData,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/data-hub")({
   head: () => ({ meta: [{ title: "Practice Setup / Data Hub — PracticeReady" }] }),
@@ -270,12 +276,23 @@ function DataHub() {
                   className="rounded-lg border border-input bg-background p-2 text-sm"
                   placeholder="Name"
                 />
-                <input
-                  value={s.role}
-                  onChange={(e) => updateStaff(s.id, { role: e.target.value })}
+                <select
+                  value={ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number]) ? s.role : "custom"}
+                  onChange={(e) => {
+                    const next = e.target.value === "custom" ? s.role : e.target.value;
+                    updateStaff(s.id, { role: next });
+                  }}
                   className="rounded-lg border border-input bg-background p-2 text-sm"
-                  placeholder="Role (GP, ANP, Nurse, HCA, Pharmacist, Reception)"
-                />
+                >
+                  {!ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number]) && (
+                    <option value="custom">{s.role || "Choose role"}</option>
+                  )}
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
                 <input
                   value={s.clinics}
                   onChange={(e) => updateStaff(s.id, { clinics: e.target.value })}
@@ -302,12 +319,17 @@ function DataHub() {
               placeholder="e.g. Amy Chen"
               className="rounded-lg border border-input bg-background p-2 text-sm"
             />
-            <input
-              value={newStaff.role}
+            <select
+              value={newStaff.role || ROLE_OPTIONS[0]}
               onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
-              placeholder="e.g. Nurse Practitioner"
               className="rounded-lg border border-input bg-background p-2 text-sm"
-            />
+            >
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
             <input
               value={newStaff.clinics}
               onChange={(e) => setNewStaff({ ...newStaff, clinics: e.target.value })}

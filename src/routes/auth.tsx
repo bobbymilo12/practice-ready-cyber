@@ -35,9 +35,20 @@ function AuthPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState<Role | null>(null);
   const [error, setError] = useState("");
   const setAccount = useApp((s) => s.setAccount);
+  const createAccount = useApp((s) => s.createAccount);
+  const loginAccount = useApp((s) => s.loginAccount);
+
+  const resetPasswordFields = () => {
+    setPassword("");
+    setConfirm("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  };
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,11 +56,13 @@ function AuthPage() {
       setError("Please choose Manager or Trainee.");
       return;
     }
-    if (mode === "create" && (!name.trim() || !email.trim() || !phone.trim())) {
+    const trimmedEmail = email.trim();
+
+    if (mode === "create" && (!name.trim() || !trimmedEmail || !phone.trim())) {
       setError("Please fill in your name, email and telephone number.");
       return;
     }
-    if (mode === "login" && (!email.trim() || !password)) {
+    if (mode === "login" && (!trimmedEmail || !password)) {
       setError("Please enter your email and password.");
       return;
     }
@@ -61,8 +74,38 @@ function AuthPage() {
       setError("The two passwords do not match.");
       return;
     }
+
+    if (mode === "create") {
+      const ok = createAccount({
+        name: name.trim() || trimmedEmail.split("@")[0],
+        email: trimmedEmail,
+        phone,
+        password,
+        role,
+      });
+      if (!ok) {
+        setError("We could not save that account on this device. Please try a different email.");
+        return;
+      }
+    } else {
+      const ok = loginAccount(trimmedEmail, password, role);
+      if (!ok) {
+        setError("We couldn't match that account on this device. Check the role, email and password.");
+        return;
+      }
+    }
+
     setError("");
-    setAccount({ name: name.trim() || email.split("@")[0], email: email.trim(), phone, password, role });
+    if (mode === "create") {
+      setAccount({
+        name: name.trim() || trimmedEmail.split("@")[0],
+        email: trimmedEmail,
+        phone,
+        password,
+        role,
+      });
+      resetPasswordFields();
+    }
     navigate({ to: role === "manager" ? "/dashboard" : "/staff" });
   }
 
@@ -84,7 +127,10 @@ function AuthPage() {
             <button
               key={m}
               type="button"
-              onClick={() => setMode(m)}
+              onClick={() => {
+                setMode(m);
+                resetPasswordFields();
+              }}
               className={`rounded-lg px-4 py-2 font-medium ${
                 mode === m
                   ? "bg-primary text-primary-foreground"
@@ -139,27 +185,47 @@ function AuthPage() {
 
             <label className="block text-sm">
               <span className="font-medium">Password</span>
-              <input
-                className={field}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
-                autoComplete={mode === "create" ? "new-password" : "current-password"}
-              />
+              <div className="relative">
+                <input
+                  className={`${field} pr-10`}
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  autoComplete={mode === "create" ? "new-password" : "current-password"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </label>
 
             {mode === "create" && (
               <label className="block text-sm">
                 <span className="font-medium">Confirm password</span>
-                <input
-                  className={field}
-                  type="password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  placeholder="Re-enter your password"
-                  autoComplete="new-password"
-                />
+                <div className="relative">
+                  <input
+                    className={`${field} pr-10`}
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="Re-enter your password"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    className="absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground hover:text-foreground"
+                    aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}
+                  >
+                    {showConfirmPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </label>
             )}
 

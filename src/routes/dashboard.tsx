@@ -36,12 +36,14 @@ function Dashboard() {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            to="/practice/setup"
-            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
-          >
-            Set up practice
-          </Link>
+          {!setupComplete && (
+            <Link
+              to="/practice/setup"
+              className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
+            >
+              Set up practice
+            </Link>
+          )}
           <Link
             to="/trainees/invite"
             className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
@@ -58,7 +60,7 @@ function Dashboard() {
             to="/data-hub"
             className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
           >
-            Practice Setup / Data Hub
+            Practice Information
           </Link>
           <Link
             to="/modules/create"
@@ -85,7 +87,7 @@ function Dashboard() {
       </div>
 
       {/* First-run nudge */}
-      {(dataHubEmpty || !setupComplete) && (
+      {dataHubEmpty && !setupComplete && (
         <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
           <span className="font-semibold">Start here:</span> run{" "}
           <Link to="/practice/setup" className="font-semibold text-primary hover:underline">

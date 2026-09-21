@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
-import { useApp, STAFF_ROLE_OPTIONS } from "@/lib/store";
+import { useApp, ROLE_OPTIONS, STAFF_CAPABILITY_OPTIONS } from "@/lib/store";
 
 export const Route = createFileRoute("/practice/setup")({
   head: () => ({
@@ -28,6 +28,15 @@ export const Route = createFileRoute("/practice/setup")({
 const field =
   "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary";
 
+const sameDayQuickPicks = [
+  "Chest pain, breathing difficulty or stroke symptoms",
+  "Suspected sepsis or rapidly worsening illness",
+  "Child under five who is unwell",
+  "Mental health crisis or safeguarding concern",
+  "Acute pain that has worsened in the last 24 hours",
+  "Medication run-out with concern about safety",
+];
+
 function PracticeSetup() {
   const nav = useNavigate();
   const practiceData = useApp((s) => s.practiceData);
@@ -40,11 +49,19 @@ function PracticeSetup() {
 
   const [step, setStep] = useState(0);
   const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState<string>(STAFF_ROLE_OPTIONS[0]);
+  const [newRole, setNewRole] = useState<string>(ROLE_OPTIONS[0]);
+  const [customRole, setCustomRole] = useState("");
   const [created, setCreated] = useState<number | null>(null);
 
-  const steps = ["Your team", "Practice basics", "Same-day appointments", "Prescriptions"];
+  const steps = [
+    "Your team",
+    "Clinician coverage",
+    "Practice basics",
+    "Same-day appointments",
+    "Prescriptions",
+  ];
   const reasons = practiceData.sameDayReasons;
+  const isDoctorRole = (role: string) => /doctor|gp|partner/i.test(role);
 
   const setReason = (i: number, value: string) =>
     setSameDayReasons(reasons.map((r, idx) => (idx === i ? value : r)));
@@ -136,20 +153,24 @@ function PracticeSetup() {
                     placeholder="Name"
                   />
                   <select
-                    value={STAFF_ROLE_OPTIONS.includes(s.role as never) ? s.role : ""}
-                    onChange={(e) => updateStaff(s.id, { role: e.target.value })}
+                    value={ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number]) ? s.role : "custom"}
+                    onChange={(e) => {
+                      const next = e.target.value === "custom" ? s.role : e.target.value;
+                      updateStaff(s.id, { role: next });
+                    }}
                     className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
                   >
-                    {!STAFF_ROLE_OPTIONS.includes(s.role as never) && (
-                      <option value="">{s.role || "Choose a role"}</option>
+                    {!ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number]) && (
+                      <option value="custom">{s.role || "Choose a role"}</option>
                     )}
-                    {STAFF_ROLE_OPTIONS.map((r) => (
+                    {ROLE_OPTIONS.map((r) => (
                       <option key={r} value={r}>
                         {r}
                       </option>
                     ))}
                   </select>
                   <button
+                    type="button"
                     onClick={() => removeStaff(s.id)}
                     className="rounded-lg border border-destructive/40 px-3 py-2 text-xs text-destructive hover:bg-destructive/5"
                   >
@@ -166,22 +187,41 @@ function PracticeSetup() {
                 placeholder="Add a name"
                 className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
               />
-              <select
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value)}
-                className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-              >
-                {STAFF_ROLE_OPTIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+              <div className="space-y-2">
+                <select
+                  value={newRole === "Other" ? "Other" : newRole}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setNewRole(next);
+                    if (next !== "Other") setCustomRole("");
+                  }}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                  <option value="Other">Other</option>
+                </select>
+                {newRole === "Other" && (
+                  <input
+                    value={customRole}
+                    onChange={(e) => setCustomRole(e.target.value)}
+                    placeholder="Custom role"
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  />
+                )}
+              </div>
               <button
+                type="button"
                 onClick={() => {
                   if (!newName.trim()) return;
-                  addStaff({ name: newName.trim(), role: newRole, clinics: "" });
+                  const resolvedRole = newRole === "Other" ? customRole.trim() || "Other" : newRole;
+                  addStaff({ name: newName.trim(), role: resolvedRole, clinics: "", capabilities: [] });
                   setNewName("");
+                  setCustomRole("");
+                  setNewRole(ROLE_OPTIONS[0]);
                 }}
                 className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
               >
@@ -192,6 +232,55 @@ function PracticeSetup() {
         )}
 
         {step === 1 && (
+          <Card className="mt-6">
+            <h2 className="font-display text-xl font-semibold">Which tasks can each clinician carry out?</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Tick the tasks each person is trained to do. Doctors are usually kept simple unless you specifically want extra detail.
+            </p>
+
+            <div className="mt-5 space-y-4">
+              {practiceData.staff.map((s) => (
+                <div key={s.id} className="rounded-xl border border-border p-4">
+                  <div className="font-medium text-foreground">
+                    {s.name || "Unnamed staff member"} · {s.role || "Unassigned role"}
+                  </div>
+
+                  {isDoctorRole(s.role) ? (
+                    <div className="mt-3 rounded-lg border border-dashed border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                      Doctors are covered by the practice's clinical lead rules, so individual task boxes are not needed here.
+                    </div>
+                  ) : (
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      {STAFF_CAPABILITY_OPTIONS.map((option) => {
+                        const checked = (s.capabilities ?? []).includes(option);
+                        return (
+                          <label
+                            key={`${s.id}-${option}`}
+                            className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const nextCapabilities = e.target.checked
+                                  ? [...(s.capabilities ?? []), option].filter((value, index, arr) => arr.indexOf(value) === index)
+                                  : (s.capabilities ?? []).filter((value) => value !== option);
+                                updateStaff(s.id, { capabilities: nextCapabilities });
+                              }}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {step === 2 && (
           <Card className="mt-6 space-y-4">
             <h2 className="font-display text-xl font-semibold">Practice basics</h2>
             <label className="block text-sm">
@@ -230,7 +319,7 @@ function PracticeSetup() {
           </Card>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <Card className="mt-6">
             <h2 className="font-display text-xl font-semibold">
               What counts as a same-day appointment?
@@ -239,6 +328,24 @@ function PracticeSetup() {
               One reason per line. New starters use this list to decide what to offer and what
               to pass to the duty team.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {sameDayQuickPicks.map((pick) => (
+                <button
+                  key={pick}
+                  type="button"
+                  onClick={() => {
+                    const cleaned = pick.trim();
+                    if (!reasons.includes(cleaned)) {
+                      const next = [...reasons, cleaned];
+                      setSameDayReasons(next.filter(Boolean));
+                    }
+                  }}
+                  className="rounded-full border border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  {pick}
+                </button>
+              ))}
+            </div>
             <div className="mt-4 space-y-2">
               {reasons.map((r, i) => (
                 <div key={i} className="flex gap-2">
@@ -266,7 +373,7 @@ function PracticeSetup() {
           </Card>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <Card className="mt-6 space-y-4">
             <h2 className="font-display text-xl font-semibold">
               How do patients order prescriptions?
@@ -300,14 +407,21 @@ function PracticeSetup() {
 
         <div className="mt-6 flex items-center justify-between">
           <button
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={step === 0}
+            type="button"
+            onClick={() => {
+              if (step === 0) {
+                nav({ to: "/dashboard" });
+                return;
+              }
+              setStep((s) => Math.max(0, s - 1));
+            }}
             className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-40"
           >
             ← Back
           </button>
           {step < steps.length - 1 ? (
             <button
+              type="button"
               onClick={() => setStep((s) => s + 1)}
               className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
             >
@@ -315,6 +429,7 @@ function PracticeSetup() {
             </button>
           ) : (
             <button
+              type="button"
               onClick={finish}
               className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground hover:opacity-90"
             >
@@ -324,6 +439,7 @@ function PracticeSetup() {
         </div>
 
         <button
+          type="button"
           onClick={() => nav({ to: "/dashboard" })}
           className="mt-4 text-xs text-muted-foreground hover:underline"
         >

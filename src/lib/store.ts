@@ -90,8 +90,28 @@ export const TRAINEE_ROLE_OPTIONS = [
   "Administrator",
   "Medical Records",
   "Phlebotomist",
-  "Other",
 ];
+
+export const ROLE_OPTIONS = [
+  "Doctor",
+  "Nurse",
+  "HCA",
+  "Physio",
+  "Mental Health Practitioner",
+  "Nurse Practitioner",
+  "Pharmacist",
+  "Reception",
+] as const;
+
+export const STAFF_ROLE_OPTIONS = [
+  ...ROLE_OPTIONS,
+  "Doctor (GP)",
+  "Senior Nurse",
+  "Practice Nurse",
+  "Physiotherapist",
+  "Reception / Admin lead",
+  "GP Partner",
+] as const;
 
 export interface Assignment {
   id: string;
@@ -99,19 +119,8 @@ export interface Assignment {
   moduleId: string;
   assignedAt: number;
   dueDate?: string;
+  status: "assigned" | "in_progress" | "completed" | "overdue";
 }
-
-export const STAFF_ROLE_OPTIONS = [
-  "Doctor (GP)",
-  "Nurse Practitioner",
-  "Senior Nurse",
-  "Practice Nurse",
-  "HCA",
-  "Physiotherapist",
-  "Mental Health Practitioner",
-  "Pharmacist",
-  "Reception / Admin lead",
-] as const;
 
 export const RESULT_EMOJIS = ["👍", "🎉", "💪", "👀", "🔁", "⚠️"] as const;
 
@@ -121,8 +130,28 @@ export interface StaffMember {
   name: string;
   role: string; // GP, ANP, Nurse Practitioner, Practice Nurse, HCA, Pharmacist, Reception
   clinics: string; // free-text list of what they cover
+  capabilities?: string[];
   notes?: string;
 }
+
+export const STAFF_CAPABILITY_OPTIONS = [
+  "Asthma reviews",
+  "Diabetes reviews",
+  "Cervical screening",
+  "Blood pressure checks",
+  "ECG",
+  "Medication reviews",
+  "Prescription queries",
+  "Wound review",
+  "Minor illness",
+  "Home visits",
+  "Vaccinations",
+  "Crisis triage",
+  "Fit notes",
+  "Mental health support",
+  "New patient checks",
+  "Urgent same-day triage",
+] as const;
 
 export interface RolePolicies {
   gpsSameDay: string;
@@ -213,30 +242,35 @@ const defaultPracticeData: PracticeData = {
       name: "Dr Rachel Owens",
       role: "GP Partner",
       clinics: "All GP presentations, home visits lead",
+      capabilities: ["Urgent same-day triage", "Home visits", "Mental health support", "Fit notes"],
     },
     {
       id: "s2",
       name: "Anna Bright",
       role: "Nurse Practitioner",
       clinics: "Minor illness, UTIs, ear infections, wound review",
+      capabilities: ["Minor illness", "Wound review", "Urgent same-day triage", "New patient checks"],
     },
     {
       id: "s3",
       name: "Priya Shah",
       role: "Practice Nurse (asthma & diabetes trained)",
       clinics: "Asthma reviews, diabetic annual reviews, cervical screening",
+      capabilities: ["Asthma reviews", "Diabetes reviews", "Cervical screening", "Vaccinations"],
     },
     {
       id: "s4",
       name: "Marcus Lee",
       role: "HCA",
       clinics: "Blood pressure, bloods, ECG, B12 injections",
+      capabilities: ["Blood pressure checks", "ECG", "Vaccinations", "New patient checks"],
     },
     {
       id: "s5",
       name: "Sarah Khan",
       role: "Practice Pharmacist",
       clinics: "Medication reviews, high-risk drug monitoring, prescription queries",
+      capabilities: ["Medication reviews", "Prescription queries", "Mental health support", "Fit notes"],
     },
   ],
   rolePolicies: {
@@ -281,6 +315,7 @@ interface AppState {
   trainees: Trainee[];
   assignments: Assignment[];
   setupComplete: boolean;
+  emojiMarks: Record<string, string>;
 
   setAnswer: (key: string, value: string) => void;
   resetAnswers: () => void;
@@ -297,11 +332,13 @@ interface AppState {
 
   // Accounts & team
   setAccount: (a: Account) => void;
+  createAccount: (a: Account) => boolean;
+  loginAccount: (email: string, password: string, role?: AccountRole) => boolean;
   signOut: () => void;
   inviteTrainee: (email: string, name?: string, role?: string) => Trainee;
   removeTrainee: (id: string) => void;
   activateTrainee: (id: string) => void;
-  assignModule: (traineeId: string, moduleId: string, dueDate?: string) => void;
+  assignModule: (traineeId: string, moduleId: string, dueDate?: string, status?: Assignment["status"]) => void;
   unassignModule: (traineeId: string, moduleId: string) => void;
   markResult: (traineeId: string, moduleId: string, completedAt: number, emoji: string) => void;
 
@@ -1094,6 +1131,7 @@ export const useApp = create<AppState>()(
       trainees: [],
       assignments: [],
       setupComplete: false,
+      emojiMarks: {},
 
       setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
       resetAnswers: () => set({ answers: {} }),
@@ -1258,6 +1296,41 @@ export const useApp = create<AppState>()(
           };
         }),
 
+      createAccount: (a) => {
+        const key = a.email.trim().toLowerCase();
+        if (!key || !a.password || a.password.length < 6) return false;
+        set((state) => {
+          const existing = state.trainees.find((t) => t.email.toLowerCase() === key);
+          return {
+            account: a,
+            trainees: existing
+              ? state.trainees.map((t) =>
+                  t.id === existing.id
+                    ? { ...t, status: "active" as TraineeStatus, name: t.name || a.name }
+                    : t,
+                )
+              : state.trainees,
+          };
+        });
+        return true;
+      },
+
+      loginAccount: (email, password, role) => {
+        const key = email.trim().toLowerCase();
+        const current = get().account;
+        if (current && current.email.toLowerCase() === key && current.password === password) {
+          if (role && current.role !== role) return false;
+          return true;
+        }
+        const account = get().account;
+        if (!account || account.email.toLowerCase() !== key || account.password !== password) {
+          return false;
+        }
+        if (role && account.role !== role) return false;
+        set({ account });
+        return true;
+      },
+
       signOut: () => set({ account: null }),
 
       inviteTrainee: (email, name, role) => {
@@ -1291,14 +1364,21 @@ export const useApp = create<AppState>()(
           ),
         })),
 
-      assignModule: (traineeId, moduleId, dueDate) =>
+      assignModule: (traineeId, moduleId, dueDate, status = "assigned") =>
         set((state) =>
           state.assignments.some((a) => a.traineeId === traineeId && a.moduleId === moduleId)
             ? state
             : {
                 assignments: [
                   ...state.assignments,
-                  { id: uid(), traineeId, moduleId, assignedAt: Date.now(), dueDate },
+                  {
+                    id: uid(),
+                    traineeId,
+                    moduleId,
+                    assignedAt: Date.now(),
+                    dueDate,
+                    status,
+                  },
                 ],
               },
         ),
@@ -1317,6 +1397,10 @@ export const useApp = create<AppState>()(
               ? { ...r, emoji: r.emoji === emoji ? undefined : emoji }
               : r,
           ),
+          emojiMarks: {
+            ...state.emojiMarks,
+            [`${traineeId}:${moduleId}:${completedAt}`]: emoji,
+          },
         })),
 
       completeSetup: (generate) => {
@@ -1449,9 +1533,16 @@ export const useApp = create<AppState>()(
           assignments: p.assignments ?? [],
           account: p.account ?? null,
           setupComplete: p.setupComplete ?? false,
+          emojiMarks: (p.emojiMarks as Record<string, string>) ?? {},
           practiceData: {
             ...defaultPracticeData,
             ...pd,
+            staff: (pd.staff ?? defaultPracticeData.staff).map((member) => ({
+              ...member,
+              capabilities: Array.isArray(member.capabilities)
+                ? member.capabilities
+                : [],
+            })),
             sameDayReasons:
               Array.isArray(pd.sameDayReasons) && pd.sameDayReasons.length > 0
                 ? pd.sameDayReasons
