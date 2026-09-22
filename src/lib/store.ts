@@ -1,3 +1,9 @@
+import type { BookingConfig, PrescriptionConfig } from "./practice-config";
+import {
+  initialiseCapabilities,
+  roleCapabilities,
+  type AppointmentCapabilities,
+} from "./appointment-capabilities";
 import { create } from "zustand";
 import { practiceScenarios } from "./practice-scenarios";
 
@@ -41,6 +47,9 @@ export const TRAINEE_ROLE_OPTIONS = [
 
 export const ROLE_OPTIONS = [
   "Doctor",
+  "GP",
+  "Practice Nurse",
+  "ANP",
   "Nurse",
   "HCA",
   "Physio",
@@ -54,7 +63,6 @@ export const STAFF_ROLE_OPTIONS = [
   ...ROLE_OPTIONS,
   "Doctor (GP)",
   "Senior Nurse",
-  "Practice Nurse",
   "Physiotherapist",
   "Reception / Admin lead",
   "GP Partner",
@@ -69,6 +77,7 @@ export interface StaffMember {
   role: string; // GP, ANP, Nurse Practitioner, Practice Nurse, HCA, Pharmacist, Reception
   clinics: string; // free-text list of what they cover
   capabilities?: string[];
+  appointmentCapabilities?: AppointmentCapabilities;
   notes?: string;
 }
 
@@ -108,6 +117,8 @@ export interface RolePolicies {
 }
 
 export interface PracticeData {
+  bookingConfig?: BookingConfig;
+  prescriptionConfig?: PrescriptionConfig;
   practiceName: string;
   hours: string;
   address: string;
@@ -278,8 +289,13 @@ export interface AppState {
 
   // Practice setup
   completeSetup: (generate: boolean) => string[];
+  setBookingConfig: (config: BookingConfig) => void;
+  setPrescriptionConfig: (config: PrescriptionConfig) => void;
   setPracticeField: (
-    field: keyof Omit<PracticeData, "staff" | "rolePolicies" | "sameDayReasons">,
+    field: keyof Omit<
+      PracticeData,
+      "staff" | "rolePolicies" | "sameDayReasons" | "bookingConfig" | "prescriptionConfig"
+    >,
     value: string,
   ) => void;
   setSameDayReasons: (reasons: string[]) => void;
@@ -1298,6 +1314,10 @@ export const useApp = create<AppState>()((set, get) => ({
           ),
         })),
 
+  setBookingConfig: (bookingConfig) =>
+    set((s) => ({ practiceData: { ...s.practiceData, bookingConfig } })),
+  setPrescriptionConfig: (prescriptionConfig) =>
+    set((s) => ({ practiceData: { ...s.practiceData, prescriptionConfig } })),
       setPracticeField: (field, value) =>
         set((state) => ({ practiceData: { ...state.practiceData, [field]: value } })),
 
@@ -1313,7 +1333,7 @@ export const useApp = create<AppState>()((set, get) => ({
         set((state) => ({
           practiceData: {
             ...state.practiceData,
-            staff: [...state.practiceData.staff, { ...s, id: uid() }],
+            staff: [...state.practiceData.staff, { ...initialiseCapabilities(s), id: uid() }],
           },
         })),
 
@@ -1321,7 +1341,17 @@ export const useApp = create<AppState>()((set, get) => ({
         set((state) => ({
           practiceData: {
             ...state.practiceData,
-            staff: state.practiceData.staff.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+            staff: state.practiceData.staff.map((s) => {
+              if (s.id !== id) return s;
+              const next = { ...s, ...patch };
+              if (patch.role !== undefined && patch.role !== s.role) {
+                next.appointmentCapabilities = {
+                  defaults: roleCapabilities(patch.role),
+                  overrides: s.appointmentCapabilities?.overrides ?? {},
+                };
+              }
+              return initialiseCapabilities(next);
+            }),
           },
         })),
 

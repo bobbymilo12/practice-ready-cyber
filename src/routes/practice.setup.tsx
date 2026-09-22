@@ -1,19 +1,31 @@
+import { BookingFields, PrescriptionFields } from "@/components/PracticeProcessFields";
+import { bookingFor, prescriptionsFor, practiceSummary, configReview } from "@/lib/practice-config";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { useApp, ROLE_OPTIONS, STAFF_CAPABILITY_OPTIONS, type PracticeData } from "@/lib/store";
 import { flushPractice } from "@/lib/backend";
-import { setupMissing, setupSteps } from "@/lib/practice-setup";
+import {
+  appointmentTypes,
+  clinicianCapabilities,
+  initialiseCapabilities,
+  isClinicalStaff,
+  roleCapabilities,
+} from "@/lib/appointment-capabilities";
+import { setupMissing, setupSteps, teamReviewSummary } from "@/lib/practice-setup";
 
 export const Route = createFileRoute("/practice/setup")({
   head: () => ({ meta: [{ title: "Set up your practice — PracticeReady" }] }),
   validateSearch: (s: Record<string, unknown>): { step?: number } => ({
-    step: Math.min(5, Math.max(0, Math.floor(Number(s.step) || 0))),
+    step: Math.min(setupSteps.length - 1, Math.max(0, Math.floor(Number(s.step) || 0))),
   }),
   component: PracticeSetup,
 });
 const field = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
-type TextField = keyof Omit<PracticeData, "staff" | "rolePolicies" | "sameDayReasons">;
+type TextField = keyof Omit<
+  PracticeData,
+  "staff" | "rolePolicies" | "sameDayReasons" | "bookingConfig" | "prescriptionConfig"
+>;
 function PracticeSetup() {
   const { step = 0 } = Route.useSearch();
   const nav = useNavigate();
@@ -23,6 +35,13 @@ function PracticeSetup() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const missing = setupMissing(p);
+  const review = configReview(p);
+  const reviewByStep = [undefined, undefined, review.booking, review.prescription, undefined];
+  const summary = practiceSummary({
+    ...p,
+    bookingConfig: bookingFor(p),
+    prescriptionConfig: prescriptionsFor(p),
+  });
   const go = (next: number) => {
     setError("");
     void nav({ to: "/practice/setup", search: { step: next } });
@@ -39,17 +58,6 @@ function PracticeSetup() {
       />
     </label>
   );
-  const policy = (key: keyof PracticeData["rolePolicies"], label: string) => (
-    <label className="block text-sm font-medium">
-      {label}
-      <textarea
-        rows={3}
-        className={field}
-        value={p.rolePolicies[key]}
-        onChange={(e) => store.setRolePolicy(key, e.target.value)}
-      />
-    </label>
-  );
   async function save(exit = false) {
     const gaps = step === 5 ? missing.flat() : missing[step];
     if (!exit && gaps.length) {
@@ -59,7 +67,13 @@ function PracticeSetup() {
     setBusy(true);
     setError("");
     try {
+      if (step === 2 || step === 5) store.setBookingConfig(bookingFor(p));
+      if (step === 3 || step === 5) store.setPrescriptionConfig(prescriptionsFor(p));
       if (!exit && step === 5) store.completeSetup(true);
+      p.staff.forEach((person) => {
+        if (!person.appointmentCapabilities)
+          store.updateStaff(person.id, initialiseCapabilities(person));
+      });
       await flushPractice();
       if (exit) await nav({ to: "/dashboard" });
       else if (step === 5) setDone(true);
@@ -91,7 +105,9 @@ function PracticeSetup() {
   return (
     <Shell>
       <div className="mx-auto max-w-3xl">
-        <p className="text-sm text-muted-foreground">Practice setup · Step {step + 1} of 6</p>
+        <p className="text-sm text-muted-foreground">
+          Practice setup · Step {step + 1} of {setupSteps.length}
+        </p>
         <h1 className="mt-2 font-display text-3xl font-bold">
           {
             [
@@ -122,7 +138,7 @@ function PracticeSetup() {
           ))}
         </nav>
         <Card>
-          <fieldset disabled={busy} className="space-y-5">
+          <fieldset disabled={busy} className="min-w-0 space-y-5">
             {step === 0 && (
               <>
                 {input("practiceName", "Practice name")}
@@ -162,8 +178,49 @@ function PracticeSetup() {
                         onChange={(e) => store.updateStaff(person.id, { role: e.target.value })}
                       />
                     </label>
+                    {isClinicalStaff(person) && (
+                      <details>
+                        <summary className="cursor-pointer text-sm">
+                          Edit appointment types (
+                          {
+                            appointmentTypes.filter(({ id }) => clinicianCapabilities(person)[id])
+                              .length
+                          }{" "}
+                          selected)
+                        </summary>
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          We’ve pre-selected the appointment types typically associated with this
+                          role. Adjust these if this team member works differently at your practice.
+                        </p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {appointmentTypes.map(({ id, name }) => (
+                            <label key={id} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-primary"
+                                checked={clinicianCapabilities(person)[id] === true}
+                                onChange={(e) =>
+                                  store.updateStaff(person.id, {
+                                    appointmentCapabilities: {
+                                      defaults:
+                                        person.appointmentCapabilities?.defaults ??
+                                        roleCapabilities(person.role),
+                                      overrides: {
+                                        ...person.appointmentCapabilities?.overrides,
+                                        [id]: e.target.checked,
+                                      },
+                                    },
+                                  })
+                                }
+                              />
+                              {name}
+                            </label>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                     <label className="block text-sm">
-                      Clinics or responsibilities
+                      Clinics or responsibilities (optional)
                       <textarea
                         className={field}
                         value={person.clinics}
@@ -221,46 +278,10 @@ function PracticeSetup() {
                 </button>
               </>
             )}
-            {step === 2 && (
-              <>
-                <label className="block text-sm font-medium">
-                  Same-day criteria
-                  <span className="mt-1 block font-normal text-muted-foreground">
-                    Enter your local criteria, one per line. Include escalation rules rather than
-                    assuming every urgent request should be booked.
-                  </span>
-                  <textarea
-                    rows={4}
-                    className={field}
-                    value={p.sameDayReasons.join("\n")}
-                    onChange={(e) => store.setSameDayReasons(e.target.value.split("\n"))}
-                  />
-                </label>
-                {input(
-                  "dutyContact",
-                  "Escalation contact",
-                  "Who should reception contact, and how?",
-                )}
-                {policy("gpsSameDay", "Same-day booking process")}
-                {policy("gpsRoutine", "Routine booking process")}
-                <p className="text-sm text-muted-foreground">
-                  You can add separate booking rules for other roles in Practice information.
-                </p>
-              </>
-            )}
+            {step === 2 && <BookingFields />}
             {step === 3 && (
               <>
-                {input(
-                  "prescriptionOrdering",
-                  "Prescription ordering",
-                  "How should patients submit a request?",
-                )}
-                {input("repeatTurnaround", "Prescription turnaround")}
-                {input(
-                  "repeatEmergency",
-                  "Medication run-out process",
-                  "Who should reception contact and what should they tell the patient?",
-                )}
+                <PrescriptionFields />
                 <details>
                   <summary className="cursor-pointer text-sm">
                     More prescription details (optional)
@@ -305,7 +326,17 @@ function PracticeSetup() {
                   We’ll create starter drafts for bookings, urgent requests, prescriptions, results
                   and reception onboarding. Review every scenario before publishing.
                 </p>
-                {setupSteps.slice(0, 5).map((label, i) => (
+                {(review.booking.unconfirmed.length > 0 ||
+                  review.booking.textOnly.length > 0 ||
+                  review.prescription.unconfirmed.length > 0 ||
+                  review.prescription.textOnly.length > 0) && (
+                  <p className="rounded-xl border border-border bg-muted/40 p-4 text-sm">
+                    Some settings are unconfirmed or recorded only in existing guidance. You can
+                    save your progress and retain that guidance. Resolve these review items before
+                    relying on or publishing the resulting training.
+                  </p>
+                )}
+                {setupSteps.slice(0, -1).map((label, i) => (
                   <div
                     key={label}
                     className="flex items-start justify-between gap-4 border-b border-border pb-4"
@@ -316,18 +347,38 @@ function PracticeSetup() {
                         {
                           [
                             `${p.practiceName}\n${p.hours}\n${p.outOfHoursTimes}`,
-                            p.staff
-                              .map(
-                                (s) =>
-                                  `${s.name} · ${s.role}: ${[s.clinics, ...(s.capabilities ?? [])].filter(Boolean).join(", ")}`,
-                              )
-                              .join("\n"),
-                            `Same-day: ${p.rolePolicies.gpsSameDay}\nRoutine: ${p.rolePolicies.gpsRoutine}\nCriteria: ${p.sameDayReasons.join("; ")}\nEscalation: ${p.dutyContact}`,
-                            `${p.prescriptionOrdering}\n${p.repeatTurnaround}\nRun-out: ${p.repeatEmergency}`,
+                            p.staff.map(teamReviewSummary).join("\n\n"),
+                            `Same-day: ${summary.rolePolicies.gpsSameDay}\nRoutine: ${summary.rolePolicies.gpsRoutine}\nCriteria: ${summary.sameDayReasons.join("; ")}\nEscalation: ${summary.dutyContact}`,
+                            `${summary.prescriptionOrdering}\n${summary.repeatTurnaround}\nRun-out: ${summary.repeatEmergency}`,
                             `Confidentiality: ${p.localConfidentiality}\nSafeguarding: ${p.localSafeguarding}`,
                           ][i]
                         }
                       </p>
+                      {reviewByStep[i] && (
+                        <div className="mt-3 space-y-2 rounded-lg border border-border p-3 text-sm">
+                          <p className="font-medium">
+                            {reviewByStep[i]!.unconfirmed.length || reviewByStep[i]!.textOnly.length
+                              ? "Configuration needs review"
+                              : "Structured selections complete"}
+                          </p>
+                          {reviewByStep[i]!.unconfirmed.length > 0 && (
+                            <p>Not yet confirmed: {reviewByStep[i]!.unconfirmed.join("; ")}.</p>
+                          )}
+                          {reviewByStep[i]!.textOnly.length > 0 && (
+                            <p>
+                              Existing guidance only — awaiting structured review:{" "}
+                              {reviewByStep[i]!.textOnly.join("; ")}.
+                            </p>
+                          )}
+                          {reviewByStep[i]!.instructions.length > 0 && (
+                            <p>
+                              Local instructions to check against current selections:{" "}
+                              {reviewByStep[i]!.instructions.join("; ")}. Use Edit to resolve any
+                              conflicting wording.
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {missing[i].length > 0 && (
                         <p className="mt-2 text-sm text-destructive">
                           Missing: {missing[i].join("; ")}

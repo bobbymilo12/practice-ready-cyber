@@ -1,0 +1,522 @@
+import { useId, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { useApp, type PracticeData } from "@/lib/store";
+import {
+  appointmentTypes,
+  clinicianCapabilities,
+  isClinicalStaff,
+} from "@/lib/appointment-capabilities";
+import {
+  bookingFor,
+  prescriptionsFor,
+  sameDayGroups,
+  sameDayProcesses,
+  routineProcesses,
+  prescriptionMethods,
+  contactMethods,
+  contactRoles,
+  turnarounds,
+  calendarRules,
+  urgentActions,
+  switchUrgentRoute,
+  routeText,
+  type Option,
+  type Choice,
+  type ContactRoute,
+} from "@/lib/practice-config";
+const field = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
+function Text({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="block text-sm">
+      {label}
+      <input className={field} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+function Instruction({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(!!value);
+  const hintId = useId();
+  return (
+    <div>
+      {value.trim() && (
+        <p id={hintId} className="mb-2 text-sm text-muted-foreground">
+          Review this instruction against your current selections, especially after changing an
+          option. Update or remove any wording that no longer applies; existing text is kept until
+          you edit it.
+        </p>
+      )}
+      {open || value ? (
+        <label className="block text-sm">
+          {label}
+          <textarea
+            aria-describedby={value.trim() ? hintId : undefined}
+            rows={2}
+            className={field}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        </label>
+      ) : (
+        <button type="button" className="text-sm text-primary" onClick={() => setOpen(true)}>
+          + Add practice-specific instruction<span className="sr-only">: {label}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+function Check({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-start gap-2 text-sm">
+      <input
+        type="checkbox"
+        className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
+  );
+}
+function Multi({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: Option[];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-3 font-medium">{label}</legend>
+      {options.map((o) => (
+        <Check
+          key={o.id}
+          label={o.label}
+          checked={value.includes(o.id)}
+          onChange={(checked) =>
+            onChange(checked ? [...value, o.id] : value.filter((id) => id !== o.id))
+          }
+        />
+      ))}
+    </fieldset>
+  );
+}
+function SelectChoice({
+  label,
+  options,
+  value,
+  onChange,
+  radio = false,
+}: {
+  label: string;
+  options: Option[];
+  value: Choice;
+  onChange: (v: Choice) => void;
+  radio?: boolean;
+}) {
+  const name = useId();
+  return (
+    <div className="space-y-3">
+      {radio ? (
+        <fieldset className="space-y-3">
+          <legend className="mb-3 font-medium">{label}</legend>
+          {options.map((o) => (
+            <label key={o.id} className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name={name}
+                className="mt-0.5 accent-primary"
+                checked={value.id === o.id}
+                onChange={() => onChange({ ...value, id: o.id })}
+              />
+              {o.label}
+            </label>
+          ))}
+        </fieldset>
+      ) : (
+        <label className="block text-sm font-medium">
+          {label}
+          <select
+            className={field}
+            value={value.id}
+            onChange={(e) => onChange({ ...value, id: e.target.value })}
+          >
+            <option value="">Choose an option</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {value.id === "other" && (
+        <Text
+          label={`${label} — other`}
+          value={value.other}
+          onChange={(other) => onChange({ ...value, other })}
+        />
+      )}
+    </div>
+  );
+}
+function ContactFields({
+  label,
+  value,
+  onChange,
+  practice,
+}: {
+  label: string;
+  value: ContactRoute;
+  onChange: (v: ContactRoute) => void;
+  practice: PracticeData;
+}) {
+  const c = value.contact;
+  const selected =
+    c.kind === "staff" ? `staff:${c.staffId}` : c.kind === "role" ? `role:${c.role}` : c.kind;
+  const roles = [
+    ...new Set([
+      ...contactRoles,
+      ...practice.staff.map((s) => s.role).filter(Boolean),
+      ...(c.kind === "role" ? [c.role] : []),
+    ]),
+  ];
+  return (
+    <div className="space-y-4">
+      <label className="block font-medium text-sm">
+        {label}
+        <select
+          className={field}
+          value={selected}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({
+              ...value,
+              contact: v.startsWith("staff:")
+                ? { kind: "staff", staffId: v.slice(6) }
+                : v.startsWith("role:")
+                  ? { kind: "role", role: v.slice(5) }
+                  : v === "other"
+                    ? { kind: "other", text: "" }
+                    : { kind: "unconfirmed" },
+            });
+          }}
+        >
+          <option value="unconfirmed">Choose a contact</option>
+          {roles.map((role) => (
+            <option key={role} value={`role:${role}`}>
+              {role}
+            </option>
+          ))}
+          {practice.staff
+            .filter((s) => s.name.trim())
+            .map((s) => (
+              <option key={s.id} value={`staff:${s.id}`}>
+                {s.name} — {s.role}
+              </option>
+            ))}
+          {c.kind === "staff" && !practice.staff.some((s) => s.id === c.staffId) && (
+            <option value={selected}>Team member removed — choose another contact</option>
+          )}
+          <option value="other">Other</option>
+        </select>
+      </label>
+      {c.kind === "other" && (
+        <Text
+          label="Other contact"
+          value={c.text}
+          onChange={(text) => onChange({ ...value, contact: { kind: "other", text } })}
+        />
+      )}
+      <SelectChoice
+        label="How should reception contact them?"
+        options={contactMethods}
+        value={value.method}
+        onChange={(method) => onChange({ ...value, method })}
+      />
+      {value.method.id === "phone" && (
+        <Text
+          label="Phone / extension number"
+          value={value.method.other}
+          onChange={(other) => onChange({ ...value, method: { ...value.method, other } })}
+        />
+      )}
+      <Instruction
+        label="Contact instructions (including existing guidance)"
+        value={value.instruction}
+        onChange={(instruction) => onChange({ ...value, instruction })}
+      />
+    </div>
+  );
+}
+export function BookingFields() {
+  const p = useApp((s) => s.practiceData),
+    set = useApp((s) => s.setBookingConfig);
+  const b = bookingFor(p);
+  return (
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <h2 className="font-semibold">
+          Which requests should reception consider for the same-day pathway?
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Review these provisional examples against your agreed local guidance. Selection means
+          consideration for your same-day pathway, not automatic booking. Emergency/red-flag and
+          clinical triage rules remain separate; this is not PracticeReady-approved medical advice.
+        </p>
+        {b.sameDayPathway.instruction && (
+          <p className="text-sm text-muted-foreground">
+            Your existing criteria are preserved below as local guidance. No symptom categories have
+            been inferred from that text.
+          </p>
+        )}
+        <div className="grid gap-5 sm:grid-cols-2">
+          {sameDayGroups.map((g) => (
+            <div key={g.label} className="rounded-xl border border-border p-4">
+              <Multi
+                label={g.label}
+                options={g.options}
+                value={b.sameDayPathway.selected}
+                onChange={(selected) =>
+                  set({ ...b, sameDayPathway: { ...b.sameDayPathway, selected } })
+                }
+              />
+            </div>
+          ))}
+        </div>
+        {b.sameDayPathway.custom.map((v, i) => (
+          <div key={i} className="flex items-end gap-2">
+            <div className="flex-1">
+              <Text
+                label={`Local criterion ${i + 1}`}
+                value={v}
+                onChange={(text) =>
+                  set({
+                    ...b,
+                    sameDayPathway: {
+                      ...b.sameDayPathway,
+                      custom: b.sameDayPathway.custom.map((s, n) => (n === i ? text : s)),
+                    },
+                  })
+                }
+              />
+            </div>
+            <button
+              type="button"
+              className="pb-3 text-sm text-destructive"
+              aria-label={`Remove local criterion ${i + 1}`}
+              onClick={() =>
+                set({
+                  ...b,
+                  sameDayPathway: {
+                    ...b.sameDayPathway,
+                    custom: b.sameDayPathway.custom.filter((_, n) => n !== i),
+                  },
+                })
+              }
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="text-sm text-primary"
+          onClick={() =>
+            set({
+              ...b,
+              sameDayPathway: { ...b.sameDayPathway, custom: [...b.sameDayPathway.custom, ""] },
+            })
+          }
+        >
+          + Add another criterion
+        </button>
+        <Instruction
+          label="Same-day criteria instructions (including existing guidance)"
+          value={b.sameDayPathway.instruction}
+          onChange={(instruction) =>
+            set({ ...b, sameDayPathway: { ...b.sameDayPathway, instruction } })
+          }
+        />
+      </section>
+      <SelectChoice
+        radio
+        label="How are same-day requests normally handled?"
+        options={sameDayProcesses}
+        value={b.sameDayProcess}
+        onChange={(sameDayProcess) => set({ ...b, sameDayProcess })}
+      />
+      <Check
+        label="If reception is unsure, send to duty clinician"
+        checked={b.sendUncertainToDutyClinician}
+        onChange={(sendUncertainToDutyClinician) => set({ ...b, sendUncertainToDutyClinician })}
+      />
+      <Instruction
+        label="Same-day process instructions (including existing guidance)"
+        value={b.sameDayInstruction}
+        onChange={(sameDayInstruction) => set({ ...b, sameDayInstruction })}
+      />
+      <ContactFields
+        label="Who should reception contact when they are unsure?"
+        value={b.escalation}
+        practice={p}
+        onChange={(escalation) => set({ ...b, escalation })}
+      />
+      <SelectChoice
+        radio
+        label="How are routine appointment requests normally handled?"
+        options={routineProcesses}
+        value={b.routineProcess}
+        onChange={(routineProcess) => set({ ...b, routineProcess })}
+      />
+      <Instruction
+        label="Routine booking instructions (including existing guidance)"
+        value={b.routineInstruction}
+        onChange={(routineInstruction) => set({ ...b, routineInstruction })}
+      />
+      <div className="rounded-xl bg-muted/40 p-4 text-sm">
+        <p>Booking uses the appointment types already configured for your team.</p>
+        {p.staff.filter(isClinicalStaff).map((s) => (
+          <p key={s.id} className="mt-2">
+            {s.name} — {appointmentTypes.filter((t) => clinicianCapabilities(s)[t.id]).length}{" "}
+            appointment types selected
+          </p>
+        ))}
+        <Link className="mt-3 inline-block text-primary" to="/practice/setup" search={{ step: 1 }}>
+          Review appointment types in Team →
+        </Link>
+      </div>
+    </div>
+  );
+}
+export function PrescriptionFields() {
+  const p = useApp((s) => s.practiceData),
+    set = useApp((s) => s.setPrescriptionConfig);
+  const c = prescriptionsFor(p);
+  return (
+    <div className="space-y-6">
+      <Multi
+        label="How can patients request repeat prescriptions?"
+        options={prescriptionMethods}
+        value={c.methods}
+        onChange={(methods) => set({ ...c, methods })}
+      />
+      {c.methods.includes("other") && (
+        <Text
+          label="Other prescription request method"
+          value={c.otherMethod}
+          onChange={(otherMethod) => set({ ...c, otherMethod })}
+        />
+      )}
+      <Instruction
+        label="Ordering instructions (including existing guidance)"
+        value={c.orderingInstruction}
+        onChange={(orderingInstruction) => set({ ...c, orderingInstruction })}
+      />
+      <SelectChoice
+        radio
+        label="What is the usual repeat prescription turnaround?"
+        options={turnarounds}
+        value={c.turnaround}
+        onChange={(turnaround) => set({ ...c, turnaround })}
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SelectChoice
+          label="Weekends"
+          options={calendarRules}
+          value={c.weekends}
+          onChange={(weekends) => set({ ...c, weekends })}
+        />
+        <SelectChoice
+          label="Bank holidays"
+          options={calendarRules}
+          value={c.bankHolidays}
+          onChange={(bankHolidays) => set({ ...c, bankHolidays })}
+        />
+      </div>
+      <Instruction
+        label="Turnaround instructions (including existing guidance)"
+        value={c.turnaroundInstruction}
+        onChange={(turnaroundInstruction) => set({ ...c, turnaroundInstruction })}
+      />
+      <h2 className="font-semibold">Who handles urgent prescription requests?</h2>
+      <Check
+        label="Use the same contact and method as appointment escalation"
+        checked={c.urgentRoute.source === "appointment"}
+        onChange={(same) =>
+          set({
+            ...c,
+            urgentRoute: switchUrgentRoute(c.urgentRoute, same),
+          })
+        }
+      />
+      {c.urgentRoute.source === "appointment" && c.urgentRoute.previousSeparateRoute && (
+        <p className="text-sm text-muted-foreground">
+          Your separate contact details are retained. Turn this option off to restore them. While it
+          is on, only appointment escalation is used.
+        </p>
+      )}
+      {c.urgentRoute.source === "appointment" ? (
+        <p className="whitespace-pre-line text-sm text-muted-foreground">
+          {routeText(bookingFor(p).escalation, p) ||
+            "Choose the appointment escalation contact and method in Bookings."}
+          <Link to="/practice/setup" search={{ step: 2 }} className="mt-2 block text-primary">
+            Review appointment escalation →
+          </Link>
+        </p>
+      ) : (
+        <ContactFields
+          label="Urgent prescription contact"
+          practice={p}
+          value={c.urgentRoute.route}
+          onChange={(route) => set({ ...c, urgentRoute: { source: "separate", route } })}
+        />
+      )}
+      <Multi
+        label="What should reception normally do?"
+        options={urgentActions}
+        value={c.urgentActions}
+        onChange={(urgentActions) => set({ ...c, urgentActions })}
+      />
+      {c.urgentActions.includes("other") && (
+        <Text
+          label="Other urgent prescription process"
+          value={c.otherAction}
+          onChange={(otherAction) => set({ ...c, otherAction })}
+        />
+      )}
+      <Instruction
+        label="Urgent prescription instructions (including existing guidance)"
+        value={c.urgentInstruction}
+        onChange={(urgentInstruction) => set({ ...c, urgentInstruction })}
+      />
+    </div>
+  );
+}

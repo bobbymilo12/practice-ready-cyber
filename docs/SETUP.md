@@ -140,3 +140,26 @@ Run `npm run dev` and open the local server at `http://localhost:5173/auth` (or 
 - Only Vite development builds on `localhost`, `127.0.0.1` or IPv6 loopback allow this bypass. It is unavailable on hosted/forwarded preview domains, production builds and `npm run preview`, even if a mock role is stored. To use it from a remote development environment, forward the port to localhost on your machine.
 
 The removable implementation is in `src/lib/dev-mode.ts` and the dynamically loaded `src/lib/dev-backend.ts`. Integration points are marked by `devRole`/`devAuthAvailable` in the backend, account gate, login and invitation pages. The Supabase API, database permissions and real account types are unchanged. Remove those hooks, the two files and its tests (`tests/browser/dev-auth.spec.ts`, `tests/dev-mode.test.mjs` and the corresponding npm test command) when the bypass is no longer needed.
+
+### Appointment capabilities
+
+Practice Setup includes a collapsed “Edit appointment types (X selected)” section
+under each clinical team member’s Role field. Clinical status is determined only
+by the role mappings; legacy manual clinical-status flags are ignored. Non-clinical
+roles do not show the section. The catalogue and role mappings in
+`src/lib/appointment-capabilities.ts` are placeholders pending approved guidance.
+
+Each staff record stores `appointmentCapabilities.defaults` (a snapshot) and
+`appointmentCapabilities.overrides` (explicit true/false values keyed by stable
+appointment IDs). These are saved through the existing practice-state API into
+`practices.state`; no SQL migration is required. Older records fall back to role
+defaults and receive a snapshot when setup is saved. Changing a role refreshes
+its defaults while retaining individual overrides.
+Existing free-text responsibilities are separate and are not inferred as permissions.
+
+`roleCapabilities` accepts organisation and practice role-default layers, in that
+order, over the PracticeReady defaults. A future organisation settings feature
+can supply those layers when creating/resetting a snapshot. Reviewed snapshots
+are deliberately not changed by later default edits. `canHandleAppointment`
+provides the per-clinician query for future consumers; training integration is
+not part of this feature.

@@ -1,3 +1,4 @@
+import { practiceSummary } from "@/lib/practice-config";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
@@ -24,16 +25,6 @@ type RoleGroup = {
 };
 
 const ROLE_GROUPS: RoleGroup[] = [
-  {
-    title: "GPs",
-    hint: "What reception can book with a GP — split by same-day (on-the-day) vs routine.",
-    sameDayKey: "gpsSameDay",
-    routineKey: "gpsRoutine",
-    sameDayPlaceholder:
-      "e.g. Safeguarding concerns, mental health crisis, chest pain (after 999), suspected sepsis, new severe headache, suicidal ideation, under-5 illness.",
-    routinePlaceholder:
-      "e.g. Complex chronic disease reviews, GP-only medication reviews, HRT initiation, referral discussions, results discussions clinician-only.",
-  },
   {
     title: "Nurse Practitioners / ANPs",
     hint: "What ANPs can see on-the-day vs at a routine appointment. Note who is trained.",
@@ -105,25 +96,11 @@ const RULE_GROUPS: {
 
 type PracticeTextKey = keyof Omit<
   PracticeData,
-  "staff" | "rolePolicies" | "sameDayReasons"
+  "staff" | "rolePolicies" | "sameDayReasons" | "bookingConfig" | "prescriptionConfig"
 >;
 
 const REPEAT_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeholder: string }[] =
   [
-    {
-      key: "repeatOrderMethods",
-      label: "How can patients order repeats (and what is NOT accepted)?",
-      hint: "Be very specific — this drives training on what to refuse politely.",
-      placeholder:
-        "e.g. NHS App and paper slip. Telephone orders NOT accepted (except emergency supply).",
-    },
-    {
-      key: "repeatTurnaround",
-      label: "Standard repeat turnaround and how urgent items are handled",
-      hint: "Include weekend / bank holiday rules.",
-      placeholder:
-        "e.g. 48 working hours; +24h after weekends; urgent items to duty pharmacist Sarah Khan same day.",
-    },
     {
       key: "repeatControlled",
       label: "Controlled drug rules — what reception must never do",
@@ -138,53 +115,45 @@ const REPEAT_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeh
       placeholder:
         "e.g. Warfarin (INR in date), methotrexate (bloods 12-weekly), lithium, DMARDs, opioids, ADHD meds — do NOT issue on standard route.",
     },
-    {
-      key: "repeatEmergency",
-      label: "Exact emergency-supply process for run-out situations",
-      hint: "Step-by-step, including who authorises and how it's documented.",
-      placeholder:
-        "e.g. Confirm med + last dose + red flags → check criteria → duty pharmacist (or duty GP) → signpost to nominated pharmacy → document.",
-    },
   ];
 
-const LOCAL_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeholder: string }[] =
-  [
-    {
-      key: "localSafeguarding",
-      label: "Safeguarding — lead, how concerns are raised and escalated",
-      hint: "Include lead's name, template used, third-party rules for under-16s.",
-      placeholder:
-        "e.g. Safeguarding lead: Dr Patel. Same-day EMIS template + verbal handover. Under-16 third-party requests always escalated.",
-    },
-    {
-      key: "localComplaints",
-      label: "Complaints — verbal and written process",
-      hint: "Include acknowledgement / response timelines and what reception must never say.",
-      placeholder:
-        "e.g. Verbal: acknowledge, offer escalation to practice manager, log on Datix. Written: ack in 3 wd, response in 20.",
-    },
-    {
-      key: "localDNA",
-      label: "DNA / missed appointment policy",
-      hint: "Include how many DNAs before escalation and vulnerable-patient rules.",
-      placeholder:
-        "e.g. Code DNA in EMIS; 3+ DNAs in 6 months → practice manager; vulnerable patients → welfare check to duty GP.",
-    },
-    {
-      key: "localInterpreter",
-      label: "Interpreter / BSL — how it's arranged",
-      hint: "Include service, number, PIN location, and what NOT to do.",
-      placeholder:
-        "e.g. Language Line 0800 XXX XXXX (PIN on intranet). BSL via SignVideo. Never use family for clinical interpretation.",
-    },
-    {
-      key: "localConfidentiality",
-      label: "Confidentiality — day-to-day rules for reception",
-      hint: "Screen locking, third-party rules, age-based results rules.",
-      placeholder:
-        "e.g. Screen lock on leaving desk. No info in reception area. Third party only with written consent. <13 to parent; 13–16 Gillick; 16+ patient only.",
-    },
-  ];
+const LOCAL_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeholder: string }[] = [
+  {
+    key: "localSafeguarding",
+    label: "Safeguarding — lead, how concerns are raised and escalated",
+    hint: "Include lead's name, template used, third-party rules for under-16s.",
+    placeholder:
+      "e.g. Safeguarding lead: Dr Patel. Same-day EMIS template + verbal handover. Under-16 third-party requests always escalated.",
+  },
+  {
+    key: "localComplaints",
+    label: "Complaints — verbal and written process",
+    hint: "Include acknowledgement / response timelines and what reception must never say.",
+    placeholder:
+      "e.g. Verbal: acknowledge, offer escalation to practice manager, log on Datix. Written: ack in 3 wd, response in 20.",
+  },
+  {
+    key: "localDNA",
+    label: "DNA / missed appointment policy",
+    hint: "Include how many DNAs before escalation and vulnerable-patient rules.",
+    placeholder:
+      "e.g. Code DNA in EMIS; 3+ DNAs in 6 months → practice manager; vulnerable patients → welfare check to duty GP.",
+  },
+  {
+    key: "localInterpreter",
+    label: "Interpreter / BSL — how it's arranged",
+    hint: "Include service, number, PIN location, and what NOT to do.",
+    placeholder:
+      "e.g. Language Line 0800 XXX XXXX (PIN on intranet). BSL via SignVideo. Never use family for clinical interpretation.",
+  },
+  {
+    key: "localConfidentiality",
+    label: "Confidentiality — day-to-day rules for reception",
+    hint: "Screen locking, third-party rules, age-based results rules.",
+    placeholder:
+      "e.g. Screen lock on leaving desk. No info in reception area. Third party only with written consent. <13 to parent; 13–16 Gillick; 16+ patient only.",
+  },
+];
 
 function DataHub() {
   const {
@@ -197,6 +166,7 @@ function DataHub() {
     replaceStaffName,
   } = useApp();
 
+  const summary = practiceSummary(practiceData);
   const [newStaff, setNewStaff] = useState<Omit<StaffMember, "id">>({
     name: "",
     role: ROLE_OPTIONS[0],
@@ -209,10 +179,13 @@ function DataHub() {
   const fields: { key: PracticeTextKey; label: string; hint: string }[] = [
     { key: "practiceName", label: "Practice name", hint: "Shown in modules and dashboards." },
     { key: "hours", label: "Appointment hours", hint: "Core and extended access." },
-    { key: "dutyContact", label: "Duty team / escalation contact", hint: "How reception reaches duty." },
     { key: "nominatedPharmacy", label: "Nominated pharmacy", hint: "Default EPS pharmacy." },
     { key: "urgentNumbers", label: "Urgent / crisis numbers", hint: "999, 111, crisis team." },
-    { key: "extras", label: "Local extras", hint: "PCN hub, safeguarding lead, interpreter service." },
+    {
+      key: "extras",
+      label: "Local extras",
+      hint: "PCN hub, safeguarding lead, interpreter service.",
+    },
   ];
 
   return (
@@ -224,8 +197,8 @@ function DataHub() {
             Practice information
           </h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            Keep your team and local procedures up to date. Review existing modules separately
-            when procedures change.
+            Keep your team and local procedures up to date. Review existing modules separately when
+            procedures change.
           </p>
         </div>
         <Link
@@ -240,6 +213,51 @@ function DataHub() {
         Open guided setup →
       </Link>
 
+      <section className="mt-8 space-y-4">
+        <Card>
+          <h2 className="font-semibold">Appointment pathways</h2>
+          <p className="mt-3 whitespace-pre-line text-sm">
+            {[
+              summary.sameDayReasons.join("\n"),
+              summary.rolePolicies.gpsSameDay,
+              summary.rolePolicies.gpsRoutine,
+              summary.dutyContact,
+            ]
+              .filter(Boolean)
+              .join("\n\n") || "Not yet configured"}
+          </p>
+          <Link
+            className="mt-3 inline-block text-primary"
+            to="/practice/setup"
+            search={{ step: 2 }}
+          >
+            Edit booking configuration →
+          </Link>
+        </Card>
+        <Card>
+          <h2 className="font-semibold">Prescription process</h2>
+          <p className="mt-3 whitespace-pre-line text-sm">
+            {[
+              summary.prescriptionOrdering,
+              !practiceData.prescriptionConfig &&
+              summary.repeatOrderMethods !== summary.prescriptionOrdering
+                ? summary.repeatOrderMethods
+                : "",
+              summary.repeatTurnaround,
+              summary.repeatEmergency,
+            ]
+              .filter(Boolean)
+              .join("\n\n") || "Not yet configured"}
+          </p>
+          <Link
+            className="mt-3 inline-block text-primary"
+            to="/practice/setup"
+            search={{ step: 3 }}
+          >
+            Edit prescription configuration →
+          </Link>
+        </Card>
+      </section>
       {/* Practice basics */}
       <h2 className="mt-10 font-display text-xl font-semibold">Practice basics</h2>
       <section className="mt-4 grid gap-4 md:grid-cols-2">
@@ -280,7 +298,11 @@ function DataHub() {
                   placeholder="Name"
                 />
                 <select
-                  value={ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number]) ? s.role : "custom"}
+                  value={
+                    ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number])
+                      ? s.role
+                      : "custom"
+                  }
                   onChange={(e) => {
                     const next = e.target.value === "custom" ? s.role : e.target.value;
                     updateStaff(s.id, { role: next });
@@ -355,12 +377,10 @@ function DataHub() {
 
       {/* Role policies split by same-day vs routine */}
       <section className="mt-10">
-        <h2 className="font-display text-xl font-semibold">
-          Who books what — same-day vs routine
-        </h2>
+        <h2 className="font-display text-xl font-semibold">Who books what — same-day vs routine</h2>
         <p className="text-sm text-muted-foreground">
-          For each role, describe what reception can book on the day of the call vs at a
-          routine appointment. These details support your module drafts.
+          For each role, describe what reception can book on the day of the call vs at a routine
+          appointment. These details support your module drafts.
         </p>
         <div className="mt-4 space-y-4">
           {ROLE_GROUPS.map((g) => (
@@ -396,8 +416,8 @@ function DataHub() {
           Repeat prescriptions — your local process
         </h2>
         <p className="text-sm text-muted-foreground">
-          Reception gets asked about prescriptions constantly. Be specific here — vague
-          answers produce vague training.
+          Reception gets asked about prescriptions constantly. Be specific here — vague answers
+          produce vague training.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {REPEAT_FIELDS.map((f) => (
@@ -418,12 +438,10 @@ function DataHub() {
 
       {/* Local guidelines & protocols */}
       <section className="mt-10">
-        <h2 className="font-display text-xl font-semibold">
-          Local guidelines &amp; protocols
-        </h2>
+        <h2 className="font-display text-xl font-semibold">Local guidelines &amp; protocols</h2>
         <p className="text-sm text-muted-foreground">
-          The everyday operational rules new starters need to know. These feed every
-          module you generate.
+          The everyday operational rules new starters need to know. These feed every module you
+          generate.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {LOCAL_FIELDS.map((f) => (
@@ -467,10 +485,9 @@ function DataHub() {
         <Card>
           <h2 className="font-display text-xl font-semibold">Update local knowledge</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tell PracticeReady when someone has left and been replaced (for example, Anna
-            has left and been replaced by Amy). We rename them in the staff list, update
-            every published and draft module that mentions the old name, and flag those
-            modules for manager review.
+            Tell PracticeReady when someone has left and been replaced (for example, Anna has left
+            and been replaced by Amy). We rename them in the staff list, update every published and
+            draft module that mentions the old name, and flag those modules for manager review.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <input
@@ -502,9 +519,7 @@ function DataHub() {
               Replace &amp; propagate
             </button>
           </div>
-          {replaceMsg && (
-            <p className="mt-3 text-sm text-[color:var(--success)]">{replaceMsg}</p>
-          )}
+          {replaceMsg && <p className="mt-3 text-sm text-[color:var(--success)]">{replaceMsg}</p>}
         </Card>
       </section>
     </Shell>
@@ -562,7 +577,7 @@ function BulletField({
             <input
               value={item}
               onChange={(e) => update(i, e.target.value)}
-              placeholder={items.length === 1 && !item ? examples[0] ?? "" : "Add another item"}
+              placeholder={items.length === 1 && !item ? (examples[0] ?? "") : "Add another item"}
               className="flex-1 rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm outline-none ring-primary/30 focus:ring-2"
             />
             {items.length > 1 && (
@@ -577,10 +592,7 @@ function BulletField({
           </div>
         ))}
       </div>
-      <button
-        onClick={add}
-        className="mt-2 text-xs font-medium text-primary hover:underline"
-      >
+      <button onClick={add} className="mt-2 text-xs font-medium text-primary hover:underline">
         + Add bullet
       </button>
       {examples.length > 1 && (
@@ -591,4 +603,3 @@ function BulletField({
     </div>
   );
 }
-

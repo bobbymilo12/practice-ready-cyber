@@ -9,50 +9,25 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TrainRouteImport } from './routes/train'
-import { Route as StaffRouteImport } from './routes/staff'
-import { Route as ResultsRouteImport } from './routes/results'
-import { Route as DataHubRouteImport } from './routes/data-hub'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TraineesInviteRouteImport } from './routes/trainees.invite'
-import { Route as TraineesIdRouteImport } from './routes/trainees.$id'
-import { Route as PracticeSetupRouteImport } from './routes/practice.setup'
-import { Route as ModulesSetupRouteImport } from './routes/modules.setup'
-import { Route as ModulesReviewRouteImport } from './routes/modules.review'
-import { Route as ModulesMergeRouteImport } from './routes/modules.merge'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DataHubRouteImport } from './routes/data-hub'
+import { Route as ResultsRouteImport } from './routes/results'
+import { Route as StaffRouteImport } from './routes/staff'
+import { Route as TrainRouteImport } from './routes/train'
 import { Route as ModulesCreateRouteImport } from './routes/modules.create'
+import { Route as ModulesMergeRouteImport } from './routes/modules.merge'
+import { Route as ModulesReviewRouteImport } from './routes/modules.review'
+import { Route as ModulesSetupRouteImport } from './routes/modules.setup'
+import { Route as PracticeSetupRouteImport } from './routes/practice.setup'
+import { Route as TraineesIdRouteImport } from './routes/trainees.$id'
+import { Route as TraineesInviteRouteImport } from './routes/trainees.invite'
 
-const TrainRoute = TrainRouteImport.update({
-  id: '/train',
-  path: '/train',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StaffRoute = StaffRouteImport.update({
-  id: '/staff',
-  path: '/staff',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResultsRoute = ResultsRouteImport.update({
-  id: '/results',
-  path: '/results',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DataHubRoute = DataHubRouteImport.update({
-  id: '/data-hub',
-  path: '/data-hub',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
@@ -60,34 +35,39 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TraineesInviteRoute = TraineesInviteRouteImport.update({
-  id: '/trainees/invite',
-  path: '/trainees/invite',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TraineesIdRoute = TraineesIdRouteImport.update({
-  id: '/trainees/$id',
-  path: '/trainees/$id',
+const DataHubRoute = DataHubRouteImport.update({
+  id: '/data-hub',
+  path: '/data-hub',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PracticeSetupRoute = PracticeSetupRouteImport.update({
-  id: '/practice/setup',
-  path: '/practice/setup',
+const ResultsRoute = ResultsRouteImport.update({
+  id: '/results',
+  path: '/results',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ModulesSetupRoute = ModulesSetupRouteImport.update({
-  id: '/modules/setup',
-  path: '/modules/setup',
+const StaffRoute = StaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ModulesReviewRoute = ModulesReviewRouteImport.update({
-  id: '/modules/review',
-  path: '/modules/review',
+const TrainRoute = TrainRouteImport.update({
+  id: '/train',
+  path: '/train',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModulesCreateRoute = ModulesCreateRouteImport.update({
+  id: '/modules/create',
+  path: '/modules/create',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModulesMergeRoute = ModulesMergeRouteImport.update({
@@ -95,9 +75,29 @@ const ModulesMergeRoute = ModulesMergeRouteImport.update({
   path: '/modules/merge',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ModulesCreateRoute = ModulesCreateRouteImport.update({
-  id: '/modules/create',
-  path: '/modules/create',
+const ModulesReviewRoute = ModulesReviewRouteImport.update({
+  id: '/modules/review',
+  path: '/modules/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModulesSetupRoute = ModulesSetupRouteImport.update({
+  id: '/modules/setup',
+  path: '/modules/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PracticeSetupRoute = PracticeSetupRouteImport.update({
+  id: '/practice/setup',
+  path: '/practice/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TraineesIdRoute = TraineesIdRouteImport.update({
+  id: '/trainees/$id',
+  path: '/trainees/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TraineesInviteRoute = TraineesInviteRouteImport.update({
+  id: '/trainees/invite',
+  path: '/trainees/invite',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -227,46 +227,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/train': {
-      id: '/train'
-      path: '/train'
-      fullPath: '/train'
-      preLoaderRoute: typeof TrainRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/staff': {
-      id: '/staff'
-      path: '/staff'
-      fullPath: '/staff'
-      preLoaderRoute: typeof StaffRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/results': {
-      id: '/results'
-      path: '/results'
-      fullPath: '/results'
-      preLoaderRoute: typeof ResultsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/data-hub': {
-      id: '/data-hub'
-      path: '/data-hub'
-      fullPath: '/data-hub'
-      preLoaderRoute: typeof DataHubRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/about': {
@@ -276,46 +241,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/trainees/invite': {
-      id: '/trainees/invite'
-      path: '/trainees/invite'
-      fullPath: '/trainees/invite'
-      preLoaderRoute: typeof TraineesInviteRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/trainees/$id': {
-      id: '/trainees/$id'
-      path: '/trainees/$id'
-      fullPath: '/trainees/$id'
-      preLoaderRoute: typeof TraineesIdRouteImport
+    '/data-hub': {
+      id: '/data-hub'
+      path: '/data-hub'
+      fullPath: '/data-hub'
+      preLoaderRoute: typeof DataHubRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/practice/setup': {
-      id: '/practice/setup'
-      path: '/practice/setup'
-      fullPath: '/practice/setup'
-      preLoaderRoute: typeof PracticeSetupRouteImport
+    '/results': {
+      id: '/results'
+      path: '/results'
+      fullPath: '/results'
+      preLoaderRoute: typeof ResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/modules/setup': {
-      id: '/modules/setup'
-      path: '/modules/setup'
-      fullPath: '/modules/setup'
-      preLoaderRoute: typeof ModulesSetupRouteImport
+    '/staff': {
+      id: '/staff'
+      path: '/staff'
+      fullPath: '/staff'
+      preLoaderRoute: typeof StaffRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/modules/review': {
-      id: '/modules/review'
-      path: '/modules/review'
-      fullPath: '/modules/review'
-      preLoaderRoute: typeof ModulesReviewRouteImport
+    '/train': {
+      id: '/train'
+      path: '/train'
+      fullPath: '/train'
+      preLoaderRoute: typeof TrainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modules/create': {
+      id: '/modules/create'
+      path: '/modules/create'
+      fullPath: '/modules/create'
+      preLoaderRoute: typeof ModulesCreateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/modules/merge': {
@@ -325,11 +297,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ModulesMergeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/modules/create': {
-      id: '/modules/create'
-      path: '/modules/create'
-      fullPath: '/modules/create'
-      preLoaderRoute: typeof ModulesCreateRouteImport
+    '/modules/review': {
+      id: '/modules/review'
+      path: '/modules/review'
+      fullPath: '/modules/review'
+      preLoaderRoute: typeof ModulesReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modules/setup': {
+      id: '/modules/setup'
+      path: '/modules/setup'
+      fullPath: '/modules/setup'
+      preLoaderRoute: typeof ModulesSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/practice/setup': {
+      id: '/practice/setup'
+      path: '/practice/setup'
+      fullPath: '/practice/setup'
+      preLoaderRoute: typeof PracticeSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trainees/$id': {
+      id: '/trainees/$id'
+      path: '/trainees/$id'
+      fullPath: '/trainees/$id'
+      preLoaderRoute: typeof TraineesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trainees/invite': {
+      id: '/trainees/invite'
+      path: '/trainees/invite'
+      fullPath: '/trainees/invite'
+      preLoaderRoute: typeof TraineesInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

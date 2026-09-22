@@ -1,3 +1,5 @@
+import { practiceSummary } from "./practice-config.ts";
+import { appointmentTypes, clinicianCapabilities } from "./appointment-capabilities.ts";
 import type { PracticeData, Scenario } from "./store";
 
 // Local rules are quoted verbatim. Both situations remain drafts until reviewed.
@@ -7,6 +9,12 @@ export function practiceScenarios(
   practice: PracticeData,
   answers: Record<string, string>,
 ): Scenario[] {
+  practice = practiceSummary(practice);
+  if (practice.bookingConfig) {
+    answers = { ...answers };
+    delete answers.sameDayProcess;
+    delete answers.dutyTeam;
+  }
   const rules: { title: string; rule: string; quotes: [string, string] }[] = [];
   const add = (name: string, rule: string | undefined, first: string, second: string) => {
     if (rule?.trim()) rules.push({ title: name, rule: rule.trim(), quotes: [first, second] });
@@ -82,7 +90,7 @@ export function practiceScenarios(
       "A colleague has handed over an urgent call. Which local team should be alerted?",
     );
     add(
-      "Recognising local escalation criteria",
+      "Considering the same-day pathway",
       practice.sameDayReasons.join("\n"),
       "Could this request need help today?",
       "A caller's situation has changed since their earlier call. How do you check the same-day criteria?",
@@ -116,7 +124,13 @@ export function practiceScenarios(
     );
   }
   for (const person of practice.staff) {
-    const tasks = [...(person.capabilities ?? []), person.clinics].filter(Boolean).join("; ");
+    const tasks = [
+      ...appointmentTypes.filter((t) => clinicianCapabilities(person)[t.id]).map((t) => t.name),
+      ...(person.capabilities ?? []),
+      person.clinics,
+    ]
+      .filter(Boolean)
+      .join("; ");
     if (tasks)
       add(
         `Working with ${person.name}`,
