@@ -18,14 +18,22 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground font-display font-bold">
               P
             </span>
-            <span className="font-display text-lg font-semibold tracking-tight">PracticeReady</span>
+            <span className="hidden font-display text-lg font-semibold tracking-tight sm:inline">
+              PracticeReady
+            </span>
           </Link>
-          <nav className="hidden gap-6 text-sm text-muted-foreground md:flex">
+          <nav className="flex gap-4 whitespace-nowrap text-sm text-muted-foreground sm:gap-6">
             <Link
               to="/about"
               className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium"
             >
-              About
+              About Us
+            </Link>
+            <Link
+              to="/faqs"
+              className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium"
+            >
+              FAQs
             </Link>
           </nav>
           <div className="flex items-center gap-2">

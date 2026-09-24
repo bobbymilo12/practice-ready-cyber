@@ -1,7 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card } from "@/components/Shell";
 export const Route = createFileRoute("/about")({
-  head: () => ({ meta: [{ title: "About PracticeReady" }] }),
+  head: () => ({
+    meta: [
+      { title: "About Us — PracticeReady" },
+      {
+        name: "description",
+        content:
+          "PracticeReady helps GP reception and admin teams learn their practice's own procedures through short, interactive scenarios.",
+      },
+      { property: "og:title", content: "About Us — PracticeReady" },
+      {
+        property: "og:description",
+        content: "Local knowledge, reviewed by managers, turned into practice scenarios for new starters.",
+      },
+      { property: "og:type", content: "website" },
+    ],
+  }),
   component: AboutPage,
 });
 function AboutPage() {
