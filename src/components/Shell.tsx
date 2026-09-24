@@ -25,7 +25,13 @@ export function Shell({ children }: { children: ReactNode }) {
               to="/about"
               className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium"
             >
-              About
+              About Us
+            </Link>
+            <Link
+              to="/faqs"
+              className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium"
+            >
+              FAQs
             </Link>
           </nav>
           <div className="flex items-center gap-2">
