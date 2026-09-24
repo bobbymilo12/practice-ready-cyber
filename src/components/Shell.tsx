@@ -20,7 +20,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </span>
             <span className="font-display text-lg font-semibold tracking-tight">PracticeReady</span>
           </Link>
-          <nav className="hidden gap-6 text-sm text-muted-foreground md:flex">
+          <nav className="flex gap-4 text-sm text-muted-foreground sm:gap-6">
             <Link
               to="/about"
               className="hover:text-foreground [&.active]:text-foreground [&.active]:font-medium"
