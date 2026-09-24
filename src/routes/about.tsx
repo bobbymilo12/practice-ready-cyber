@@ -47,7 +47,7 @@ function AboutPage() {
         <p className="mb-6 inline-flex rounded-full bg-secondary px-4 py-2 text-xs font-semibold uppercase text-secondary-foreground">
           About PracticeReady
         </p>
-        <h1 className="max-w-3xl text-balance font-display text-4xl font-bold leading-tight sm:text-5xl">
+        <h1 className="max-w-3xl text-balance font-display text-[1.75rem] font-bold leading-tight sm:text-5xl">
           Local knowledge. Confident new starters.
         </h1>
         <div className="mt-6 max-w-2xl space-y-4 text-lg leading-8 text-muted-foreground">
