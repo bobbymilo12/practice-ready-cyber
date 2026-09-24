@@ -157,7 +157,7 @@ function Results() {
                       : "border-border hover:border-primary/40"
                   }`}
                 >
-                  {v} — {["Not yet", "Shaky", "Ok", "Confident", "Very confident"][v - 1]}
+                  {v} — {["Not yet", "Shaky", "OK", "Confident", "Very confident"][v - 1]}
                 </button>
               );
             })}
