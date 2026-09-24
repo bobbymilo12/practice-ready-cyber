@@ -1,11 +1,6 @@
-import { useId, useState } from "react";
+import { useId } from "react";
 import { Link } from "@tanstack/react-router";
 import { useApp, type PracticeData } from "@/lib/store";
-import {
-  appointmentTypes,
-  clinicianCapabilities,
-  isClinicalStaff,
-} from "@/lib/appointment-capabilities";
 import {
   bookingFor,
   prescriptionsFor,
@@ -41,7 +36,7 @@ function Text({
     </label>
   );
 }
-function Instruction({
+export function Instruction({
   label,
   value,
   onChange,
@@ -50,34 +45,25 @@ function Instruction({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const [open, setOpen] = useState(!!value);
-  const hintId = useId();
   return (
-    <div>
-      {value.trim() && (
-        <p id={hintId} className="mb-2 text-sm text-muted-foreground">
-          Review this instruction against your current selections, especially after changing an
-          option. Update or remove any wording that no longer applies; existing text is kept until
-          you edit it.
-        </p>
-      )}
-      {open || value ? (
-        <label className="block text-sm">
-          {label}
-          <textarea
-            aria-describedby={value.trim() ? hintId : undefined}
-            rows={2}
-            className={field}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-          />
-        </label>
-      ) : (
-        <button type="button" className="text-sm text-primary" onClick={() => setOpen(true)}>
-          + Add practice-specific instruction<span className="sr-only">: {label}</span>
-        </button>
-      )}
-    </div>
+    <details className="text-sm">
+      <summary className="cursor-pointer text-primary">
+        {value.trim()
+          ? "Edit practice-specific instructions"
+          : "+ Add practice-specific instructions"}
+        <span className="sr-only">: {label}</span>
+      </summary>
+      <label className="mt-3 block">
+        {label}
+        <textarea
+          aria-label={label}
+          rows={2}
+          className={field}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </label>
+    </details>
   );
 }
 function Check({
@@ -164,6 +150,7 @@ function SelectChoice({
         <label className="block text-sm font-medium">
           {label}
           <select
+            aria-label={label}
             className={field}
             value={value.id}
             onChange={(e) => onChange({ ...value, id: e.target.value })}
@@ -187,7 +174,7 @@ function SelectChoice({
     </div>
   );
 }
-function ContactFields({
+export function ContactFields({
   label,
   value,
   onChange,
@@ -213,6 +200,7 @@ function ContactFields({
       <label className="block font-medium text-sm">
         {label}
         <select
+          aria-label={label}
           className={field}
           value={selected}
           onChange={(e) => {
@@ -282,33 +270,51 @@ export function BookingFields() {
   const b = bookingFor(p);
   return (
     <div className="space-y-8">
+      <Multi
+        label="How can patients request appointments?"
+        options={[
+          { id: "phone", label: "Telephone" },
+          { id: "online", label: "Practice website / online form" },
+          { id: "nhs-app", label: "NHS App" },
+          { id: "reception", label: "At reception" },
+          { id: "other", label: "Other" },
+        ]}
+        value={b.requestMethods ?? []}
+        onChange={(requestMethods) => set({ ...b, requestMethods })}
+      />
+      {b.requestMethods?.includes("other") && (
+        <Text
+          label="Other appointment request method"
+          value={b.otherRequestMethod ?? ""}
+          onChange={(otherRequestMethod) => set({ ...b, otherRequestMethod })}
+        />
+      )}
       <section className="space-y-4">
         <h2 className="font-semibold">
           Which requests should reception consider for the same-day pathway?
         </h2>
         <p className="text-sm text-muted-foreground">
-          Review these provisional examples against your agreed local guidance. Selection means
-          consideration for your same-day pathway, not automatic booking. Emergency/red-flag and
-          clinical triage rules remain separate; this is not PracticeReady-approved medical advice.
+          Select only requests covered by your local same-day process. These selections do not
+          replace clinical triage.
         </p>
-        {b.sameDayPathway.instruction && (
-          <p className="text-sm text-muted-foreground">
-            Your existing criteria are preserved below as local guidance. No symptom categories have
-            been inferred from that text.
-          </p>
-        )}
         <div className="grid gap-5 sm:grid-cols-2">
           {sameDayGroups.map((g) => (
-            <div key={g.label} className="rounded-xl border border-border p-4">
-              <Multi
-                label={g.label}
-                options={g.options}
-                value={b.sameDayPathway.selected}
-                onChange={(selected) =>
-                  set({ ...b, sameDayPathway: { ...b.sameDayPathway, selected } })
-                }
-              />
-            </div>
+            <details key={g.label} className="rounded-xl border border-border p-4">
+              <summary className="cursor-pointer text-sm">
+                {g.label} ·{" "}
+                {g.options.filter((o) => b.sameDayPathway.selected.includes(o.id)).length} selected
+              </summary>
+              <div className="mt-3">
+                <Multi
+                  label={g.label}
+                  options={g.options}
+                  value={b.sameDayPathway.selected}
+                  onChange={(selected) =>
+                    set({ ...b, sameDayPathway: { ...b.sameDayPathway, selected } })
+                  }
+                />
+              </div>
+            </details>
           ))}
         </div>
         {b.sameDayPathway.custom.map((v, i) => (
@@ -401,18 +407,9 @@ export function BookingFields() {
         value={b.routineInstruction}
         onChange={(routineInstruction) => set({ ...b, routineInstruction })}
       />
-      <div className="rounded-xl bg-muted/40 p-4 text-sm">
-        <p>Booking uses the appointment types already configured for your team.</p>
-        {p.staff.filter(isClinicalStaff).map((s) => (
-          <p key={s.id} className="mt-2">
-            {s.name} — {appointmentTypes.filter((t) => clinicianCapabilities(s)[t.id]).length}{" "}
-            appointment types selected
-          </p>
-        ))}
-        <Link className="mt-3 inline-block text-primary" to="/practice/setup" search={{ step: 1 }}>
-          Review appointment types in Team →
-        </Link>
-      </div>
+      <Link className="inline-block text-sm text-primary" to="/practice/setup" search={{ step: 1 }}>
+        Review what each role handles in Team →
+      </Link>
     </div>
   );
 }
@@ -447,25 +444,31 @@ export function PrescriptionFields() {
         value={c.turnaround}
         onChange={(turnaround) => set({ ...c, turnaround })}
       />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <SelectChoice
-          label="Weekends"
-          options={calendarRules}
-          value={c.weekends}
-          onChange={(weekends) => set({ ...c, weekends })}
-        />
-        <SelectChoice
-          label="Bank holidays"
-          options={calendarRules}
-          value={c.bankHolidays}
-          onChange={(bankHolidays) => set({ ...c, bankHolidays })}
-        />
-      </div>
-      <Instruction
-        label="Turnaround instructions (including existing guidance)"
-        value={c.turnaroundInstruction}
-        onChange={(turnaroundInstruction) => set({ ...c, turnaroundInstruction })}
-      />
+      <details>
+        <summary className="cursor-pointer text-sm">More turnaround settings (optional)</summary>
+        <div className="mt-4 space-y-4">
+          {" "}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectChoice
+              label="Weekends"
+              options={calendarRules}
+              value={c.weekends}
+              onChange={(weekends) => set({ ...c, weekends })}
+            />
+            <SelectChoice
+              label="Bank holidays"
+              options={calendarRules}
+              value={c.bankHolidays}
+              onChange={(bankHolidays) => set({ ...c, bankHolidays })}
+            />
+          </div>
+          <Instruction
+            label="Turnaround instructions (including existing guidance)"
+            value={c.turnaroundInstruction}
+            onChange={(turnaroundInstruction) => set({ ...c, turnaroundInstruction })}
+          />
+        </div>
+      </details>
       <h2 className="font-semibold">Who handles urgent prescription requests?</h2>
       <Check
         label="Use the same contact and method as appointment escalation"
@@ -477,12 +480,6 @@ export function PrescriptionFields() {
           })
         }
       />
-      {c.urgentRoute.source === "appointment" && c.urgentRoute.previousSeparateRoute && (
-        <p className="text-sm text-muted-foreground">
-          Your separate contact details are retained. Turn this option off to restore them. While it
-          is on, only appointment escalation is used.
-        </p>
-      )}
       {c.urgentRoute.source === "appointment" ? (
         <p className="whitespace-pre-line text-sm text-muted-foreground">
           {routeText(bookingFor(p).escalation, p) ||

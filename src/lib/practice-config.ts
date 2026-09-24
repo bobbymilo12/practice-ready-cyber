@@ -104,6 +104,8 @@ export interface ContactRoute {
 }
 export interface BookingConfig {
   version: 1;
+  requestMethods?: string[];
+  otherRequestMethod?: string;
   // Separate domain: these selections do not classify emergency or clinical triage criteria.
   sameDayPathway: { selected: string[]; custom: string[]; instruction: string };
   sameDayProcess: Choice;
@@ -140,52 +142,36 @@ const join = (...s: (string | undefined)[]) =>
   [...new Set(s.filter((v): v is string => !!v?.trim()))].join("\n");
 export function bookingFor(p: PracticeData): BookingConfig {
   if (p.bookingConfig) return p.bookingConfig;
-  const legacy = !!join(
-    p.sameDayReasons.join("\n"),
-    p.dutyContact,
-    p.rolePolicies.gpsSameDay,
-    p.rolePolicies.gpsRoutine,
-  );
   return {
     version: 1,
     sameDayPathway: {
-      selected: legacy
-        ? []
-        : sameDayGroups.flatMap((g) =>
-            g.options.filter((o) => !o.id.startsWith("other-")).map((o) => o.id),
-          ),
+      selected: [],
       custom: [],
       instruction: p.sameDayReasons.join("\n"),
     },
-    sameDayProcess: choice(legacy ? "" : "triage"),
+    sameDayProcess: choice(),
     sameDayInstruction: p.rolePolicies.gpsSameDay,
-    sendUncertainToDutyClinician: !legacy,
+    sendUncertainToDutyClinician: false,
     escalation: { ...emptyContactRoute(), instruction: p.dutyContact },
-    routineProcess: choice(legacy ? "" : "direct"),
+    routineProcess: choice(),
     routineInstruction: p.rolePolicies.gpsRoutine,
   };
 }
 export function prescriptionsFor(p: PracticeData): PrescriptionConfig {
   if (p.prescriptionConfig) return p.prescriptionConfig;
-  const legacy = !!join(
-    p.prescriptionOrdering,
-    p.repeatOrderMethods,
-    p.repeatTurnaround,
-    p.repeatEmergency,
-  );
   return {
     version: 1,
-    methods: legacy ? [] : ["nhs-app", "website", "paper"],
+    methods: [],
     otherMethod: "",
     orderingInstruction: join(p.prescriptionOrdering, p.repeatOrderMethods),
-    turnaround: choice(legacy ? "" : "48"),
+    turnaround: choice(),
     turnaroundInstruction: p.repeatTurnaround,
     weekends: choice("unconfirmed"),
     bankHolidays: choice("unconfirmed"),
     urgentRoute: p.repeatEmergency.trim()
       ? { source: "separate", route: emptyContactRoute() }
       : { source: "appointment" },
-    urgentActions: legacy ? [] : ["contact"],
+    urgentActions: [],
     otherAction: "",
     urgentInstruction: p.repeatEmergency,
   };
@@ -211,7 +197,9 @@ export function routeText(r: ContactRoute, p: PracticeData): string {
 }
 // Read-only compatibility projection: never persist derived strings over legacy data.
 export function practiceSummary(p: PracticeData): PracticeData {
-  let result = p;
+  let result = p.safeguardingRoute
+    ? { ...p, localSafeguarding: join(routeText(p.safeguardingRoute, p), p.localSafeguarding) }
+    : p;
   if (p.bookingConfig) {
     const b = p.bookingConfig;
     const criteria = [
@@ -297,6 +285,9 @@ export function configMissing(p: PracticeData): { booking: string[]; prescriptio
     v.id === "other" ? !!v.other.trim() : !!v.id || !!instruction.trim();
   return {
     booking: [
+      b.requestMethods?.includes("other") && !b.otherRequestMethod?.trim()
+        ? "Other appointment request method"
+        : "",
       !b.sameDayPathway.selected.length &&
       !b.sameDayPathway.custom.some((s) => s.trim()) &&
       !b.sameDayPathway.instruction.trim()

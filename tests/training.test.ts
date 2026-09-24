@@ -213,13 +213,15 @@ test("structured summaries follow renamed staff and shared escalation, never sta
   assert.ok(summary.repeatEmergency.includes("Sarah New"));
   assert.ok(summary.repeatEmergency.includes("123"));
   assert.ok(!JSON.stringify(summary.rolePolicies).includes("STALE"));
-  assert.deepEqual(configMissing(p), { booking: [], prescription: [] });
+  assert.ok(!configMissing(p).booking.includes("Escalation contact and method"));
+  assert.ok(!configMissing(p).prescription.includes("Urgent prescription contact and method"));
   const drafts = practiceScenarios("appointment-booking", "Bookings", p, {
     sameDayProcess: "STALE answer",
     dutyTeam: "STALE answer",
   });
   assert.ok(!JSON.stringify(drafts).includes("STALE"));
-  assert.ok(JSON.stringify(drafts).includes("Medication review"));
+  // A job title alone must not introduce a clinical capability.
+  assert.ok(!JSON.stringify(drafts).includes("Medication review"));
   p.bookingConfig.escalation.method.other = "456";
   summary = practiceSummary(p);
   assert.ok(summary.repeatEmergency.includes("456"));
@@ -232,9 +234,10 @@ test("new setup defaults are independent snapshots, and custom choices require d
   const p = blankPractice();
   p.bookingConfig = bookingFor(p);
   p.prescriptionConfig = prescriptionsFor(p);
-  assert.ok(p.bookingConfig.sameDayPathway.selected.includes("infection"));
+  assert.deepEqual(p.bookingConfig.sameDayPathway.selected, []);
+  p.bookingConfig.sameDayPathway.selected.push("infection");
+  assert.deepEqual(bookingFor(blankPractice()).sameDayPathway.selected, []);
   p.bookingConfig.sameDayPathway.selected = [];
-  assert.ok(bookingFor(blankPractice()).sameDayPathway.selected.length > 0);
   p.prescriptionConfig.methods = ["other"];
   p.prescriptionConfig.turnaround = { id: "other", other: "" };
   const missing = configMissing(p);
@@ -307,36 +310,201 @@ test("review separates text-only legacy guidance, unconfirmed calendars and stru
   assert.ok(!configReview(p).prescription.unconfirmed.includes("Bank-holiday turnaround rules"));
 });
 
-test("team review shows effective clinician overrides and retains older responsibilities separately", () => {
+test("team review uses shared roles rather than inferred individual defaults", () => {
+  const p = blankPractice();
   const person = {
     id: "np",
-    name: "Alex",
+    name: "Catherine",
     role: "Nurse Practitioner",
-    clinics: "Local clinic",
-    capabilities: ["Additional responsibility"],
-    appointmentCapabilities: {
-      defaults: roleCapabilities("Nurse Practitioner"),
-      overrides: { "breast-examination": false, "medication-review": true },
-    },
+    clinics: "Legacy clinic",
+    appointmentCapabilities: { defaults: roleCapabilities("Nurse Practitioner"), overrides: {} },
   };
-  const summary = teamReviewSummary(person);
-  assert.ok(summary.includes("Appointment types (9 selected)"));
-  assert.ok(summary.includes("Medication review"));
-  assert.ok(!summary.includes("Breast examination"));
-  assert.ok(summary.includes("Local clinic, Additional responsibility"));
+  assert.match(teamReviewSummary(person, p), /needs review/);
+  const role = suggestedRole(person.role);
+  role.confirmed = true;
+  role.selectedRequestIds = ["chest-infections"];
+  p.roleRequests = { [role.roleId]: role };
+  assert.match(teamReviewSummary(person, p), /1 shared requests selected/);
+  assert.equal(person.clinics, "Legacy clinic");
+});
+
+import {
+  suggestedRole,
+  requestRoleId,
+  rolesForRequest,
+  requestsForStaff,
+  routingForRequest,
+} from "../src/lib/role-requests.ts";
+test("role requests share stable identities and require local confirmation without changing legacy staff", () => {
+  const p = blankPractice();
+  const before = JSON.stringify(p.staff);
+  const role = suggestedRole("Nurse Practitioner");
+  assert.equal(requestRoleId(" nurse  practitioner "), role.roleId);
+  assert.deepEqual(role.selectedRequestIds, []);
+  role.selectedRequestIds = ["chest-infections"];
+  p.roleRequests = { [role.roleId]: role };
+  assert.equal(rolesForRequest(p, "chest-infections").length, 0);
+  role.confirmed = true;
+  assert.equal(
+    rolesForRequest(JSON.parse(JSON.stringify(p)), "chest-infections")[0].roleId,
+    role.roleId,
+  );
+  assert.equal(JSON.stringify(p.staff), before);
+  assert.deepEqual(suggestedRole("Nurse Practitioner").selectedRequestIds, []);
+});
+
+test("routing joins a practice request to confirmed roles and all employees without copying scope", () => {
+  const p = blankPractice();
+  p.staff = [
+    {
+      id: "c",
+      name: "Catherine",
+      role: "Nurse Practitioner",
+      clinics: "Old clinic",
+      capabilities: ["Old note"],
+    },
+    { id: "s", name: "Sarah", role: " nurse practitioner ", clinics: "" },
+    { id: "e", name: "Emily", role: "Nurse Practitioner", clinics: "" },
+    { id: "gp", name: "Dr Example", role: "GP", clinics: "" },
+    { id: "hca", name: "Jo", role: "HCA", clinics: "" },
+    { id: "n", name: "Robin", role: "Practice Nurse", clinics: "" },
+  ];
+  const originalStaff = JSON.stringify(p.staff);
+  p.roleRequests = {};
+  for (const [label, request] of [
+    ["Nurse Practitioner", "chest-infections"],
+    ["GP", "chest-infections"],
+    ["HCA", "blood-tests"],
+    ["Practice Nurse", "blood-tests"],
+  ]) {
+    const role = suggestedRole(label);
+    assert.deepEqual(role.selectedRequestIds, []);
+    role.selectedRequestIds = [request];
+    role.confirmed = true;
+    p.roleRequests[role.roleId] = role;
+  }
+  assert.deepEqual(requestsForStaff(p, "c"), requestsForStaff(p, "s"));
+  assert.equal(routingForRequest(p, "Chest infection").length, 2);
+  assert.equal(routingForRequest(p, "chest-infections")[0].employees.length, 3);
+  assert.deepEqual(
+    routingForRequest(p, "Blood test").map((r) => r.role),
+    ["HCA", "Practice Nurse"],
+  );
+  const np = p.roleRequests[requestRoleId("Nurse Practitioner")];
+  np.selectedRequestIds = ["asthma-reviews"];
+  assert.deepEqual(requestsForStaff(p, "e"), ["asthma-reviews"]);
+  const serialized = JSON.parse(JSON.stringify(p));
+  assert.deepEqual(
+    routingForRequest(serialized, "Asthma review")[0].employees.map((s) => s.id),
+    ["c", "s", "e"],
+  );
+  const drafts = practiceScenarios("first-week", "Reception", p, {});
   assert.ok(
-    teamReviewSummary({ id: "gp", name: "GP", role: "GP", clinics: "" }).includes(
-      "Appointment types (7 selected)",
+    drafts.some(
+      (s) => s.learningPoint.includes("Catherine") && s.learningPoint.includes("Asthma reviews"),
     ),
   );
-  assert.equal(
-    teamReviewSummary({ id: "r", name: "Receptionist", role: "Reception", clinics: "Front desk" }),
-    "Receptionist · Reception: Front desk",
+  assert.ok(
+    !drafts.some(
+      (s) => s.learningPoint.includes("Old clinic") || s.learningPoint.includes("Old note"),
+    ),
+  );
+  np.confirmed = false;
+  assert.deepEqual(requestsForStaff(p, "c"), []);
+  assert.equal(routingForRequest(p, "Asthma review").length, 0);
+  assert.equal(JSON.stringify(p.staff), originalStaff);
+});
+
+import {
+  withRequestOverride,
+  resetRequestOverride,
+  resetAllRequestOverrides,
+  staffForRequest,
+} from "../src/lib/role-requests.ts";
+test("employee exceptions are sparse, inherit live defaults and support reset, custom requests and role changes", () => {
+  const p = blankPractice();
+  const role = suggestedRole("Nurse Practitioner");
+  role.confirmed = true;
+  role.selectedRequestIds = ["breast-examination", "chest-infections"];
+  role.categories[1].requests.push({
+    id: "custom:clinic",
+    label: "Specialist diabetes clinic",
+    custom: true,
+  });
+  p.roleRequests = { [role.roleId]: role };
+  p.staff = [
+    {
+      id: "c",
+      name: "Catherine",
+      role: role.label,
+      clinics: "Legacy information",
+      notes: "Keep this note",
+    },
+    { id: "s", name: "Sarah", role: role.label, clinics: "" },
+  ];
+  assert.deepEqual(requestsForStaff(p, "c"), requestsForStaff(p, "s"));
+  p.staff[0] = withRequestOverride(p.staff[0], role, "breast-examination", false);
+  p.staff[0] = withRequestOverride(p.staff[0], role, "custom:clinic", true);
+  assert.deepEqual(p.staff[0].requestOverrides, {
+    [role.roleId]: { "breast-examination": false, "custom:clinic": true },
+  });
+  assert.equal(p.staff[1].requestOverrides, undefined);
+  assert.deepEqual(
+    staffForRequest(p, "Breast examination").map((s) => [s.employee.name, s.canHandle]),
+    [
+      ["Catherine", false],
+      ["Sarah", true],
+    ],
+  );
+  assert.equal(rolesForRequest(p, "custom:clinic").length, 0);
+  assert.deepEqual(
+    routingForRequest(p, "Specialist diabetes clinic")[0].employees.map((s) => s.name),
+    ["Catherine"],
+  );
+  assert.equal(routingForRequest(p, "Specialist diabetes clinic")[0].practiceDefault, false);
+  role.selectedRequestIds = ["breast-examination", "asthma-reviews"];
+  for (const id of ["c", "s"]) {
+    assert.ok(!requestsForStaff(p, id).includes("chest-infections"));
+    assert.ok(requestsForStaff(p, id).includes("asthma-reviews"));
+  }
+  // Even if a role edit makes the exception equal to the default, retain explicit intent.
+  role.selectedRequestIds = [];
+  assert.equal(p.staff[0].requestOverrides?.[role.roleId]["breast-examination"], false);
+  role.selectedRequestIds = ["breast-examination"];
+  assert.ok(!requestsForStaff(p, "c").includes("breast-examination"));
+  p.staff[0] = resetRequestOverride(p.staff[0], role.roleId, "breast-examination");
+  assert.ok(requestsForStaff(p, "c").includes("breast-examination"));
+  assert.deepEqual(p.staff[0].requestOverrides, { [role.roleId]: { "custom:clinic": true } });
+  const saved = JSON.parse(JSON.stringify(p));
+  assert.deepEqual(requestsForStaff(saved, "c"), requestsForStaff(p, "c"));
+  const scenarios = practiceScenarios("first-week", "Reception", p, {});
+  assert.ok(
+    scenarios.some(
+      (s) =>
+        s.learningPoint.includes("Catherine") &&
+        s.learningPoint.includes("Specialist diabetes clinic"),
+    ),
   );
   assert.ok(
-    teamReviewSummary({
-      ...person,
-      appointmentCapabilities: { defaults: {}, overrides: {} },
-    }).includes("None selected"),
+    !scenarios.some(
+      (s) =>
+        s.learningPoint.includes("Sarah") && s.learningPoint.includes("Specialist diabetes clinic"),
+    ),
+  );
+  p.staff[0].role = "HCA";
+  assert.deepEqual(requestsForStaff(p, "c"), []);
+  p.staff[0].role = role.label;
+  assert.ok(requestsForStaff(p, "c").includes("custom:clinic"));
+  role.categories[1].requests = role.categories[1].requests.filter((r) => r.id !== "custom:clinic");
+  assert.ok(!requestsForStaff(p, "c").includes("custom:clinic"));
+  assert.equal(p.staff[0].requestOverrides?.[role.roleId]["custom:clinic"], true);
+  p.staff[0] = resetAllRequestOverrides(p.staff[0]);
+  assert.equal(p.staff[0].requestOverrides, undefined);
+  assert.deepEqual(requestsForStaff(p, "c"), requestsForStaff(p, "s"));
+  assert.equal(p.staff[0].clinics, "Legacy information");
+  assert.equal(p.staff[0].notes, "Keep this note");
+  assert.equal(
+    withRequestOverride(p.staff[0], role, "breast-examination", true).requestOverrides,
+    undefined,
   );
 });

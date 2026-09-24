@@ -106,9 +106,8 @@ test("guided setup validates, resumes, preserves details and waits for a success
   await page.getByLabel("Opening hours", { exact: true }).fill("Monday to Friday 8–6");
   await page.getByLabel("Out-of-hours process").fill("Use our recorded out-of-hours service.");
   await page.getByRole("button", { name: "Save and continue" }).click();
-  await page.getByRole("button", { name: "Add team member", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Dr Oak");
-  await page.getByLabel("Clinics or responsibilities").fill("Routine appointments");
+  await page.getByRole("button", { name: "Add employee", exact: true }).click();
   await page.getByRole("button", { name: "Save and continue" }).click();
   await page.reload();
   await expect(page.getByRole("heading", { name: "How are appointments handled?" })).toBeVisible();
@@ -128,12 +127,19 @@ test("guided setup validates, resumes, preserves details and waits for a success
   await page.getByLabel("48 working hours", { exact: true }).check();
   await page.getByLabel("Contact responsible clinician", { exact: true }).check();
   await page.getByRole("button", { name: "Save and continue" }).click();
+  await page.locator("summary").filter({ hasText: "Local confidentiality instructions" }).click();
   await page
-    .getByLabel("Confidentiality process")
+    .getByLabel("Local confidentiality instructions")
     .fill("Verify identity and consent before sharing");
-  await page.getByLabel("Safeguarding process").fill("Contact our safeguarding lead via duty team");
+  await page
+    .locator("summary")
+    .filter({ hasText: "Practice-specific safeguarding instructions" })
+    .click();
+  await page
+    .getByLabel("Practice-specific safeguarding instructions")
+    .fill("Contact our safeguarding lead via duty team");
   await page.getByRole("button", { name: "Save and continue" }).click();
-  await expect(page.getByText(/Dr Oak · Doctor: Routine appointments/)).toBeVisible();
+  await expect(page.getByText(/1 team members/)).toBeVisible();
   backend.fail(true);
   await page.getByRole("button", { name: "Create starter drafts" }).click();
   await expect(page.getByRole("heading", { name: "Your practice is set up" })).toHaveCount(0);
@@ -153,55 +159,41 @@ test("guided setup validates, resumes, preserves details and waits for a success
   );
 });
 
-test("inline appointment types use role defaults and preserve individual overrides", async ({
-  page,
-}) => {
-  await manager(page);
+test("employee edits keep the shared role and historical records intact", async ({ page }) => {
+  const backend = await manager(page);
+  const p = backend.state().practiceData as PracticeData;
+  const legacy = {
+    id: "legacy",
+    name: "Catherine",
+    role: "Nurse Practitioner",
+    clinics: "Local clinic",
+    notes: "Tuesday only",
+    capabilities: ["Asthma reviews"],
+    appointmentCapabilities: {
+      defaults: { "asthma-review": true },
+      overrides: { "blood-test": false },
+    },
+  };
+  p.staff = [legacy];
   await page.goto("/practice/setup?step=1");
-  for (const name of ["Alex", "Robin"]) {
-    await page.getByRole("button", { name: "Add team member", exact: true }).click();
-    await page.getByLabel("Name", { exact: true }).last().fill(name);
-    await page.getByLabel("Role", { exact: true }).last().fill("Nurse Practitioner");
-    await page.getByLabel("Clinics or responsibilities").last().fill("Clinical appointments");
-  }
-  const cards = page
-    .locator("div.rounded-xl")
-    .filter({ has: page.getByLabel("Name", { exact: true }) });
-  const alex = cards.nth(0);
-  const robin = cards.nth(1);
-  await expect(alex.getByText("Edit appointment types (9 selected)")).toBeVisible();
-  await expect(alex.getByLabel("Breast examination", { exact: true })).not.toBeVisible();
-  await alex.getByText("Edit appointment types (9 selected)").click();
-  await alex.getByLabel("Breast examination", { exact: true }).uncheck();
-  await expect(alex.getByText("Edit appointment types (8 selected)")).toBeVisible();
-  await alex.getByLabel("Medication review", { exact: true }).check();
-  await expect(alex.getByText("Edit appointment types (9 selected)")).toBeVisible();
-  await robin.getByText("Edit appointment types (9 selected)").click();
-  await expect(robin.getByLabel("Breast examination", { exact: true })).toBeChecked();
-  await expect(robin.getByLabel("Medication review", { exact: true })).not.toBeChecked();
-  await page.getByRole("button", { name: "Save and continue" }).click();
-  await expect(page.getByRole("heading", { name: "How are appointments handled?" })).toBeVisible();
-  await page.reload();
-  await page.getByRole("button", { name: "Back", exact: true }).click();
-  await alex.getByText("Edit appointment types (9 selected)").click();
-  await expect(alex.getByLabel("Breast examination", { exact: true })).not.toBeChecked();
-  await expect(alex.getByLabel("Medication review", { exact: true })).toBeChecked();
-  await robin.getByLabel("Role", { exact: true }).fill("HCA");
-  await expect(robin.getByText("Edit appointment types (4 selected)")).toBeVisible();
-  await robin.getByLabel("Role", { exact: true }).fill("Reception");
-  await expect(robin.getByText(/Edit appointment types/)).toHaveCount(0);
-  await robin.getByLabel("Role", { exact: true }).fill("Practice Nurse");
-  await expect(robin.getByText("Edit appointment types (7 selected)")).toBeVisible();
+  const employee = page.getByRole("article", { name: "Employee Catherine", exact: true });
+  await expect(employee.getByRole("checkbox")).toHaveCount(0);
   await expect(
-    page.getByText("Clinical team member — configure appointment capabilities"),
-  ).toHaveCount(0);
+    employee.getByText("Catherine uses your practice’s Nurse Practitioner role configuration."),
+  ).toBeVisible();
+  await expect(page.getByText("Tuesday only", { exact: true })).not.toBeVisible();
+  await page.getByText("Preserved individual information", { exact: true }).click();
+  await expect(page.getByText("Tuesday only", { exact: true })).toBeVisible();
+  await employee.getByLabel("Employee role").fill("Practice Nurse");
+  await page.getByRole("button", { name: "Save and exit", exact: true }).click();
+  expect((backend.state().practiceData as PracticeData).staff[0]).toEqual({
+    ...legacy,
+    role: "Practice Nurse",
+  });
+  await page.goto("/data-hub");
   await expect(
-    page.getByRole("navigation", { name: "Setup steps" }).getByRole("button"),
-  ).toHaveCount(6);
-  await page.setViewportSize({ width: 390, height: 844 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
-    true,
-  );
+    page.getByRole("button", { name: "View / edit Practice Nurse role", exact: true }),
+  ).toBeVisible();
 });
 
 test("structured processes preserve legacy guidance and resolve shared staff contacts after reload", async ({
@@ -210,15 +202,17 @@ test("structured processes preserve legacy guidance and resolve shared staff con
   const backend = await manager(page);
   backend.state().practiceData.repeatEmergency = "";
   await page.goto("/practice/setup?step=1");
-  await page.getByRole("button", { name: "Add team member", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Sarah Khan");
   await page.getByLabel("Role", { exact: true }).fill("Pharmacist");
-  // No responsibility text is required for a role with appointment defaults.
+  await page.getByRole("button", { name: "Add employee", exact: true }).click();
+  // Employee creation only needs a name and role.
   await page.getByRole("button", { name: "Save and continue" }).click();
+  await page.getByText("Acute illness · 0 selected", { exact: true }).click();
   await expect(
     page.getByLabel("New or worsening infection symptoms", { exact: true }),
-  ).toBeChecked();
-  await expect(page.getByLabel("Fever in a child", { exact: true })).toBeVisible();
+  ).not.toBeChecked();
+  await page.getByLabel("Clinical triage is required before booking", { exact: true }).check();
+  await page.getByLabel("Reception books directly", { exact: true }).check();
   await page.getByRole("button", { name: "+ Add another criterion", exact: true }).click();
   await page.getByLabel("Local criterion 1", { exact: true }).fill("Local pathway example");
   await page
@@ -236,10 +230,11 @@ test("structured processes preserve legacy guidance and resolve shared staff con
   await page.getByLabel("NHS App", { exact: true }).check();
   await page.getByLabel("48 working hours", { exact: true }).check();
   await page.getByLabel("Contact responsible clinician", { exact: true }).check();
+  await page.getByText("More turnaround settings (optional)", { exact: true }).click();
   await page.getByRole("combobox", { name: "Weekends", exact: true }).selectOption("exclude");
   await page.getByRole("button", { name: "Save and continue" }).click();
   await page.getByRole("button", { name: "2. Team", exact: true }).click();
-  await page.getByLabel("Name", { exact: true }).fill("Sarah Updated");
+  await page.getByLabel("Employee name", { exact: true }).fill("Sarah Updated");
   await page.getByRole("button", { name: "Save and continue" }).click();
   await page.reload();
   await expect(page.getByLabel("Local criterion 1", { exact: true })).toHaveValue(
@@ -250,6 +245,7 @@ test("structured processes preserve legacy guidance and resolve shared staff con
   ).toHaveCount(1);
   await page.getByRole("button", { name: "4. Prescriptions", exact: true }).click();
   await expect(page.getByText(/Sarah Updated — Pharmacist\s+Microsoft Teams/)).toBeVisible();
+  await page.getByText("More turnaround settings (optional)", { exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Weekends", exact: true })).toHaveValue(
     "exclude",
   );
@@ -284,7 +280,7 @@ test("urgent contact restoration survives saving and reopening shared mode", asy
   await page.goto("/practice/setup?step=3");
   await expect(page.getByLabel("Phone / extension number")).toHaveValue("789");
   await page.getByLabel("Use the same contact and method as appointment escalation").check();
-  await expect(page.getByText(/Your separate contact details are retained/)).toBeVisible();
+  await expect(page.getByLabel("Phone / extension number")).not.toBeVisible();
   await page.getByRole("button", { name: "Save and exit" }).click();
   await expect(page).toHaveURL(/dashboard/);
   await page.goto("/practice/setup?step=3");
@@ -304,57 +300,26 @@ test("urgent contact restoration survives saving and reopening shared mode", asy
   expect(backend.state().practiceData.prescriptionConfig?.urgentRoute.source).toBe("separate");
 });
 
-test("review highlights unconfirmed and legacy settings, prompts instruction checks and shows appointment overrides", async ({
-  page,
-}) => {
+test("review stays concise while legacy instructions remain editable", async ({ page }) => {
   const backend = await manager(page);
-  const p: PracticeData = backend.state().practiceData;
-  p.dutyContact = "Use the duty rota";
-  p.rolePolicies.gpsSameDay = "Use our agreed pathway";
-  p.staff = [
-    {
-      id: "alex",
-      name: "Alex",
-      role: "Pharmacist",
-      clinics: "Legacy responsibilities",
-      appointmentCapabilities: {
-        defaults: { "medication-review": true },
-        overrides: { "medication-review": false, "bp-check": true },
-      },
-    },
-  ];
   await page.goto("/practice/setup?step=3");
-  await page.getByLabel("Telephone", { exact: true }).check();
-  const instruction = page.getByLabel("Ordering instructions (including existing guidance)");
+  const instruction = page.getByLabel("Ordering instructions (including existing guidance)", {
+    exact: true,
+  });
+  await expect(instruction).not.toBeVisible();
+  await page.locator("summary").filter({ hasText: "Ordering instructions" }).click();
   await expect(instruction).toHaveValue(defaultPracticeData.repeatOrderMethods);
   await expect(
     page.getByText(/Review this instruction against your current selections/),
-  ).toBeVisible();
-  await expect(instruction).toHaveAttribute("aria-describedby", /.+/);
+  ).toHaveCount(0);
+  await instruction.fill("Our local ordering process");
   await page.getByRole("button", { name: "6. Review", exact: true }).click();
   await expect(
-    page.getByText(/Existing guidance only — awaiting structured review:.*Appointment escalation/),
+    page.getByRole("heading", { name: "Role configuration", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText(/Not yet confirmed:.*Weekend turnaround rules.*Bank-holiday turnaround rules/),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      /Local instructions to check against current selections:.*Prescription ordering/,
-    ),
-  ).toBeVisible();
-  const team = page.getByText(/Alex · Pharmacist: Legacy responsibilities/);
-  await expect(team).toContainText("Appointment types (1 selected): Blood pressure check");
-  await expect(team).not.toContainText("Medication review");
-  await page.getByRole("button", { name: "Edit prescriptions", exact: true }).click();
-  await page.getByRole("combobox", { name: "Weekends", exact: true }).selectOption("exclude");
-  await page.getByRole("combobox", { name: "Bank holidays", exact: true }).selectOption("exclude");
-  await instruction.fill("Telephone requests accepted through the reception team");
-  await page.getByRole("button", { name: "Save and exit" }).click();
-  await expect(page).toHaveURL(/dashboard/);
-  await page.goto("/practice/setup?step=5");
-  await expect(page.getByText(/Not yet confirmed:.*Weekend turnaround rules/)).toHaveCount(0);
-  await expect(
-    page.getByText(/Telephone requests accepted through the reception team/),
-  ).toBeVisible();
+  await expect(page.getByText("Our local ordering process", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save and exit", exact: true }).click();
+  expect(backend.state().practiceData.prescriptionConfig?.orderingInstruction).toBe(
+    "Our local ordering process",
+  );
 });

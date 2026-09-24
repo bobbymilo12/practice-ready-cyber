@@ -1,9 +1,7 @@
+import type { PracticeRoleRequests } from "./role-requests";
+import type { ContactRoute } from "./practice-config";
 import type { BookingConfig, PrescriptionConfig } from "./practice-config";
-import {
-  initialiseCapabilities,
-  roleCapabilities,
-  type AppointmentCapabilities,
-} from "./appointment-capabilities";
+import type { AppointmentCapabilities } from "./appointment-capabilities";
 import { create } from "zustand";
 import { practiceScenarios } from "./practice-scenarios";
 
@@ -75,9 +73,12 @@ export interface StaffMember {
   id: string;
   name: string;
   role: string; // GP, ANP, Nurse Practitioner, Practice Nurse, HCA, Pharmacist, Reception
-  clinics: string; // free-text list of what they cover
+  // Historical individual information is retained; new care navigation uses practice.roleRequests.
+  clinics: string;
   capabilities?: string[];
   appointmentCapabilities?: AppointmentCapabilities;
+  // Sparse request-ID overrides scoped to the role; no copied defaults or automatic legacy migration.
+  requestOverrides?: Record<string, Record<string, boolean>>;
   notes?: string;
 }
 
@@ -117,6 +118,8 @@ export interface RolePolicies {
 }
 
 export interface PracticeData {
+  roleRequests?: Record<string, PracticeRoleRequests>;
+  safeguardingRoute?: ContactRoute;
   bookingConfig?: BookingConfig;
   prescriptionConfig?: PrescriptionConfig;
   practiceName: string;
@@ -289,12 +292,20 @@ export interface AppState {
 
   // Practice setup
   completeSetup: (generate: boolean) => string[];
+  setRoleRequests: (config: PracticeRoleRequests) => void;
+  setSafeguardingRoute: (route: ContactRoute) => void;
   setBookingConfig: (config: BookingConfig) => void;
   setPrescriptionConfig: (config: PrescriptionConfig) => void;
   setPracticeField: (
     field: keyof Omit<
       PracticeData,
-      "staff" | "rolePolicies" | "sameDayReasons" | "bookingConfig" | "prescriptionConfig"
+      | "staff"
+      | "rolePolicies"
+      | "sameDayReasons"
+      | "bookingConfig"
+      | "prescriptionConfig"
+      | "roleRequests"
+      | "safeguardingRoute"
     >,
     value: string,
   ) => void;
@@ -1314,6 +1325,15 @@ export const useApp = create<AppState>()((set, get) => ({
           ),
         })),
 
+  setRoleRequests: (config) =>
+    set((s) => ({
+      practiceData: {
+        ...s.practiceData,
+        roleRequests: { ...s.practiceData.roleRequests, [config.roleId]: config },
+      },
+    })),
+  setSafeguardingRoute: (safeguardingRoute) =>
+    set((s) => ({ practiceData: { ...s.practiceData, safeguardingRoute } })),
   setBookingConfig: (bookingConfig) =>
     set((s) => ({ practiceData: { ...s.practiceData, bookingConfig } })),
   setPrescriptionConfig: (prescriptionConfig) =>
@@ -1333,7 +1353,7 @@ export const useApp = create<AppState>()((set, get) => ({
         set((state) => ({
           practiceData: {
             ...state.practiceData,
-            staff: [...state.practiceData.staff, { ...initialiseCapabilities(s), id: uid() }],
+            staff: [...state.practiceData.staff, { ...s, id: uid() }],
           },
         })),
 
@@ -1341,17 +1361,8 @@ export const useApp = create<AppState>()((set, get) => ({
         set((state) => ({
           practiceData: {
             ...state.practiceData,
-            staff: state.practiceData.staff.map((s) => {
-              if (s.id !== id) return s;
-              const next = { ...s, ...patch };
-              if (patch.role !== undefined && patch.role !== s.role) {
-                next.appointmentCapabilities = {
-                  defaults: roleCapabilities(patch.role),
-                  overrides: s.appointmentCapabilities?.overrides ?? {},
-                };
-              }
-              return initialiseCapabilities(next);
-            }),
+            // Keep historical individual fields intact; current scope comes from the shared role.
+            staff: state.practiceData.staff.map((s) => s.id === id ? { ...s, ...patch } : s),
           },
         })),
 

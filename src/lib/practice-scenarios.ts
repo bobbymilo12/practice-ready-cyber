@@ -1,5 +1,5 @@
 import { practiceSummary } from "./practice-config.ts";
-import { appointmentTypes, clinicianCapabilities } from "./appointment-capabilities.ts";
+import { requestRoleId, effectiveRequestsForStaff } from "./role-requests.ts";
 import type { PracticeData, Scenario } from "./store";
 
 // Local rules are quoted verbatim. Both situations remain drafts until reviewed.
@@ -124,11 +124,14 @@ export function practiceScenarios(
     );
   }
   for (const person of practice.staff) {
-    const tasks = [
-      ...appointmentTypes.filter((t) => clinicianCapabilities(person)[t.id]).map((t) => t.name),
-      ...(person.capabilities ?? []),
-      person.clinics,
-    ]
+    const role = practice.roleRequests?.[requestRoleId(person.role)];
+    // A saved role is the authority for all its employees. Never infer scope from old defaults.
+    // Older practices without role configuration retain their recorded individual guidance.
+    const tasks = (
+      role
+        ? effectiveRequestsForStaff(practice, person.id).map((r) => r.label)
+        : [person.clinics, ...(person.capabilities ?? [])]
+    )
       .filter(Boolean)
       .join("; ");
     if (tasks)

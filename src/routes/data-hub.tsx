@@ -1,14 +1,9 @@
+import { TeamFields } from "@/components/TeamFields";
 import { practiceSummary } from "@/lib/practice-config";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Shell, Card, Badge } from "@/components/Shell";
-import {
-  useApp,
-  ROLE_OPTIONS,
-  type StaffMember,
-  type RolePolicies,
-  type PracticeData,
-} from "@/lib/store";
+import { Shell, Card } from "@/components/Shell";
+import { useApp, type RolePolicies, type PracticeData } from "@/lib/store";
 
 export const Route = createFileRoute("/data-hub")({
   head: () => ({ meta: [{ title: "Practice information — PracticeReady" }] }),
@@ -96,7 +91,13 @@ const RULE_GROUPS: {
 
 type PracticeTextKey = keyof Omit<
   PracticeData,
-  "staff" | "rolePolicies" | "sameDayReasons" | "bookingConfig" | "prescriptionConfig"
+  | "staff"
+  | "rolePolicies"
+  | "sameDayReasons"
+  | "bookingConfig"
+  | "prescriptionConfig"
+  | "roleRequests"
+  | "safeguardingRoute"
 >;
 
 const REPEAT_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeholder: string }[] =
@@ -156,22 +157,9 @@ const LOCAL_FIELDS: { key: PracticeTextKey; label: string; hint: string; placeho
 ];
 
 function DataHub() {
-  const {
-    practiceData,
-    setPracticeField,
-    setRolePolicy,
-    addStaff,
-    updateStaff,
-    removeStaff,
-    replaceStaffName,
-  } = useApp();
+  const { practiceData, setPracticeField, setRolePolicy, replaceStaffName } = useApp();
 
   const summary = practiceSummary(practiceData);
-  const [newStaff, setNewStaff] = useState<Omit<StaffMember, "id">>({
-    name: "",
-    role: ROLE_OPTIONS[0],
-    clinics: "",
-  });
   const [replaceOld, setReplaceOld] = useState("");
   const [replaceNew, setReplaceNew] = useState("");
   const [replaceMsg, setReplaceMsg] = useState<string | null>(null);
@@ -275,104 +263,9 @@ function DataHub() {
         ))}
       </section>
 
-      {/* Staff list */}
       <section className="mt-10">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 className="font-display text-xl font-semibold">Clinicians &amp; staff</h2>
-            <p className="text-sm text-muted-foreground">
-              Name, role and appointment types they cover. Referenced by every module.
-            </p>
-          </div>
-          <Badge tone="info">{practiceData.staff.length} on file</Badge>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          {practiceData.staff.map((s) => (
-            <Card key={s.id}>
-              <div className="grid gap-3 md:grid-cols-[1.2fr_1.2fr_2fr_auto] md:items-start">
-                <input
-                  value={s.name}
-                  onChange={(e) => updateStaff(s.id, { name: e.target.value })}
-                  className="rounded-lg border border-input bg-background p-2 text-sm"
-                  placeholder="Name"
-                />
-                <select
-                  value={
-                    ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number])
-                      ? s.role
-                      : "custom"
-                  }
-                  onChange={(e) => {
-                    const next = e.target.value === "custom" ? s.role : e.target.value;
-                    updateStaff(s.id, { role: next });
-                  }}
-                  className="rounded-lg border border-input bg-background p-2 text-sm"
-                >
-                  {!ROLE_OPTIONS.includes(s.role as (typeof ROLE_OPTIONS)[number]) && (
-                    <option value="custom">{s.role || "Choose role"}</option>
-                  )}
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={s.clinics}
-                  onChange={(e) => updateStaff(s.id, { clinics: e.target.value })}
-                  className="rounded-lg border border-input bg-background p-2 text-sm"
-                  placeholder="Clinics / appointment types they cover"
-                />
-                <button
-                  onClick={() => removeStaff(s.id)}
-                  className="rounded-lg border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5"
-                >
-                  Remove
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        <Card className="mt-4">
-          <h3 className="font-display text-base font-semibold">Add a new staff member</h3>
-          <div className="mt-3 grid gap-3 md:grid-cols-[1.2fr_1.2fr_2fr_auto]">
-            <input
-              value={newStaff.name}
-              onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })}
-              placeholder="e.g. Amy Chen"
-              className="rounded-lg border border-input bg-background p-2 text-sm"
-            />
-            <select
-              value={newStaff.role || ROLE_OPTIONS[0]}
-              onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
-              className="rounded-lg border border-input bg-background p-2 text-sm"
-            >
-              {ROLE_OPTIONS.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-            <input
-              value={newStaff.clinics}
-              onChange={(e) => setNewStaff({ ...newStaff, clinics: e.target.value })}
-              placeholder="e.g. Minor illness, UTIs, wound review"
-              className="rounded-lg border border-input bg-background p-2 text-sm"
-            />
-            <button
-              disabled={!newStaff.name.trim() || !newStaff.role.trim()}
-              onClick={() => {
-                addStaff(newStaff);
-                setNewStaff({ name: "", role: ROLE_OPTIONS[0], clinics: "" });
-              }}
-              className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
-            >
-              Add
-            </button>
-          </div>
-        </Card>
+        <h2 className="mb-4 font-display text-xl font-semibold">Team and roles</h2>
+        <TeamFields />
       </section>
 
       {/* Role policies split by same-day vs routine */}

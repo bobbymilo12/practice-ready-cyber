@@ -1,18 +1,18 @@
-import { BookingFields, PrescriptionFields } from "@/components/PracticeProcessFields";
-import { bookingFor, prescriptionsFor, practiceSummary, configReview } from "@/lib/practice-config";
+import { requestRoleId } from "@/lib/role-requests";
+import { TeamFields } from "@/components/TeamFields";
+import {
+  BookingFields,
+  PrescriptionFields,
+  ContactFields,
+  Instruction,
+} from "@/components/PracticeProcessFields";
+import { bookingFor, prescriptionsFor, emptyContactRoute } from "@/lib/practice-config";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
-import { useApp, ROLE_OPTIONS, STAFF_CAPABILITY_OPTIONS, type PracticeData } from "@/lib/store";
+import { useApp, type PracticeData } from "@/lib/store";
 import { flushPractice } from "@/lib/backend";
-import {
-  appointmentTypes,
-  clinicianCapabilities,
-  initialiseCapabilities,
-  isClinicalStaff,
-  roleCapabilities,
-} from "@/lib/appointment-capabilities";
-import { setupMissing, setupSteps, teamReviewSummary } from "@/lib/practice-setup";
+import { setupMissing, setupSteps } from "@/lib/practice-setup";
 
 export const Route = createFileRoute("/practice/setup")({
   head: () => ({ meta: [{ title: "Set up your practice — PracticeReady" }] }),
@@ -24,7 +24,13 @@ export const Route = createFileRoute("/practice/setup")({
 const field = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
 type TextField = keyof Omit<
   PracticeData,
-  "staff" | "rolePolicies" | "sameDayReasons" | "bookingConfig" | "prescriptionConfig"
+  | "staff"
+  | "rolePolicies"
+  | "sameDayReasons"
+  | "bookingConfig"
+  | "prescriptionConfig"
+  | "roleRequests"
+  | "safeguardingRoute"
 >;
 function PracticeSetup() {
   const { step = 0 } = Route.useSearch();
@@ -35,13 +41,6 @@ function PracticeSetup() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const missing = setupMissing(p);
-  const review = configReview(p);
-  const reviewByStep = [undefined, undefined, review.booking, review.prescription, undefined];
-  const summary = practiceSummary({
-    ...p,
-    bookingConfig: bookingFor(p),
-    prescriptionConfig: prescriptionsFor(p),
-  });
   const go = (next: number) => {
     setError("");
     void nav({ to: "/practice/setup", search: { step: next } });
@@ -51,7 +50,7 @@ function PracticeSetup() {
       {label}
       {hint && <span className="mt-1 block font-normal text-muted-foreground">{hint}</span>}
       <textarea
-        rows={key === "practiceName" ? 1 : 3}
+        rows={key === "practiceName" || key === "hours" ? 1 : 2}
         className={field}
         value={p[key]}
         onChange={(e) => store.setPracticeField(key, e.target.value)}
@@ -70,10 +69,6 @@ function PracticeSetup() {
       if (step === 2 || step === 5) store.setBookingConfig(bookingFor(p));
       if (step === 3 || step === 5) store.setPrescriptionConfig(prescriptionsFor(p));
       if (!exit && step === 5) store.completeSetup(true);
-      p.staff.forEach((person) => {
-        if (!person.appointmentCapabilities)
-          store.updateStaff(person.id, initialiseCapabilities(person));
-      });
       await flushPractice();
       if (exit) await nav({ to: "/dashboard" });
       else if (step === 5) setDone(true);
@@ -154,130 +149,7 @@ function PracticeSetup() {
                 </details>
               </>
             )}
-            {step === 1 && (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  Add the people trainees need to know. Include their clinics or responsibilities.
-                </p>
-                {p.staff.map((person) => (
-                  <div key={person.id} className="space-y-3 rounded-xl border border-border p-4">
-                    <label className="block text-sm">
-                      Name
-                      <input
-                        className={field}
-                        value={person.name}
-                        onChange={(e) => store.updateStaff(person.id, { name: e.target.value })}
-                      />
-                    </label>
-                    <label className="block text-sm">
-                      Role
-                      <input
-                        list="team-roles"
-                        className={field}
-                        value={person.role}
-                        onChange={(e) => store.updateStaff(person.id, { role: e.target.value })}
-                      />
-                    </label>
-                    {isClinicalStaff(person) && (
-                      <details>
-                        <summary className="cursor-pointer text-sm">
-                          Edit appointment types (
-                          {
-                            appointmentTypes.filter(({ id }) => clinicianCapabilities(person)[id])
-                              .length
-                          }{" "}
-                          selected)
-                        </summary>
-                        <p className="mt-3 text-sm text-muted-foreground">
-                          We’ve pre-selected the appointment types typically associated with this
-                          role. Adjust these if this team member works differently at your practice.
-                        </p>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {appointmentTypes.map(({ id, name }) => (
-                            <label key={id} className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 accent-primary"
-                                checked={clinicianCapabilities(person)[id] === true}
-                                onChange={(e) =>
-                                  store.updateStaff(person.id, {
-                                    appointmentCapabilities: {
-                                      defaults:
-                                        person.appointmentCapabilities?.defaults ??
-                                        roleCapabilities(person.role),
-                                      overrides: {
-                                        ...person.appointmentCapabilities?.overrides,
-                                        [id]: e.target.checked,
-                                      },
-                                    },
-                                  })
-                                }
-                              />
-                              {name}
-                            </label>
-                          ))}
-                        </div>
-                      </details>
-                    )}
-                    <label className="block text-sm">
-                      Clinics or responsibilities (optional)
-                      <textarea
-                        className={field}
-                        value={person.clinics}
-                        onChange={(e) => store.updateStaff(person.id, { clinics: e.target.value })}
-                      />
-                    </label>
-                    <details>
-                      <summary className="cursor-pointer text-sm">
-                        Choose additional responsibilities (optional)
-                      </summary>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {STAFF_CAPABILITY_OPTIONS.map((task) => (
-                          <label key={task} className="flex gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={person.capabilities?.includes(task) ?? false}
-                              onChange={(e) =>
-                                store.updateStaff(person.id, {
-                                  capabilities: e.target.checked
-                                    ? [...(person.capabilities ?? []), task]
-                                    : person.capabilities?.filter((t) => t !== task),
-                                })
-                              }
-                            />
-                            {task}
-                          </label>
-                        ))}
-                      </div>
-                    </details>
-                    <button
-                      className="text-sm text-destructive"
-                      onClick={() => store.removeStaff(person.id)}
-                    >
-                      Remove {person.name || "team member"}
-                    </button>
-                  </div>
-                ))}
-                <datalist id="team-roles">
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role} value={role} />
-                  ))}
-                </datalist>
-                <button
-                  onClick={() =>
-                    store.addStaff({
-                      name: "",
-                      role: ROLE_OPTIONS[0],
-                      clinics: "",
-                      capabilities: [],
-                    })
-                  }
-                  className="rounded-xl border border-border px-4 py-2 text-sm"
-                >
-                  Add team member
-                </button>
-              </>
-            )}
+            {step === 1 && <TeamFields />}
             {step === 2 && <BookingFields />}
             {step === 3 && (
               <>
@@ -296,16 +168,24 @@ function PracticeSetup() {
             )}
             {step === 4 && (
               <>
-                {input(
-                  "localConfidentiality",
-                  "Confidentiality process",
-                  "Include identity checks and requests for another person’s information.",
-                )}
-                {input(
-                  "localSafeguarding",
-                  "Safeguarding process",
-                  "Include the named contact and how to raise a concern.",
-                )}
+                <h2 className="font-semibold">Safeguarding</h2>
+                <ContactFields
+                  label="Safeguarding lead"
+                  practice={p}
+                  value={p.safeguardingRoute ?? emptyContactRoute()}
+                  onChange={store.setSafeguardingRoute}
+                />
+                <Instruction
+                  label="Practice-specific safeguarding instructions"
+                  value={p.localSafeguarding}
+                  onChange={(v) => store.setPracticeField("localSafeguarding", v)}
+                />
+                <h2 className="font-semibold">Confidentiality</h2>
+                <Instruction
+                  label="Local confidentiality instructions"
+                  value={p.localConfidentiality}
+                  onChange={(v) => store.setPracticeField("localConfidentiality", v)}
+                />
                 <details>
                   <summary className="cursor-pointer text-sm">
                     More local policies (optional)
@@ -322,20 +202,21 @@ function PracticeSetup() {
             )}
             {step === 5 && (
               <>
-                <p className="text-sm text-muted-foreground">
-                  We’ll create starter drafts for bookings, urgent requests, prescriptions, results
-                  and reception onboarding. Review every scenario before publishing.
-                </p>
-                {(review.booking.unconfirmed.length > 0 ||
-                  review.booking.textOnly.length > 0 ||
-                  review.prescription.unconfirmed.length > 0 ||
-                  review.prescription.textOnly.length > 0) && (
-                  <p className="rounded-xl border border-border bg-muted/40 p-4 text-sm">
-                    Some settings are unconfirmed or recorded only in existing guidance. You can
-                    save your progress and retain that guidance. Resolve these review items before
-                    relying on or publishing the resulting training.
-                  </p>
-                )}
+                <div className="flex justify-between gap-4 border-b border-border pb-4">
+                  <div>
+                    <h2 className="font-semibold">Role configuration</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {Object.values(p.roleRequests ?? {}).filter((r) => r.confirmed).length}{" "}
+                      confirmed roles
+                    </p>
+                    {p.staff.some((s) => !p.roleRequests?.[requestRoleId(s.role)]?.confirmed) && (
+                      <p className="text-sm text-destructive">Some team roles still need review.</p>
+                    )}
+                  </div>
+                  <button className="text-sm font-semibold text-primary" onClick={() => go(1)}>
+                    Edit roles
+                  </button>
+                </div>
                 {setupSteps.slice(0, -1).map((label, i) => (
                   <div
                     key={label}
@@ -346,39 +227,14 @@ function PracticeSetup() {
                       <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
                         {
                           [
-                            `${p.practiceName}\n${p.hours}\n${p.outOfHoursTimes}`,
-                            p.staff.map(teamReviewSummary).join("\n\n"),
-                            `Same-day: ${summary.rolePolicies.gpsSameDay}\nRoutine: ${summary.rolePolicies.gpsRoutine}\nCriteria: ${summary.sameDayReasons.join("; ")}\nEscalation: ${summary.dutyContact}`,
-                            `${summary.prescriptionOrdering}\n${summary.repeatTurnaround}\nRun-out: ${summary.repeatEmergency}`,
-                            `Confidentiality: ${p.localConfidentiality}\nSafeguarding: ${p.localSafeguarding}`,
+                            `${p.practiceName} · ${p.hours}`,
+                            `${p.staff.length} team members · ${new Set(p.staff.map((s) => s.role)).size} roles`,
+                            `${bookingFor(p).sameDayPathway.selected.length} same-day request types selected`,
+                            `${prescriptionsFor(p).methods.length} repeat request methods · ${prescriptionsFor(p).turnaround.id ? (prescriptionsFor(p).turnaround.id === "other" ? "Custom turnaround" : prescriptionsFor(p).turnaround.id + " working hours") : "Turnaround needs review"}`,
+                            `${p.safeguardingRoute || p.localSafeguarding ? "Safeguarding details recorded" : "Safeguarding needs attention"} · ${p.localConfidentiality ? "Local confidentiality instructions recorded" : "No additional confidentiality instructions"}`,
                           ][i]
                         }
                       </p>
-                      {reviewByStep[i] && (
-                        <div className="mt-3 space-y-2 rounded-lg border border-border p-3 text-sm">
-                          <p className="font-medium">
-                            {reviewByStep[i]!.unconfirmed.length || reviewByStep[i]!.textOnly.length
-                              ? "Configuration needs review"
-                              : "Structured selections complete"}
-                          </p>
-                          {reviewByStep[i]!.unconfirmed.length > 0 && (
-                            <p>Not yet confirmed: {reviewByStep[i]!.unconfirmed.join("; ")}.</p>
-                          )}
-                          {reviewByStep[i]!.textOnly.length > 0 && (
-                            <p>
-                              Existing guidance only — awaiting structured review:{" "}
-                              {reviewByStep[i]!.textOnly.join("; ")}.
-                            </p>
-                          )}
-                          {reviewByStep[i]!.instructions.length > 0 && (
-                            <p>
-                              Local instructions to check against current selections:{" "}
-                              {reviewByStep[i]!.instructions.join("; ")}. Use Edit to resolve any
-                              conflicting wording.
-                            </p>
-                          )}
-                        </div>
-                      )}
                       {missing[i].length > 0 && (
                         <p className="mt-2 text-sm text-destructive">
                           Missing: {missing[i].join("; ")}

@@ -1,9 +1,5 @@
-import { configMissing } from "./practice-config.ts";
-import {
-  appointmentTypes,
-  clinicianCapabilities,
-  isClinicalStaff,
-} from "./appointment-capabilities.ts";
+import { configMissing, contactMissing } from "./practice-config.ts";
+import { requestRoleId, selectedRequests } from "./role-requests.ts";
 import type { PracticeData, StaffMember } from "./store";
 
 export const setupSteps = ["Practice", "Team", "Bookings", "Prescriptions", "Safety", "Review"];
@@ -26,21 +22,16 @@ export function setupMissing(p: PracticeData): string[][] {
         ),
     config.booking,
     config.prescription,
-    required([
-      ["Confidentiality process", p.localConfidentiality],
-      ["Safeguarding process", p.localSafeguarding],
-    ]),
+    p.safeguardingRoute
+      ? contactMissing(p.safeguardingRoute, p)
+        ? ["Safeguarding lead and contact method"]
+        : []
+      : required([["Safeguarding process", p.localSafeguarding]]),
     [],
   ];
 }
 
-export function teamReviewSummary(person: StaffMember): string {
-  const responsibilities = [person.clinics, ...(person.capabilities ?? [])]
-    .filter(Boolean)
-    .join(", ");
-  const identity = `${person.name} · ${person.role}${responsibilities ? `: ${responsibilities}` : ""}`;
-  if (!isClinicalStaff(person)) return identity;
-  const capabilities = clinicianCapabilities(person);
-  const selected = appointmentTypes.filter((t) => capabilities[t.id]).map((t) => t.name);
-  return `${identity}\nAppointment types (${selected.length} selected): ${selected.join(", ") || "None selected"}`;
+export function teamReviewSummary(person: StaffMember, practice?: PracticeData): string {
+  const role = practice?.roleRequests?.[requestRoleId(person.role)];
+  return `${person.name} · ${person.role} — ${role?.confirmed ? `${selectedRequests(role).length} shared requests selected` : "Role configuration needs review"}`;
 }
