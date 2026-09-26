@@ -8,6 +8,7 @@ import ts from "typescript";
 const tables = {};
 let user = null;
 let handler;
+let createUserError = null;
 const writes = [];
 function query(table) {
   const filters = [];
@@ -70,7 +71,10 @@ const mockClient = {
     }),
     admin: {
       updateUserById: async () => ({ error: null }),
-      createUser: async () => ({ data: { user: { id: "invited" } }, error: null }),
+      createUser: async () =>
+        createUserError
+          ? { data: { user: null }, error: createUserError }
+          : { data: { user: { id: "invited" } }, error: null },
       deleteUser: async () => ({ error: null }),
     },
   },
@@ -110,6 +114,7 @@ await import("data:text/javascript;base64," + Buffer.from(js).toString("base64")
 
 function reset(role = "trainee", mustReset = false) {
   writes.length = 0;
+  createUserError = null;
   user = { id: "alice" };
   tables.profiles = [
     {
@@ -226,6 +231,14 @@ test("inviting an existing manager email reports that the email is already in us
   assert.equal(r.data.error, "This email is already in use and has an account.");
   assert.equal(writes.length, 0);
 });
+test("orphaned Auth accounts are reported separately from missing profiles", async () => {
+  reset("manager");
+  createUserError = { code: "email_exists", status: 422, message: "User already registered" };
+  const r = await call({ action: "invite", name: "Orphan", email: "orphan@practice.test" });
+  assert.equal(r.status, 400);
+  assert.equal(r.data.error, "This email is already registered in Supabase Auth.");
+  assert.equal(writes.length, 0);
+});
 test("API calculates scores itself and retrying finish does not create a second result", async () => {
   reset();
   const start = await call({ action: "start", assignmentId: "a1" });
@@ -254,7 +267,7 @@ test("failed invitation email reports failure and preserves an account for resen
   try {
     const r = await call({ action: "invite", name: "Casey", email: "casey@practice.test" });
     assert.equal(r.status, 400);
-    assert.match(r.data.error, /email could not be sent/);
+    assert.match(r.data.error, /email could not be sent: delivery rejected/);
     assert.equal(tables.profiles.find((p) => p.id === "invited").invite_status, "failed");
   } finally {
     globalThis.fetch = realFetch;

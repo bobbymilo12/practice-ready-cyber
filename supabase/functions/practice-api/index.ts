@@ -267,8 +267,14 @@ Deno.serve(async (request) => {
           app_metadata: { invited_trainee: true },
           user_metadata: { name },
         });
-        if (error || !data.user)
-          fail("Could not create the invitation. This email may already have an account.");
+        if (error || !data.user) {
+          const duplicate =
+            error?.code === "email_exists" ||
+            error?.status === 422 ||
+            /already|registered|exists/i.test(error?.message ?? "");
+          if (duplicate) fail("This email is already registered in Supabase Auth.");
+          fail("Could not create the invitation. Please check the email and try again.");
+        }
         traineeId = data.user!.id;
       }
       const now = new Date().toISOString();
@@ -293,6 +299,7 @@ Deno.serve(async (request) => {
       loginUrl.searchParams.set("email", email);
       const practiceName = String(state.practiceData?.practiceName || "your GP practice");
       let sent = false;
+      let deliveryMessage = "The invitation email could not be sent.";
       try {
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -311,6 +318,11 @@ Deno.serve(async (request) => {
           signal: AbortSignal.timeout(15000),
         });
         sent = response.ok;
+        if (!sent) {
+          const provider = await response.json().catch(() => null);
+          const message = provider && typeof provider.message === "string" ? provider.message : "";
+          if (message) deliveryMessage = `The invitation email could not be sent: ${message}`;
+        }
       } catch {
         /* Keep the invited account so the manager can resend. */
       }
@@ -320,9 +332,7 @@ Deno.serve(async (request) => {
         .eq("id", traineeId);
       check(deliveryError);
       if (!sent)
-        fail(
-          "The account was created, but the email could not be sent. Please resend the invitation.",
-        );
+        fail(`${deliveryMessage} Please check the address or try again later.`);
       return reply({ ok: true });
     }
 
