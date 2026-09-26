@@ -1,3 +1,1 @@
-[functions.practice-api]
-# The function validates every JWT using auth.getUser; supports publishable keys.
-verify_jwt = false
+project_id = "aprxaiydmpbvwqorhnpn"
