@@ -3,8 +3,8 @@ import { ArrowRight, BookOpenCheck, RefreshCw, UsersRound } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/lib/store";
-import receptionTeam from "@/assets/reception-team.jpg.asset.json";
-import teamLearning from "@/assets/team-learning.jpg.asset.json";
+import receptionTeam from "@/assets/hero-receptionist.jpg";
+import teamLearning from "@/assets/hero-training.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -71,7 +71,7 @@ function Home() {
 
         <figure className="relative overflow-hidden rounded-lg bg-surface-muted">
           <img
-            src={receptionTeam.url}
+            src={receptionTeam}
             alt="A receptionist helping people at a healthcare reception desk"
             className="aspect-[4/3] h-full w-full object-cover"
           />
@@ -94,7 +94,7 @@ function Home() {
       <section className="grid items-center gap-10 py-16 md:grid-cols-2 md:gap-16 lg:py-24">
         <div className="overflow-hidden rounded-lg bg-surface-muted">
           <img
-            src={teamLearning.url}
+            src={teamLearning}
             alt="Office colleagues reviewing information together at a laptop"
             className="aspect-[16/11] h-full w-full object-cover"
           />

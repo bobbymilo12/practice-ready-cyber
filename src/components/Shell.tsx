@@ -56,7 +56,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {account && (
               <button
                 onClick={() => void signOut().catch((e) => setError(e.message))}
-                className="rounded-lg px-3 py-2 text-sm"
+                className="cursor-pointer rounded-lg border border-transparent px-3 py-2 text-sm transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"
               >
                 Log out
               </button>
