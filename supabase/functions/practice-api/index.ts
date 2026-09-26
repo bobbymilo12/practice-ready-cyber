@@ -232,12 +232,16 @@ Deno.serve(async (request) => {
       const { data: existing, error: existingError } = await admin
         .from("profiles")
         .select("*")
-        .eq("practice_id", profile.practice_id)
         .eq("email", email)
         .maybeSingle();
       check(existingError);
-      if (existing && (existing.role !== "trainee" || !existing.must_reset_password))
-        fail("This account is already active.");
+      if (
+        existing &&
+        (existing.practice_id !== profile.practice_id ||
+          existing.role !== "trainee" ||
+          !existing.must_reset_password)
+      )
+        fail("This email is already in use and has an account.");
       if (existing?.last_invite_at && Date.now() - Date.parse(existing.last_invite_at) < 60000)
         fail("Please wait one minute before resending this invitation.");
       const password = `Pr!${crypto.randomUUID()}${crypto.randomUUID().slice(0, 8)}`;

@@ -219,6 +219,13 @@ test("trainees cannot invite, overwrite practice data, remove people or access o
   assert.equal((await call({ action: "start", assignmentId: "a2", traineeId: "bob" })).status, 403);
   assert.equal(writes.length, 0);
 });
+test("inviting an existing manager email reports that the email is already in use", async () => {
+  reset("manager");
+  const r = await call({ action: "invite", name: "Replacement", email: "alice@practice.test" });
+  assert.equal(r.status, 400);
+  assert.equal(r.data.error, "This email is already in use and has an account.");
+  assert.equal(writes.length, 0);
+});
 test("API calculates scores itself and retrying finish does not create a second result", async () => {
   reset();
   const start = await call({ action: "start", assignmentId: "a1" });
