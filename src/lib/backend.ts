@@ -6,7 +6,9 @@ import type { TrainingSession } from "./training";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-export const configured = Boolean(url && key);
+const placeholderConfig = (value: string | undefined) =>
+  !value || /YOUR_PROJECT|YOUR_PUBLIC_PUBLISHABLE_KEY/i.test(value);
+export const configured = Boolean(url && key && !placeholderConfig(url) && !placeholderConfig(key));
 export const supabase =
   configured && !(import.meta.env.DEV && devRole()) ? createClient(url, key) : null;
 
