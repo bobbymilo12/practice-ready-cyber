@@ -75,18 +75,18 @@ const mockClient = {
     },
   },
 };
+const testEnv = {
+  SUPABASE_URL: process.env.SUPABASE_URL || "https://test.supabase.co",
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || "test-only",
+  APP_URL: process.env.APP_URL || "https://practice-ready.co.uk",
+  ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || "https://practice-ready.co.uk",
+  RESEND_API_KEY: process.env.RESEND_API_KEY || "test-only",
+  INVITE_FROM: process.env.INVITE_FROM || "training@practice-ready.co.uk",
+};
 globalThis.__practiceTestClient = mockClient;
 globalThis.Deno = {
   env: {
-    get: (name) =>
-      ({
-        SUPABASE_URL: "https://test.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "test-only",
-        APP_URL: "https://practice.test",
-        ALLOWED_ORIGINS: "https://practice.test",
-        RESEND_API_KEY: "test-only",
-        INVITE_FROM: "training@practice.test",
-      })[name],
+    get: (name) => testEnv[name],
   },
   serve: (fn) => {
     handler = fn;
