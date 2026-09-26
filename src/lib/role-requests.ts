@@ -1,4 +1,5 @@
 import type { PracticeData, StaffMember } from "./store";
+import { roleTemplateForName, type RoleTemplate } from "./role-templates.ts";
 
 export interface RoleRequest {
   id: string;
@@ -17,6 +18,10 @@ export interface PracticeRoleRequests {
   categories: RequestCategory[];
   selectedRequestIds: string[];
   confirmed: boolean;
+  archived?: boolean;
+  // Snapshot provenance only: later library updates never rewrite local selections.
+  template?: { id: string; version: number; suggestions: "awaiting-review" | "reviewed" };
+  suggestionsEdited?: boolean;
 }
 // Role identity deliberately preserves distinct local roles (e.g. ANP and Nurse Practitioner).
 export const requestRoleId = (role: string) =>
@@ -71,8 +76,58 @@ export function suggestedRole(role: string): PracticeRoleRequests {
     confirmed: false,
   };
 }
+/** Create a new, independent practice copy. Never use this to refresh saved configurations. */
+export function initialiseRoleFromTemplate(
+  template: RoleTemplate,
+  label = template.label,
+): PracticeRoleRequests {
+  const role = suggestedRole(label);
+  const ids = new Set(role.categories.flatMap((c) => c.requests.map((r) => r.id)));
+  if (template.suggestions.selectedRequestIds.some((id) => !ids.has(id)))
+    throw new Error(`Unknown request ID in role template ${template.id}`);
+  return {
+    ...role,
+    selectedRequestIds:
+      template.suggestions.status === "reviewed"
+        ? [...template.suggestions.selectedRequestIds]
+        : [],
+    template: {
+      id: template.id,
+      version: template.version,
+      suggestions: template.suggestions.status,
+    },
+  };
+}
+export function roleConfigurationStatus(role: PracticeRoleRequests): string {
+  if (role.confirmed) return "Configured";
+  return role.template?.suggestions === "reviewed" && !role.suggestionsEdited
+    ? "Suggested setup ready"
+    : "Needs review";
+}
+/** Match library identity without changing legacy role keys or combining local configurations. */
+export function matchesRoleTemplate(role: PracticeRoleRequests, template: RoleTemplate): boolean {
+  return role.template
+    ? role.template.id === template.id
+    : roleTemplateForName(role.label)?.id === template.id;
+}
+/** Restore saved data first. A template is applied only when a role has no stored configuration. */
+export function roleToAdd(
+  p: PracticeData,
+  name: string,
+  template = roleTemplateForName(name),
+): PracticeRoleRequests {
+  const exact = p.roleRequests?.[requestRoleId(name)];
+  const saved =
+    exact ??
+    (template && Object.values(p.roleRequests ?? {}).find((r) => matchesRoleTemplate(r, template)));
+  if (saved) return { ...saved, archived: false };
+  const legacy = template && practiceRoles(p).find((r) => matchesRoleTemplate(r, template));
+  return template
+    ? initialiseRoleFromTemplate(template, legacy?.label ?? name)
+    : suggestedRole(name);
+}
 export function selectedRequests(role: PracticeRoleRequests): RoleRequest[] {
-  if (!role.confirmed) return [];
+  if (!role.confirmed || role.archived) return [];
   return role.categories
     .flatMap((c) => c.requests)
     .filter((r) => role.selectedRequestIds.includes(r.id));
@@ -87,7 +142,7 @@ export function rolesForRequest(p: PracticeData, requestId: string): PracticeRol
 export function effectiveRequestsForStaff(p: PracticeData, staffId: string): RoleRequest[] {
   const person = p.staff.find((s) => s.id === staffId);
   const role = person && p.roleRequests?.[requestRoleId(person.role)];
-  if (!person || !role?.confirmed) return [];
+  if (!person || !role?.confirmed || role.archived) return [];
   const overrides = person.requestOverrides?.[role.roleId] ?? {};
   return role.categories
     .flatMap((c) => c.requests)
@@ -145,7 +200,7 @@ function matchesRequest(r: RoleRequest, request: string) {
 export function staffForRequest(p: PracticeData, request: string) {
   return p.staff.flatMap((person) => {
     const role = p.roleRequests?.[requestRoleId(person.role)];
-    if (!role?.confirmed) return [];
+    if (!role?.confirmed || role.archived) return [];
     const matching = role.categories
       .flatMap((c) => c.requests)
       .filter((r) => matchesRequest(r, request));
@@ -181,4 +236,36 @@ export function routingForRequest(p: PracticeData, request: string) {
         .filter((s) => requestRoleId(s.employee.role) === role.roleId && s.canHandle)
         .map((s) => s.employee),
     }));
+}
+
+// Include older employee roles without silently promoting their historical data to role defaults.
+export function practiceRoles(p: PracticeData): PracticeRoleRequests[] {
+  const roles = new Map(
+    Object.values(p.roleRequests ?? {})
+      .filter((r) => !r.archived)
+      .map((r) => [r.roleId, r]),
+  );
+  for (const person of p.staff) {
+    if (person.role.trim() && !roles.has(requestRoleId(person.role))) {
+      const old = p.roleRequests?.[requestRoleId(person.role)];
+      roles.set(
+        requestRoleId(person.role),
+        old ? { ...old, archived: false } : suggestedRole(person.role),
+      );
+    }
+  }
+  return [...roles.values()];
+}
+
+// Shared by inline role saving and the Roles step's final confirmation.
+export function roleRequestErrors(config: PracticeRoleRequests): string[] {
+  if (config.categories.some((c) => !c.label.trim() || c.requests.some((r) => !r.label.trim())))
+    return ["Name or remove empty custom entries before saving."];
+  const labels = config.categories.flatMap((c) =>
+    c.requests.map((r) => r.label.trim().toLowerCase()),
+  );
+  const categories = config.categories.map((c) => c.label.trim().toLowerCase());
+  return new Set(labels).size !== labels.length || new Set(categories).size !== categories.length
+    ? ["Use each request and category once. Rename or remove duplicate custom entries."]
+    : [];
 }

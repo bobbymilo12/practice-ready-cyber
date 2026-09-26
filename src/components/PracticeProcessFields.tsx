@@ -20,7 +20,7 @@ import {
   type ContactRoute,
 } from "@/lib/practice-config";
 const field = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
-function Text({
+export function Text({
   label,
   value,
   onChange,
@@ -114,7 +114,7 @@ function Multi({
     </fieldset>
   );
 }
-function SelectChoice({
+export function SelectChoice({
   label,
   options,
   value,
@@ -408,7 +408,7 @@ export function BookingFields() {
         onChange={(routineInstruction) => set({ ...b, routineInstruction })}
       />
       <Link className="inline-block text-sm text-primary" to="/practice/setup" search={{ step: 1 }}>
-        Review what each role handles in Team →
+        Review what each role handles in Roles →
       </Link>
     </div>
   );
@@ -484,7 +484,7 @@ export function PrescriptionFields() {
         <p className="whitespace-pre-line text-sm text-muted-foreground">
           {routeText(bookingFor(p).escalation, p) ||
             "Choose the appointment escalation contact and method in Bookings."}
-          <Link to="/practice/setup" search={{ step: 2 }} className="mt-2 block text-primary">
+          <Link to="/practice/setup" search={{ step: 3 }} className="mt-2 block text-primary">
             Review appointment escalation →
           </Link>
         </p>

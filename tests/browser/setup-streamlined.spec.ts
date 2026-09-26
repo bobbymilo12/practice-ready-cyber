@@ -1,3 +1,4 @@
+import { addPracticeRole } from "./setup-helpers";
 import { test, expect } from "@playwright/test";
 for (const mobile of [false, true]) {
   test(`streamlined setup preserves local data and shares role configuration ${mobile ? "mobile" : "desktop"}`, async ({
@@ -7,10 +8,12 @@ for (const mobile of [false, true]) {
     await page.goto("/auth");
     await page.getByRole("button", { name: "Continue as Manager", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Manager dashboard" })).toBeVisible();
-    await page.goto("/practice/setup?step=1");
+    await page.goto("/practice/setup?step=2");
+    await addPracticeRole(page, "Doctor");
+    await addPracticeRole(page, "Nurse Practitioner");
     for (const name of ["Catherine Smith", "Sarah Smith", "Emily Smith"]) {
       await page.getByLabel("Name", { exact: true }).fill(name);
-      await page.getByLabel("Role", { exact: true }).fill("Nurse Practitioner");
+      await page.getByLabel("Role", { exact: true }).selectOption("Nurse Practitioner");
       await page.getByRole("button", { name: "Add employee", exact: true }).click();
     }
     await expect(page.getByRole("article").getByRole("checkbox")).toHaveCount(0);
@@ -23,7 +26,7 @@ for (const mobile of [false, true]) {
       .click();
     const role = page
       .locator("details")
-      .filter({ has: page.locator("summary").filter({ hasText: /^Nurse Practitioner ·/ }) })
+      .filter({ has: page.locator("summary").filter({ hasText: /^Nurse Practitioner$/ }) })
       .last();
     await expect(
       page.getByRole("heading", { name: "What this role handles", exact: true }),
@@ -54,27 +57,33 @@ for (const mobile of [false, true]) {
     await custom.getByRole("button", { name: "Remove category", exact: true }).click();
     await role.getByRole("button", { name: "Save role", exact: true }).click();
     await page.getByRole("button", { name: "Save and exit", exact: true }).click();
-    await page.goto("/practice/setup?step=1");
-    await expect(
-      page.getByText("Nurse Practitioner · 2 selected · Confirmed", { exact: true }),
-    ).toHaveCount(1);
+    await page.goto("/practice/setup?step=2");
+    await expect(page.getByRole("article", { name: "Employee Catherine Smith" })).toBeVisible();
     await page
       .getByRole("article", { name: "Employee Emily Smith" })
       .getByRole("button", { name: "View / edit Nurse Practitioner role", exact: true })
       .click();
     await role.getByText("Minor illness & same-day care · 2 selected", { exact: true }).click();
     await expect(role.getByLabel("Chest infections", { exact: true })).toBeChecked();
-    await expect(role.getByLabel("Select Local review clinic updated", { exact: true })).toBeChecked();
+    await expect(
+      role.getByLabel("Select Local review clinic updated", { exact: true }),
+    ).toBeChecked();
     await expect(
       page.getByRole("heading", { name: "What this role handles", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Save and continue", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^(Save and continue|Continue to Team)$/, exact: true })
+      .click();
     await expect(page).toHaveURL(/step=2/);
-    await page.getByRole("button", { name: "Back", exact: true }).click();
-    await expect(page).toHaveURL(/step=1/);
-    await page.getByRole("button", { name: "3. Bookings", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^(Save and continue|Continue to Team)$/, exact: true })
+      .click();
+    await expect(page).toHaveURL(/step=3/);
+    await page.getByRole("button", { name: /^(Back|Back to Practice)$/, exact: true }).click();
+    await expect(page).toHaveURL(/step=2/);
+    await page.getByRole("button", { name: "4. Bookings", exact: true }).click();
     await page.getByLabel("At reception", { exact: true }).check();
-    await page.getByRole("button", { name: "4. Prescriptions", exact: true }).click();
+    await page.getByRole("button", { name: "5. Prescriptions", exact: true }).click();
     await page.getByLabel("Telephone", { exact: true }).check();
     await page.getByLabel("72 working hours", { exact: true }).check();
     await expect(
@@ -84,27 +93,26 @@ for (const mobile of [false, true]) {
     await page
       .getByLabel("Ordering instructions (including existing guidance)", { exact: true })
       .fill("Our local ordering note");
-    await page.getByRole("button", { name: "5. Safety", exact: true }).click();
+    await page.getByRole("button", { name: "6. Safety", exact: true }).click();
+    await page.getByText("Choose safeguarding leads · 0 selected", { exact: true }).click();
+    await page.getByLabel("Catherine Smith — Nurse Practitioner", { exact: true }).check();
     await page
-      .getByLabel("Safeguarding lead", { exact: true })
-      .selectOption({ label: "Nurse Practitioner" });
-    await page
-      .getByLabel("How should reception contact them?", { exact: true })
+      .getByLabel("How should staff raise a concern?", { exact: true })
       .selectOption("person");
     await page.locator("summary").filter({ hasText: "Local confidentiality instructions" }).click();
     await page
       .getByLabel("Local confidentiality instructions", { exact: true })
       .fill("Local instruction retained");
-    await page.getByRole("button", { name: "Save and continue", exact: true }).click();
-    await expect(page).toHaveURL(/step=5/);
-    await expect(
-      page.getByRole("heading", { name: "Role configuration", exact: true }),
-    ).toBeVisible();
+    await page
+      .getByRole("button", { name: /^(Save and continue|Continue to Team)$/, exact: true })
+      .click();
+    await expect(page).toHaveURL(/step=6/);
+    await expect(page.getByRole("heading", { name: "Roles", exact: true })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBeTruthy();
     await page.reload();
-    await page.getByRole("button", { name: "4. Prescriptions", exact: true }).click();
+    await page.getByRole("button", { name: "5. Prescriptions", exact: true }).click();
     await expect(page.getByLabel("72 working hours", { exact: true })).toBeChecked();
     await page.locator("summary").filter({ hasText: "Ordering instructions" }).click();
     await expect(

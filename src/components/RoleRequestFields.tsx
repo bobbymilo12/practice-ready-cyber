@@ -1,9 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
-import { requestRoleId, suggestedRole, type PracticeRoleRequests } from "@/lib/role-requests";
+import {
+  requestRoleId,
+  suggestedRole,
+  roleRequestErrors,
+  type PracticeRoleRequests,
+} from "@/lib/role-requests";
 import { flushPractice } from "@/lib/backend";
 const field = "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
-function RoleEditor({ role, open, onOpen }: { role: string; open: boolean; onOpen: () => void }) {
+export function RoleRequestFields({
+  role,
+  open,
+  onOpen,
+}: {
+  role: string;
+  open: boolean;
+  onOpen: () => void;
+}) {
   const summary = useRef<HTMLElement>(null);
   useEffect(() => {
     if (open) summary.current?.focus();
@@ -14,11 +27,11 @@ function RoleEditor({ role, open, onOpen }: { role: string; open: boolean; onOpe
   const config = saved ?? suggestedRole(role);
   const [message, setMessage] = useState("");
   const update = (patch: Partial<PracticeRoleRequests>) => {
-    set({ ...config, ...patch, confirmed: false });
+    set({ ...config, ...patch, confirmed: false, suggestionsEdited: true });
     setMessage("");
   };
   return (
-    <details open={open} className="rounded-xl border border-border p-4">
+    <details open={open} className="min-w-0">
       <summary
         ref={summary}
         onClick={(e) => {
@@ -27,8 +40,7 @@ function RoleEditor({ role, open, onOpen }: { role: string; open: boolean; onOpe
         }}
         className="cursor-pointer font-medium"
       >
-        {role} · {config.selectedRequestIds.length} selected ·{" "}
-        {config.confirmed ? "Confirmed" : "Needs review"}
+        {role}
       </summary>
       <fieldset disabled={saving} className="mt-4 min-w-0 space-y-4">
         <h3 className="font-semibold">What this role handles</h3>
@@ -37,8 +49,10 @@ function RoleEditor({ role, open, onOpen }: { role: string; open: boolean; onOpe
           at your practice.
         </p>
         <p className="text-sm text-muted-foreground">
-          Suggestions are unselected starting templates, not NHS-approved scope-of-practice rules.
-          Select only requests your practice has agreed this role handles.
+          {config.template?.suggestions === "reviewed"
+            ? "Suggested starting point: we've pre-selected appointment and request types for this role. Review these so they reflect how your practice works."
+            : "Choose the requests your practice has agreed this role handles."}{" "}
+          Your practice confirms its local configuration.
         </p>
         {config.categories.map((category) => (
           <details key={category.id} className="rounded-xl border border-border p-3">
@@ -180,33 +194,21 @@ function RoleEditor({ role, open, onOpen }: { role: string; open: boolean; onOpe
         <button
           className="rounded-xl bg-primary px-4 py-2 text-sm text-primary-foreground"
           onClick={async () => {
-            if (
-              config.categories.some(
-                (c) => !c.label.trim() || c.requests.some((r) => !r.label.trim()),
-              )
-            ) {
-              setMessage("Name or remove empty custom entries before saving.");
-              return;
-            }
-            const labels = config.categories.flatMap((c) =>
-              c.requests.map((r) => r.label.trim().toLowerCase()),
-            );
-            const categories = config.categories.map((c) => c.label.trim().toLowerCase());
-            if (
-              new Set(labels).size !== labels.length ||
-              new Set(categories).size !== categories.length
-            ) {
-              setMessage(
-                "Use each request and category once. Rename or remove duplicate custom entries.",
-              );
+            const errors = roleRequestErrors(config);
+            if (errors.length) {
+              setMessage(errors.join(" "));
               return;
             }
             setSaving(true);
-            set({ ...config, confirmed: true });
+            const confirmation = { ...config, confirmed: true };
+            set(confirmation);
             try {
               await flushPractice();
               setMessage("Role saved");
             } catch {
+              // Restore the review state only if no later edit has replaced this save.
+              if (useApp.getState().practiceData.roleRequests?.[config.roleId] === confirmation)
+                set(config);
               setMessage("Could not save. Please retry.");
             } finally {
               setSaving(false);
@@ -222,39 +224,5 @@ function RoleEditor({ role, open, onOpen }: { role: string; open: boolean; onOpe
         )}
       </fieldset>
     </details>
-  );
-}
-export function RoleRequestFields({
-  activeRole,
-  onRoleChange,
-}: {
-  activeRole: string | null;
-  onRoleChange: (role: string | null) => void;
-}) {
-  const p = useApp((s) => s.practiceData);
-  const roles = [
-    ...new Map(
-      [...p.staff.map((s) => s.role), ...Object.values(p.roleRequests ?? {}).map((r) => r.label)]
-        .filter((r) => r.trim())
-        .map((r) => [requestRoleId(r), r]),
-    ).values(),
-  ];
-  return (
-    <section className="space-y-3">
-      <h2 className="font-semibold">Role configuration</h2>
-      <p className="text-sm text-muted-foreground">
-        Configure each role once for everyone with that role.
-      </p>
-      {roles.map((role) => (
-        <RoleEditor
-          key={requestRoleId(role)}
-          role={role}
-          open={activeRole === requestRoleId(role)}
-          onOpen={() =>
-            onRoleChange(activeRole === requestRoleId(role) ? null : requestRoleId(role))
-          }
-        />
-      ))}
-    </section>
   );
 }

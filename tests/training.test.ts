@@ -508,3 +508,137 @@ test("employee exceptions are sparse, inherit live defaults and support reset, c
     undefined,
   );
 });
+
+import {
+  safeguardingFor,
+  safeguardingNames,
+  safeguardingMissing,
+} from "../src/lib/practice-config.ts";
+import { setupSteps, setupMissing } from "../src/lib/practice-setup.ts";
+import { practiceRoles } from "../src/lib/role-requests.ts";
+test("seven steps retain legacy roles, exceptions and safeguarding contacts without guessing names", () => {
+  const p = blankPractice();
+  assert.deepEqual(setupSteps, [
+    "Practice",
+    "Roles",
+    "Team",
+    "Bookings",
+    "Prescriptions",
+    "Safety",
+    "Review",
+  ]);
+  p.safeguardingRoute = {
+    contact: { kind: "role", role: "Duty GP" },
+    method: { id: "phone", other: "123" },
+    instruction: "Preserve this instruction",
+  };
+  const old = JSON.stringify(p);
+  assert.deepEqual(safeguardingFor(p).leadIds, []);
+  assert.ok(safeguardingMissing(p).some((m) => m.includes("named")));
+  assert.equal(setupMissing(p).length, 7);
+  assert.ok(practiceRoles(p).some((r) => r.roleId === requestRoleId(p.staff[0].role)));
+  assert.equal(JSON.stringify(p), old);
+  p.safeguardingRoute.contact = { kind: "staff", staffId: p.staff[0].id };
+  assert.deepEqual(safeguardingFor(p).leadIds, [p.staff[0].id]);
+  p.safeguardingRoute = { ...safeguardingFor(p), leadIds: [p.staff[0].id] };
+  p.staff[0].name = "Sarah Renamed";
+  p.staff[0].role = "Practice Manager";
+  assert.deepEqual(safeguardingNames(p), ["Sarah Renamed — Practice Manager"]);
+  assert.ok(practiceSummary(p).localSafeguarding.includes("Sarah Renamed"));
+  p.staff = [];
+  assert.ok(safeguardingMissing(p).some((m) => m.includes("no longer available")));
+  assert.ok(safeguardingNames(p)[0].includes("Needs review"));
+  assert.equal(p.safeguardingRoute.instruction, "Preserve this instruction");
+});
+test("removing an unused practice role archives its categories and selections for restoration", () => {
+  const p = blankPractice();
+  const role = suggestedRole("Custom local role");
+  role.confirmed = true;
+  role.selectedRequestIds = ["blood-tests"];
+  p.roleRequests = { [role.roleId]: role };
+  const before = JSON.stringify(role.categories);
+  role.archived = true;
+  assert.ok(!practiceRoles(p).some((r) => r.roleId === role.roleId));
+  assert.deepEqual(rolesForRequest(p, "blood-tests"), []);
+  role.archived = false;
+  assert.ok(practiceRoles(p).some((r) => r.roleId === role.roleId));
+  assert.equal(JSON.stringify(role.categories), before);
+  assert.deepEqual(role.selectedRequestIds, ["blood-tests"]);
+});
+
+import { roleTemplates, roleTemplateForName } from "../src/lib/role-templates.ts";
+import {
+  initialiseRoleFromTemplate,
+  roleConfigurationStatus,
+  roleToAdd,
+  matchesRoleTemplate,
+  selectedRequests,
+} from "../src/lib/role-requests.ts";
+test("common role library has stable distinct identities and never promotes placeholder clinical scope", () => {
+  assert.equal(new Set(roleTemplates.map((t) => t.id)).size, roleTemplates.length);
+  assert.notEqual(roleTemplateForName("ANP")?.id, roleTemplateForName("Nurse Practitioner")?.id);
+  assert.equal(roleTemplateForName("GP")?.id, "gp");
+  for (const template of roleTemplates) {
+    const role = initialiseRoleFromTemplate(template);
+    assert.equal(role.template?.id, template.id);
+    assert.equal(role.confirmed, false);
+    assert.deepEqual(selectedRequests(role), []);
+    if (template.suggestions.status === "awaiting-review") {
+      assert.deepEqual(role.selectedRequestIds, []);
+      assert.equal(roleConfigurationStatus(role), "Needs review");
+    }
+  }
+});
+test("reviewed templates create independent practice copies; updates and restores never overwrite local choices", () => {
+  // Synthetic test fixture: this is not a released clinical selection dataset.
+  const template = structuredClone(roleTemplates[0]);
+  template.suggestions = { status: "reviewed", selectedRequestIds: ["blood-tests"] };
+  const role = initialiseRoleFromTemplate(template);
+  assert.deepEqual(role.selectedRequestIds, ["blood-tests"]);
+  assert.equal(roleConfigurationStatus(role), "Suggested setup ready");
+  assert.deepEqual(selectedRequests(role), []); // Must still be confirmed locally.
+  const other = initialiseRoleFromTemplate(template);
+  role.categories[0].requests[0].label = "Local wording";
+  role.selectedRequestIds.push("ecg");
+  assert.deepEqual(other.selectedRequestIds, ["blood-tests"]);
+  assert.notEqual(other.categories[0].requests[0].label, "Local wording");
+  const p = blankPractice();
+  role.confirmed = true;
+  role.archived = true;
+  p.roleRequests = { [role.roleId]: role };
+  template.version = 2;
+  template.label = "Updated display name";
+  template.suggestions.selectedRequestIds = [];
+  const restored = roleToAdd(p, "GP", template);
+  assert.deepEqual(restored, { ...role, archived: false });
+  assert.equal(restored.template?.version, 1);
+  assert.equal(roleConfigurationStatus(restored), "Configured");
+  assert.ok(matchesRoleTemplate(restored, template));
+  assert.equal(
+    roleConfigurationStatus({ ...restored, confirmed: false, suggestionsEdited: true }),
+    "Needs review",
+  );
+  template.suggestions.selectedRequestIds = ["invalid-request-id"];
+  assert.throws(() => initialiseRoleFromTemplate(template), /Unknown request ID/);
+});
+test("adding library roles preserves older custom data, aliases and role-scoped employee overrides", () => {
+  const p = blankPractice();
+  const old = suggestedRole("GP");
+  old.confirmed = true;
+  old.categories.push({
+    id: "local-category",
+    label: "Local",
+    custom: true,
+    requests: [{ id: "local-request", label: "Local request", custom: true }],
+  });
+  old.selectedRequestIds = ["local-request"];
+  p.roleRequests = { [old.roleId]: old };
+  p.staff[0].role = "GP";
+  p.staff[0].requestOverrides = { [old.roleId]: { "local-request": false } };
+  const before = JSON.stringify(p);
+  assert.deepEqual(roleToAdd(p, "Doctor"), { ...old, archived: false });
+  assert.deepEqual(requestsForStaff(p, p.staff[0].id), []);
+  assert.equal(JSON.stringify(p), before);
+  const custom = roleToAdd(p, "Our local role");
+  assert.equal(custom.template, undefined);
+});

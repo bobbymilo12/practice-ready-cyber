@@ -1,3 +1,4 @@
+import { addPracticeRole } from "./setup-helpers";
 import { test, expect, type Page } from "@playwright/test";
 
 for (const mobile of [false, true]) {
@@ -9,10 +10,11 @@ for (const mobile of [false, true]) {
     await page.goto("/auth");
     await page.getByRole("button", { name: "Continue as Manager", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Manager dashboard" })).toBeVisible();
-    await page.goto("/practice/setup?step=1");
+    await page.goto("/practice/setup?step=2");
+    await addPracticeRole(page, "Nurse Practitioner");
     for (const name of ["Catherine", "Sarah"]) {
       await page.getByLabel("Name", { exact: true }).fill(name);
-      await page.getByLabel("Role", { exact: true }).fill("Nurse Practitioner");
+      await page.getByLabel("Role", { exact: true }).selectOption("Nurse Practitioner");
       await page.getByRole("button", { name: "Add employee", exact: true }).click();
     }
     const employee = (name: string) =>
@@ -20,7 +22,7 @@ for (const mobile of [false, true]) {
     await expect(employee("Catherine").getByRole("checkbox")).toHaveCount(0);
     const role = page
       .locator("details")
-      .filter({ has: page.locator("summary").filter({ hasText: /^Nurse Practitioner ·/ }) })
+      .filter({ has: page.locator("summary").filter({ hasText: /^Nurse Practitioner$/ }) })
       .last();
     await employee("Catherine")
       .getByRole("button", { name: "View / edit Nurse Practitioner role", exact: true })
@@ -37,12 +39,14 @@ for (const mobile of [false, true]) {
     await longTerm.getByLabel("Custom request name").fill("Specialist diabetes clinic");
     await role.getByRole("button", { name: "Save role", exact: true }).click();
     await expect(role.getByRole("status")).toHaveText("Role saved");
+    await page.getByRole("button", { name: "3. Team", exact: true }).click();
     async function customise(name: string) {
       await employee(name)
         .getByRole("button", { name: `Customise for ${name}`, exact: true })
         .click();
       return page.getByRole("region", { name: `Customise ${name}`, exact: true });
     }
+    await addPracticeRole(page, "Nurse Practitioner");
     for (const name of ["Catherine", "Sarah"]) {
       const editor = await customise(name);
       await expect(editor.getByLabel("Breast examination", { exact: true })).not.toBeVisible();
@@ -75,6 +79,8 @@ for (const mobile of [false, true]) {
     await role.getByLabel("UTIs", { exact: true }).check();
     await role.getByRole("button", { name: "Save role", exact: true }).click();
     await expect(role.getByRole("status")).toHaveText("Role saved");
+    await page.getByRole("button", { name: "3. Team", exact: true }).click();
+    await addPracticeRole(page, "Nurse Practitioner");
     for (const name of ["Catherine", "Sarah"]) {
       editor = await customise(name);
       await editor
@@ -116,8 +122,10 @@ for (const mobile of [false, true]) {
     await expect(
       editor.getByLabel("Specialist diabetes clinic", { exact: true }),
     ).not.toBeChecked();
-    await page.getByRole("button", { name: "Save and continue", exact: true }).click();
-    await expect(page).toHaveURL(/step=2/);
+    await page
+      .getByRole("button", { name: /^(Save and continue|Continue to Team)$/, exact: true })
+      .click();
+    await expect(page).toHaveURL(/step=3/);
   });
 }
 async function readOverrides(page: Page) {

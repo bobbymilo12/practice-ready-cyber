@@ -121,8 +121,8 @@ Deployment still needs a Supabase CLI login, the final app URL, and a verified R
 Once the service setup above is complete:
 
 1. Create and confirm a manager account. Log in to open guided practice setup.
-2. Add practice hours, out-of-hours instructions and your team’s responsibilities.
-3. Record the agreed booking, escalation, prescription, confidentiality and safeguarding procedures. Optional details can be added now or later in **Practice information**.
+2. Follow **Practice → Roles → Team → Bookings → Prescriptions → Safety → Review**. Configure each practice role once, then add named employees using those roles. Use **Customise for [employee]** only for individual exceptions.
+3. Record local booking and prescription processes. In Safety, select one or more named team members as safeguarding leads and confirm how staff should raise a concern. Optional instructions stay available.
 4. Check the review screen and choose **Create starter drafts**. Use **Save and exit** if you need to collect missing information.
 5. Review each module, including follow-up scenarios, then approve and publish.
 6. Invite trainees and assign the published modules.
@@ -141,25 +141,22 @@ Run `npm run dev` and open the local server at `http://localhost:5173/auth` (or 
 
 The removable implementation is in `src/lib/dev-mode.ts` and the dynamically loaded `src/lib/dev-backend.ts`. Integration points are marked by `devRole`/`devAuthAvailable` in the backend, account gate, login and invitation pages. The Supabase API, database permissions and real account types are unchanged. Remove those hooks, the two files and its tests (`tests/browser/dev-auth.spec.ts`, `tests/dev-mode.test.mjs` and the corresponding npm test command) when the bypass is no longer needed.
 
-### Appointment capabilities
+### Roles, employee exceptions and safeguarding compatibility
 
-Practice Setup includes a collapsed “Edit appointment types (X selected)” section
-under each clinical team member’s Role field. Clinical status is determined only
-by the role mappings; legacy manual clinical-status flags are ignored. Non-clinical
-roles do not show the section. The catalogue and role mappings in
-`src/lib/appointment-capabilities.ts` are placeholders pending approved guidance.
+Practice roles use the existing `practiceData.roleRequests` catalogue, with stable category/request IDs and locally confirmed selections. Team members inherit their assigned role; `requestOverrides[roleId][requestId]` stores only employee exceptions. Changing an employee’s role does not apply their previous role’s exceptions to the new role. No automatic clinical scope is inferred.
 
-Each staff record stores `appointmentCapabilities.defaults` (a snapshot) and
-`appointmentCapabilities.overrides` (explicit true/false values keyed by stable
-appointment IDs). These are saved through the existing practice-state API into
-`practices.state`; no SQL migration is required. Older records fall back to role
-defaults and receive a snapshot when setup is saved. Changing a role refreshes
-its defaults while retaining individual overrides.
-Existing free-text responsibilities are separate and are not inferred as permissions.
+Removing an unused role archives it rather than deleting its configuration. Adding the same role again restores its categories, custom requests and selections. Roles still assigned to employees cannot be removed until those employees are reassigned. Older roles referenced only by employees appear in Roles as needing review; historical individual information is retained.
 
-`roleCapabilities` accepts organisation and practice role-default layers, in that
-order, over the PracticeReady defaults. A future organisation settings feature
-can supply those layers when creating/resetting a snapshot. Reviewed snapshots
-are deliberately not changed by later default edits. `canHandleAppointment`
-provides the per-clinician query for future consumers; training integration is
-not part of this feature.
+Safeguarding uses `safeguardingRoute.leadIds` to reference named team members, alongside the existing method and instructions. Existing single-person staff-ID contacts are safely projected into this list. Generic role/free-text contacts and older instructions remain preserved, but require the manager to select named leads. No names are guessed. Renames and role changes resolve through Team records; deleting a lead flags Safety and Review until the missing selection is removed and valid leads remain.
+
+These fields persist through the existing practice-state API; no database migration or authentication changes are required. Browser tests use mocked services. Before using the updated setup with staff, review legacy role/Safety warnings and verify saving/reloading against your live Supabase project.
+
+### Common role library and starting templates
+
+Roles uses one page: select the roles at your practice, then expand each selected role to edit its requests. **Add another role** adds a local role to the same list. **Continue to Team** saves and confirms the selected configurations together; individual **Save role** buttons remain optional. Unticking an unused role retains its saved configuration for restoration. Roles assigned to team members require reassignment before removal. NP and ANP remain distinct, and existing role identities and employee exceptions are retained.
+
+`src/lib/role-templates.ts` is the versioned template library. Each entry has a stable template ID, explicit name aliases, a suggestion review status and a `selectedRequestIds` dataset using the existing request catalogue. **The current datasets await content review and contain no preselected clinical requests.** The older appointment defaults explicitly describe themselves as placeholders, so they have not been promoted to reviewed suggestions or expanded into specific clinical capabilities.
+
+To supply a reviewed starting point, populate its request IDs from `requestCategories`, mark the suggestion dataset `reviewed`, and increment the template version when its content changes. Newly added roles then have those requests preselected in their inline configuration. Managers can edit them or leave them selected before continuing to Team. Unknown request IDs fail validation. This content review is separate from the manager's required confirmation of their own practice configuration.
+
+Templates are copied only when creating a new practice configuration. The copy records template ID/version/review status; it does not read changing template selections afterwards. Reopening, re-adding or restoring an archived role preserves its saved categories, selections and custom entries. No database migration is needed.

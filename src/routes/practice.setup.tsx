@@ -1,14 +1,16 @@
-import { requestRoleId } from "@/lib/role-requests";
+import { RolesStep } from "@/components/RolesStep";
+import { SafeguardingFields } from "@/components/SafeguardingFields";
+import { practiceRoles, requestRoleId, roleRequestErrors } from "@/lib/role-requests";
 import { TeamFields } from "@/components/TeamFields";
+import { BookingFields, PrescriptionFields, Instruction } from "@/components/PracticeProcessFields";
 import {
-  BookingFields,
-  PrescriptionFields,
-  ContactFields,
-  Instruction,
-} from "@/components/PracticeProcessFields";
-import { bookingFor, prescriptionsFor, emptyContactRoute } from "@/lib/practice-config";
+  bookingFor,
+  prescriptionsFor,
+  safeguardingFor,
+  safeguardingNames,
+} from "@/lib/practice-config";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { useApp, type PracticeData } from "@/lib/store";
 import { flushPractice } from "@/lib/backend";
@@ -16,7 +18,8 @@ import { setupMissing, setupSteps } from "@/lib/practice-setup";
 
 export const Route = createFileRoute("/practice/setup")({
   head: () => ({ meta: [{ title: "Set up your practice — PracticeReady" }] }),
-  validateSearch: (s: Record<string, unknown>): { step?: number } => ({
+  validateSearch: (s: Record<string, unknown>): { step?: number; role?: string } => ({
+    role: typeof s.role === "string" ? s.role : undefined,
     step: Math.min(setupSteps.length - 1, Math.max(0, Math.floor(Number(s.step) || 0))),
   }),
   component: PracticeSetup,
@@ -33,13 +36,17 @@ type TextField = keyof Omit<
   | "safeguardingRoute"
 >;
 function PracticeSetup() {
-  const { step = 0 } = Route.useSearch();
+  const { step = 0, role } = Route.useSearch();
   const nav = useNavigate();
   const p = useApp((s) => s.practiceData);
   const store = useApp();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  useEffect(() => {
+    // Role confirmation/edits invalidate an earlier Roles validation message.
+    if (step === 1) setError("");
+  }, [p.roleRequests, step]);
   const missing = setupMissing(p);
   const go = (next: number) => {
     setError("");
@@ -58,7 +65,11 @@ function PracticeSetup() {
     </label>
   );
   async function save(exit = false) {
-    const gaps = step === 5 ? missing.flat() : missing[step];
+    const roles = practiceRoles(p);
+    const roleErrors = roles.length
+      ? roles.flatMap((r) => roleRequestErrors(r).map((error) => `${r.label}: ${error}`))
+      : ["Select at least one role"];
+    const gaps = step === 1 ? roleErrors : step === 6 ? missing.flat() : missing[step];
     if (!exit && gaps.length) {
       setError(`Complete these details: ${gaps.join("; ")}.`);
       return;
@@ -66,12 +77,15 @@ function PracticeSetup() {
     setBusy(true);
     setError("");
     try {
-      if (step === 2 || step === 5) store.setBookingConfig(bookingFor(p));
-      if (step === 3 || step === 5) store.setPrescriptionConfig(prescriptionsFor(p));
-      if (!exit && step === 5) store.completeSetup(true);
+      if (step === 1 && !exit)
+        roles.forEach((r) => store.setRoleRequests({ ...r, confirmed: true, archived: false }));
+      if (step === 3 || step === 6) store.setBookingConfig(bookingFor(p));
+      if (step === 4 || step === 6) store.setPrescriptionConfig(prescriptionsFor(p));
+      if (step === 5 || step === 6) store.setSafeguardingRoute(safeguardingFor(p));
+      if (!exit && step === 6) store.completeSetup(true);
       await flushPractice();
       if (exit) await nav({ to: "/dashboard" });
-      else if (step === 5) setDone(true);
+      else if (step === 6) setDone(true);
       else go(step + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save. Please try again.");
@@ -107,7 +121,8 @@ function PracticeSetup() {
           {
             [
               "Start with your practice",
-              "Who does what?",
+              "Roles at your practice",
+              "Who works at your practice?",
               "How are appointments handled?",
               "How do prescriptions work?",
               "How does your team handle sensitive requests?",
@@ -115,10 +130,12 @@ function PracticeSetup() {
             ][step]
           }
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Use your agreed local procedures. These details will be used to draft training for your
-          review.
-        </p>
+        {step !== 1 && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Use your agreed local procedures. These details will be used to draft training for your
+            review.
+          </p>
+        )}
         <nav aria-label="Setup steps" className="my-6 flex flex-wrap gap-2">
           {setupSteps.map((label, i) => (
             <button
@@ -149,9 +166,10 @@ function PracticeSetup() {
                 </details>
               </>
             )}
-            {step === 1 && <TeamFields />}
-            {step === 2 && <BookingFields />}
-            {step === 3 && (
+            {step === 1 && <RolesStep initialRole={role} />}
+            {step === 2 && <TeamFields />}
+            {step === 3 && <BookingFields />}
+            {step === 4 && (
               <>
                 <PrescriptionFields />
                 <details>
@@ -166,20 +184,9 @@ function PracticeSetup() {
                 </details>
               </>
             )}
-            {step === 4 && (
+            {step === 5 && (
               <>
-                <h2 className="font-semibold">Safeguarding</h2>
-                <ContactFields
-                  label="Safeguarding lead"
-                  practice={p}
-                  value={p.safeguardingRoute ?? emptyContactRoute()}
-                  onChange={store.setSafeguardingRoute}
-                />
-                <Instruction
-                  label="Practice-specific safeguarding instructions"
-                  value={p.localSafeguarding}
-                  onChange={(v) => store.setPracticeField("localSafeguarding", v)}
-                />
+                <SafeguardingFields />
                 <h2 className="font-semibold">Confidentiality</h2>
                 <Instruction
                   label="Local confidentiality instructions"
@@ -200,23 +207,8 @@ function PracticeSetup() {
                 </details>
               </>
             )}
-            {step === 5 && (
+            {step === 6 && (
               <>
-                <div className="flex justify-between gap-4 border-b border-border pb-4">
-                  <div>
-                    <h2 className="font-semibold">Role configuration</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {Object.values(p.roleRequests ?? {}).filter((r) => r.confirmed).length}{" "}
-                      confirmed roles
-                    </p>
-                    {p.staff.some((s) => !p.roleRequests?.[requestRoleId(s.role)]?.confirmed) && (
-                      <p className="text-sm text-destructive">Some team roles still need review.</p>
-                    )}
-                  </div>
-                  <button className="text-sm font-semibold text-primary" onClick={() => go(1)}>
-                    Edit roles
-                  </button>
-                </div>
                 {setupSteps.slice(0, -1).map((label, i) => (
                   <div
                     key={label}
@@ -228,16 +220,29 @@ function PracticeSetup() {
                         {
                           [
                             `${p.practiceName} · ${p.hours}`,
-                            `${p.staff.length} team members · ${new Set(p.staff.map((s) => s.role)).size} roles`,
+                            practiceRoles(p)
+                              .map(
+                                (r) =>
+                                  `${r.label} — ${r.confirmed ? "Configured" : "Needs review"}`,
+                              )
+                              .join("\n") || "No practice roles selected",
+                            p.staff
+                              .map((s) => {
+                                const count = Object.keys(
+                                  s.requestOverrides?.[requestRoleId(s.role)] ?? {},
+                                ).length;
+                                return `${s.name} — ${s.role}${count ? ` · ${count} individual ${count === 1 ? "exception" : "exceptions"}` : ""}`;
+                              })
+                              .join("\n") || "No team members added",
                             `${bookingFor(p).sameDayPathway.selected.length} same-day request types selected`,
                             `${prescriptionsFor(p).methods.length} repeat request methods · ${prescriptionsFor(p).turnaround.id ? (prescriptionsFor(p).turnaround.id === "other" ? "Custom turnaround" : prescriptionsFor(p).turnaround.id + " working hours") : "Turnaround needs review"}`,
-                            `${p.safeguardingRoute || p.localSafeguarding ? "Safeguarding details recorded" : "Safeguarding needs attention"} · ${p.localConfidentiality ? "Local confidentiality instructions recorded" : "No additional confidentiality instructions"}`,
+                            `Safeguarding leads: ${safeguardingNames(p).join("; ") || "Needs review"}`,
                           ][i]
                         }
                       </p>
                       {missing[i].length > 0 && (
                         <p className="mt-2 text-sm text-destructive">
-                          Missing: {missing[i].join("; ")}
+                          Needs review: {missing[i].join("; ")}
                         </p>
                       )}
                     </div>
@@ -270,7 +275,7 @@ function PracticeSetup() {
                 onClick={() => go(step - 1)}
                 className="rounded-xl border border-border px-5 py-3 text-sm"
               >
-                Back
+                {step === 1 ? "Back to Practice" : "Back"}
               </button>
             )}
             <button
@@ -278,7 +283,13 @@ function PracticeSetup() {
               onClick={() => void save()}
               className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
-              {busy ? "Saving…" : step === 5 ? "Create starter drafts" : "Save and continue"}
+              {busy
+                ? "Saving…"
+                : step === 6
+                  ? "Create starter drafts"
+                  : step === 1
+                    ? "Continue to Team"
+                    : "Save and continue"}
             </button>
           </div>
         </div>

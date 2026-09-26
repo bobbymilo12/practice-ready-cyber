@@ -1,8 +1,16 @@
-import { configMissing, contactMissing } from "./practice-config.ts";
-import { requestRoleId, selectedRequests } from "./role-requests.ts";
+import { configMissing, safeguardingMissing } from "./practice-config.ts";
+import { requestRoleId, selectedRequests, practiceRoles } from "./role-requests.ts";
 import type { PracticeData, StaffMember } from "./store";
 
-export const setupSteps = ["Practice", "Team", "Bookings", "Prescriptions", "Safety", "Review"];
+export const setupSteps = [
+  "Practice",
+  "Roles",
+  "Team",
+  "Bookings",
+  "Prescriptions",
+  "Safety",
+  "Review",
+];
 export function setupMissing(p: PracticeData): string[][] {
   const required = (items: [string, string][]) =>
     items.filter(([, value]) => !value.trim()).map(([label]) => label);
@@ -13,6 +21,11 @@ export function setupMissing(p: PracticeData): string[][] {
       ["Opening hours", p.hours],
       ["Out-of-hours process", p.outOfHoursTimes],
     ]),
+    practiceRoles(p).length
+      ? practiceRoles(p)
+          .filter((r) => !r.confirmed)
+          .map((r) => `${r.label} role needs review`)
+      : ["Add at least one practice role"],
     p.staff.length === 0
       ? ["Add at least one team member"]
       : p.staff.flatMap((s) =>
@@ -22,11 +35,7 @@ export function setupMissing(p: PracticeData): string[][] {
         ),
     config.booking,
     config.prescription,
-    p.safeguardingRoute
-      ? contactMissing(p.safeguardingRoute, p)
-        ? ["Safeguarding lead and contact method"]
-        : []
-      : required([["Safeguarding process", p.localSafeguarding]]),
+    safeguardingMissing(p),
     [],
   ];
 }

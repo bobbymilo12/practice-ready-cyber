@@ -217,7 +217,7 @@ function DataHub() {
           <Link
             className="mt-3 inline-block text-primary"
             to="/practice/setup"
-            search={{ step: 2 }}
+            search={{ step: 3 }}
           >
             Edit booking configuration →
           </Link>
@@ -240,7 +240,7 @@ function DataHub() {
           <Link
             className="mt-3 inline-block text-primary"
             to="/practice/setup"
-            search={{ step: 3 }}
+            search={{ step: 4 }}
           >
             Edit prescription configuration →
           </Link>

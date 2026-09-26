@@ -1,5 +1,5 @@
 import type { PracticeRoleRequests } from "./role-requests";
-import type { ContactRoute } from "./practice-config";
+import type { SafeguardingRoute } from "./practice-config";
 import type { BookingConfig, PrescriptionConfig } from "./practice-config";
 import type { AppointmentCapabilities } from "./appointment-capabilities";
 import { create } from "zustand";
@@ -119,7 +119,7 @@ export interface RolePolicies {
 
 export interface PracticeData {
   roleRequests?: Record<string, PracticeRoleRequests>;
-  safeguardingRoute?: ContactRoute;
+  safeguardingRoute?: SafeguardingRoute;
   bookingConfig?: BookingConfig;
   prescriptionConfig?: PrescriptionConfig;
   practiceName: string;
@@ -293,7 +293,7 @@ export interface AppState {
   // Practice setup
   completeSetup: (generate: boolean) => string[];
   setRoleRequests: (config: PracticeRoleRequests) => void;
-  setSafeguardingRoute: (route: ContactRoute) => void;
+  setSafeguardingRoute: (route: SafeguardingRoute) => void;
   setBookingConfig: (config: BookingConfig) => void;
   setPrescriptionConfig: (config: PrescriptionConfig) => void;
   setPracticeField: (

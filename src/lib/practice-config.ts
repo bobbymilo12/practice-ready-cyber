@@ -102,6 +102,9 @@ export interface ContactRoute {
   method: Choice;
   instruction: string;
 }
+export interface SafeguardingRoute extends ContactRoute {
+  leadIds?: string[];
+}
 export interface BookingConfig {
   version: 1;
   requestMethods?: string[];
@@ -195,10 +198,50 @@ export function routeText(r: ContactRoute, p: PracticeData): string {
     r.instruction,
   );
 }
+export function safeguardingFor(p: PracticeData): SafeguardingRoute {
+  const route = p.safeguardingRoute ?? emptyContactRoute();
+  // A stored staff ID is unambiguous. Never infer a person from a role or free text.
+  return {
+    ...route,
+    leadIds:
+      p.safeguardingRoute?.leadIds ??
+      (route.contact.kind === "staff" ? [route.contact.staffId] : []),
+  };
+}
+export function safeguardingMissing(p: PracticeData): string[] {
+  const r = safeguardingFor(p);
+  const missing: string[] = [];
+  if (!r.leadIds?.length) missing.push("Select named safeguarding leads");
+  if (r.leadIds?.some((id) => !p.staff.some((s) => s.id === id && s.name.trim())))
+    missing.push("A safeguarding lead is no longer available — review the selected leads");
+  if (!r.method.id || (["other", "phone"].includes(r.method.id) && !r.method.other.trim()))
+    missing.push("How staff should raise a safeguarding concern");
+  return missing;
+}
+export function safeguardingNames(p: PracticeData): string[] {
+  return (safeguardingFor(p).leadIds ?? []).map((id) => {
+    const s = p.staff.find((s) => s.id === id && s.name.trim());
+    return s ? `${s.name} — ${s.role}` : "Team member no longer available — Needs review";
+  });
+}
 // Read-only compatibility projection: never persist derived strings over legacy data.
 export function practiceSummary(p: PracticeData): PracticeData {
+  const safety = safeguardingFor(p);
   let result = p.safeguardingRoute
-    ? { ...p, localSafeguarding: join(routeText(p.safeguardingRoute, p), p.localSafeguarding) }
+    ? {
+        ...p,
+        localSafeguarding: join(
+          p.safeguardingRoute.leadIds !== undefined || safety.leadIds?.length
+            ? join(
+                safeguardingNames(p).join("; "),
+                choiceText(safety.method, contactMethods),
+                safety.method.id === "phone" ? safety.method.other : "",
+                safety.instruction,
+              )
+            : routeText(p.safeguardingRoute, p),
+          p.localSafeguarding,
+        ),
+      }
     : p;
   if (p.bookingConfig) {
     const b = p.bookingConfig;

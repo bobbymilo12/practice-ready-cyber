@@ -1,9 +1,9 @@
-import { useId, useState } from "react";
-import { useApp, ROLE_OPTIONS } from "@/lib/store";
-import { requestRoleId } from "@/lib/role-requests";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { useApp } from "@/lib/store";
+import { requestRoleId, practiceRoles } from "@/lib/role-requests";
 import { appointmentTypes } from "@/lib/appointment-capabilities";
 import { EmployeeExceptions } from "./EmployeeExceptions";
-import { RoleRequestFields } from "./RoleRequestFields";
 
 const field = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
 
@@ -12,25 +12,16 @@ export function TeamFields() {
   const p = useApp((s) => s.practiceData);
   const { addStaff, updateStaff, removeStaff } = useApp();
   const [name, setName] = useState("");
-  const [role, setRole] = useState<string>(ROLE_OPTIONS[0]);
-  const [activeRole, setActiveRole] = useState<string | null>(null);
+  const roles = practiceRoles(p).map((r) => r.label);
+  const [role, setRole] = useState<string>(roles[0] ?? "");
+  const nav = useNavigate();
   const [customising, setCustomising] = useState<string | null>(null);
-  const listId = useId();
-  const roleSectionId = useId();
-  const roles = [
-    ...new Set([
-      ...ROLE_OPTIONS,
-      ...p.staff.map((s) => s.role),
-      ...Object.values(p.roleRequests ?? {}).map((r) => r.label),
-    ]),
-  ].filter((r) => r.trim());
   const legacy = p.staff.filter(
     (s) => s.clinics || s.notes || s.capabilities?.length || s.appointmentCapabilities,
   );
   const editRole = (role: string) => {
     setCustomising(null);
-    setActiveRole(requestRoleId(role));
-    document.getElementById(roleSectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    void nav({ to: "/practice/setup", search: { step: 1, role: requestRoleId(role) } });
   };
   return (
     <section className="min-w-0 space-y-5" aria-label="Team and roles">
@@ -47,17 +38,24 @@ export function TeamFields() {
           </label>
           <label className="block text-sm">
             Role
-            <input
+            <select
+              aria-label="Role"
               className={field}
-              list={listId}
               value={role}
               onChange={(e) => setRole(e.target.value)}
-            />
+            >
+              <option value="">Choose a practice role</option>
+              {roles.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         <button
           type="button"
-          disabled={!name.trim() || !role.trim()}
+          disabled={!name.trim() || !roles.includes(role)}
           onClick={() => {
             addStaff({ name: name.trim(), role: role.trim(), clinics: "" });
             setName("");
@@ -67,11 +65,13 @@ export function TeamFields() {
           Add employee
         </button>
       </div>
-      <datalist id={listId}>
-        {roles.map((r) => (
-          <option key={r} value={r} />
-        ))}
-      </datalist>
+      <Link
+        to="/practice/setup"
+        search={{ step: 1 }}
+        className="block text-sm font-semibold text-primary"
+      >
+        + Add another role
+      </Link>
       <div className="space-y-3">
         {p.staff.map((person) => (
           <article
@@ -90,12 +90,22 @@ export function TeamFields() {
               </label>
               <label className="block text-sm">
                 Employee role
-                <input
+                <select
+                  aria-label="Employee role"
                   className={field}
-                  list={listId}
                   value={person.role}
                   onChange={(e) => updateStaff(person.id, { role: e.target.value })}
-                />
+                >
+                  <option value="">Choose a practice role</option>
+                  {person.role && !roles.includes(person.role) && (
+                    <option value={person.role}>{person.role}</option>
+                  )}
+                  {roles.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
@@ -122,7 +132,6 @@ export function TeamFields() {
                 type="button"
                 disabled={!person.role.trim()}
                 onClick={() => {
-                  setActiveRole(null);
                   setCustomising(person.id);
                 }}
                 className="text-sm font-semibold text-primary disabled:opacity-40"
@@ -148,9 +157,6 @@ export function TeamFields() {
           onEditRole={editRole}
         />
       )}
-      <div id={roleSectionId} className="scroll-mt-6">
-        <RoleRequestFields activeRole={activeRole} onRoleChange={setActiveRole} />
-      </div>
       {legacy.length > 0 && (
         <details className="rounded-xl border border-border p-4">
           <summary className="cursor-pointer text-sm">Preserved individual information</summary>
