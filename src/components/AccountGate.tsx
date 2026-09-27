@@ -17,7 +17,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     initializeBackend();
   }, []);
-  const publicPage = ["/", "/about", "/faqs", "/auth"].includes(path);
+  const publicPage = ["/", "/about", "/faqs", "/contact", "/auth"].includes(path);
   const traineePage = ["/staff", "/train", "/results"].includes(path);
   if (!publicPage && connection.loading)
     return (

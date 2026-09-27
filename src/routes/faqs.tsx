@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, HelpCircle } from "lucide-react";
-import { Shell } from "@/components/Shell";
+import { MarketingShell } from "@/components/MarketingShell";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -74,53 +74,61 @@ const FAQS: [string, string][] = [
 function FaqsPage() {
   const account = useApp((s) => s.account);
   return (
-    <Shell>
-      <section className="pb-12 pt-2 lg:pt-6">
-        <p className="mb-6 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-xs font-semibold uppercase text-secondary-foreground">
-          <HelpCircle aria-hidden="true" className="h-3.5 w-3.5" />
-          PracticeReady FAQs
-        </p>
-        <h1 className="max-w-3xl font-display text-4xl font-bold leading-tight sm:text-5xl">
-          Answers about how PracticeReady works.
-        </h1>
-        <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
-          What the platform does, how it fits alongside mandatory training, and what managers and
-          staff can do with it.
-        </p>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card px-6 py-2 shadow-[0_1px_2px_rgba(15,30,60,0.04)] sm:px-8">
-        <Accordion type="single" collapsible defaultValue="faq-0">
-          {FAQS.map(([question, answer], i) => (
-            <AccordionItem key={question} value={`faq-${i}`} className="border-border">
-              <AccordionTrigger className="font-display text-base font-semibold hover:no-underline sm:text-lg">
-                {question}
-              </AccordionTrigger>
-              <AccordionContent className="max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-                {answer}
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </section>
-
-      <section className="mt-12 flex flex-col items-start justify-between gap-6 rounded-lg bg-secondary px-6 py-8 sm:flex-row sm:items-center md:px-10">
-        <div>
-          <h2 className="font-display text-2xl font-bold">
-            {account ? "Ready to keep training up to date?" : "Interested in seeing PracticeReady?"}
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {account
-              ? "Head to your dashboard to review scenarios and assign modules."
-              : "We’re working with primary care teams on pilots — start an account to explore the platform."}
+    <MarketingShell>
+      <div className="marketing-wrap marketing-page">
+        <section className="pb-12 pt-2 lg:pt-6">
+          <p className="marketing-eyebrow mb-6 inline-flex items-center gap-2">
+            <HelpCircle aria-hidden="true" className="h-3.5 w-3.5" />
+            PracticeReady FAQs
           </p>
-        </div>
-        <Button asChild size="lg" className="h-12 shrink-0 px-6">
-          <Link to={account ? (account.role === "manager" ? "/dashboard" : "/staff") : "/auth"} search={account ? undefined : { mode: "create" }}>
-            {account ? "Go to dashboard" : "Create a practice account"} <ArrowRight aria-hidden="true" />
-          </Link>
-        </Button>
-      </section>
-    </Shell>
+          <h1 className="max-w-3xl font-display text-4xl font-bold leading-tight sm:text-5xl">
+            Answers about how PracticeReady works.
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
+            What the platform does, how it fits alongside mandatory training, and what managers and
+            staff can do with it.
+          </p>
+        </section>
+
+        <section className="rounded-md border border-border bg-card px-6 py-2 shadow-[0_1px_2px_rgba(15,30,60,0.04)] sm:px-8">
+          <Accordion type="single" collapsible defaultValue="faq-0">
+            {FAQS.map(([question, answer], i) => (
+              <AccordionItem key={question} value={`faq-${i}`} className="border-border">
+                <AccordionTrigger className="font-display text-base font-semibold hover:no-underline sm:text-lg">
+                  {question}
+                </AccordionTrigger>
+                <AccordionContent className="max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
+                  {answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+
+        <section className="mt-12 flex flex-col items-start justify-between gap-6 rounded-lg bg-secondary px-6 py-8 sm:flex-row sm:items-center md:px-10">
+          <div>
+            <h2 className="font-display text-2xl font-bold">
+              {account
+                ? "Ready to keep training up to date?"
+                : "Interested in seeing PracticeReady?"}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {account
+                ? "Head to your dashboard to review scenarios and assign modules."
+                : "We’re working with primary care teams on pilots — start an account to explore the platform."}
+            </p>
+          </div>
+          <Button asChild size="lg" className="h-12 shrink-0 px-6">
+            <Link
+              to={account ? (account.role === "manager" ? "/dashboard" : "/staff") : "/auth"}
+              search={account ? undefined : { mode: "create" }}
+            >
+              {account ? "Go to dashboard" : "Create a practice account"}{" "}
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </Button>
+        </section>
+      </div>
+    </MarketingShell>
   );
 }

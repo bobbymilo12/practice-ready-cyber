@@ -91,7 +91,7 @@ async function manager(page: Page) {
 
 test("landing separates manager registration and login", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Create a practice account" }).click();
+  await page.getByRole("link", { name: "Create a practice account" }).first().click();
   await expect(page.getByRole("heading", { name: "Create a manager account" })).toBeVisible();
   await expect(page.getByLabel("Full name")).toBeVisible();
 });

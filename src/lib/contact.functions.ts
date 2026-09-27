@@ -1,18 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-
-const contactSchema = z.object({
-  name: z.string().trim().min(1, "Enter your name.").max(100),
-  email: z.string().trim().email("Enter a valid email address.").max(255),
-  message: z.string().trim().min(1, "Enter a message.").max(2000),
-});
+import { contactSchema, persistContact } from "./contact";
 
 export const submitContact = createServerFn({ method: "POST" })
-  .inputValidator((data) => contactSchema.parse(data))
+  .validator((data: unknown) => contactSchema.parse(data))
   .handler(async ({ data }) => {
-    // The public form can only insert; its row-level policy permits no reads.
+    // Reuse the existing insert-only public contact table and Supabase connection.
     const { supabase } = await import("@/integrations/supabase/client");
-    const { error } = await supabase.from("contact_messages").insert(data);
-    if (error) throw new Error("Your message could not be sent. Please try again.");
-    return { success: true };
+    return persistContact(data, supabase);
   });

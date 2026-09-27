@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p supabase/tsconfig.json",
-    "test": "node --experimental-strip-types tests/appointment-capabilities.test.ts && node --experimental-strip-types tests/training.test.ts && node --experimental-strip-types tests/api.test.mjs && node --test tests/dev-mode.test.mjs",
+    "test": "node --experimental-strip-types tests/appointment-capabilities.test.ts && node --experimental-strip-types tests/training.test.ts && node --experimental-strip-types tests/api.test.mjs && node --test tests/dev-mode.test.mjs && node --experimental-strip-types tests/contact.test.ts",
     "test:e2e": "playwright test",
     "backend:check": "node scripts/check-backend.mjs"
   },
