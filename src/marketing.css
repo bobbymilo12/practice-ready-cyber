@@ -182,6 +182,31 @@
   background: #fffefa;
   box-shadow: 0 8px 30px #172c430b;
 }
+.legal-content {
+  max-width: 52rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--border);
+}
+.legal-content h2 {
+  margin-top: 2.25rem;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.legal-content h2:first-child {
+  margin-top: 0;
+}
+.legal-content p {
+  margin-top: 0.75rem;
+  line-height: 1.75;
+  color: var(--muted-foreground);
+}
+.legal-content a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
 .marketing-honeypot {
   position: absolute;
   left: -10000px;

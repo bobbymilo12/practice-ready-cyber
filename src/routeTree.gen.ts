@@ -11,13 +11,17 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as AccessibilityRouteImport } from './routes/accessibility'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DataHubRouteImport } from './routes/data-hub'
 import { Route as FaqsRouteImport } from './routes/faqs'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as StaffRouteImport } from './routes/staff'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TrainRouteImport } from './routes/train'
 import { Route as ModulesCreateRouteImport } from './routes/modules.create'
 import { Route as ModulesMergeRouteImport } from './routes/modules.merge'
@@ -37,6 +41,11 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccessibilityRoute = AccessibilityRouteImport.update({
+  id: '/accessibility',
+  path: '/accessibility',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -45,6 +54,11 @@ const AuthRoute = AuthRouteImport.update({
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CookiesRoute = CookiesRouteImport.update({
+  id: '/cookies',
+  path: '/cookies',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -62,6 +76,11 @@ const FaqsRoute = FaqsRouteImport.update({
   path: '/faqs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
@@ -70,6 +89,11 @@ const ResultsRoute = ResultsRouteImport.update({
 const StaffRoute = StaffRouteImport.update({
   id: '/staff',
   path: '/staff',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TrainRoute = TrainRouteImport.update({
@@ -116,13 +140,17 @@ const TraineesInviteRoute = TraineesInviteRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/accessibility': typeof AccessibilityRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/cookies': typeof CookiesRoute
   '/dashboard': typeof DashboardRoute
   '/data-hub': typeof DataHubRoute
   '/faqs': typeof FaqsRoute
+  '/privacy': typeof PrivacyRoute
   '/results': typeof ResultsRoute
   '/staff': typeof StaffRoute
+  '/terms': typeof TermsRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/merge': typeof ModulesMergeRoute
@@ -135,13 +163,17 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/accessibility': typeof AccessibilityRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/cookies': typeof CookiesRoute
   '/dashboard': typeof DashboardRoute
   '/data-hub': typeof DataHubRoute
   '/faqs': typeof FaqsRoute
+  '/privacy': typeof PrivacyRoute
   '/results': typeof ResultsRoute
   '/staff': typeof StaffRoute
+  '/terms': typeof TermsRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/merge': typeof ModulesMergeRoute
@@ -155,13 +187,17 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/accessibility': typeof AccessibilityRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/cookies': typeof CookiesRoute
   '/dashboard': typeof DashboardRoute
   '/data-hub': typeof DataHubRoute
   '/faqs': typeof FaqsRoute
+  '/privacy': typeof PrivacyRoute
   '/results': typeof ResultsRoute
   '/staff': typeof StaffRoute
+  '/terms': typeof TermsRoute
   '/train': typeof TrainRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/merge': typeof ModulesMergeRoute
@@ -176,13 +212,17 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/accessibility'
     | '/auth'
     | '/contact'
+    | '/cookies'
     | '/dashboard'
     | '/data-hub'
     | '/faqs'
+    | '/privacy'
     | '/results'
     | '/staff'
+    | '/terms'
     | '/train'
     | '/modules/create'
     | '/modules/merge'
@@ -195,13 +235,17 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/accessibility'
     | '/auth'
     | '/contact'
+    | '/cookies'
     | '/dashboard'
     | '/data-hub'
     | '/faqs'
+    | '/privacy'
     | '/results'
     | '/staff'
+    | '/terms'
     | '/train'
     | '/modules/create'
     | '/modules/merge'
@@ -214,13 +258,17 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/about'
+    | '/accessibility'
     | '/auth'
     | '/contact'
+    | '/cookies'
     | '/dashboard'
     | '/data-hub'
     | '/faqs'
+    | '/privacy'
     | '/results'
     | '/staff'
+    | '/terms'
     | '/train'
     | '/modules/create'
     | '/modules/merge'
@@ -234,13 +282,17 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  AccessibilityRoute: typeof AccessibilityRoute
   AuthRoute: typeof AuthRoute
   ContactRoute: typeof ContactRoute
+  CookiesRoute: typeof CookiesRoute
   DashboardRoute: typeof DashboardRoute
   DataHubRoute: typeof DataHubRoute
   FaqsRoute: typeof FaqsRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResultsRoute: typeof ResultsRoute
   StaffRoute: typeof StaffRoute
+  TermsRoute: typeof TermsRoute
   TrainRoute: typeof TrainRoute
   ModulesCreateRoute: typeof ModulesCreateRoute
   ModulesMergeRoute: typeof ModulesMergeRoute
@@ -267,6 +319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/accessibility': {
+      id: '/accessibility'
+      path: '/accessibility'
+      fullPath: '/accessibility'
+      preLoaderRoute: typeof AccessibilityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -279,6 +338,13 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cookies': {
+      id: '/cookies'
+      path: '/cookies'
+      fullPath: '/cookies'
+      preLoaderRoute: typeof CookiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -302,6 +368,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FaqsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/results': {
       id: '/results'
       path: '/results'
@@ -314,6 +387,13 @@ declare module '@tanstack/react-router' {
       path: '/staff'
       fullPath: '/staff'
       preLoaderRoute: typeof StaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/train': {
@@ -378,13 +458,17 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  AccessibilityRoute: AccessibilityRoute,
   AuthRoute: AuthRoute,
   ContactRoute: ContactRoute,
+  CookiesRoute: CookiesRoute,
   DashboardRoute: DashboardRoute,
   DataHubRoute: DataHubRoute,
   FaqsRoute: FaqsRoute,
+  PrivacyRoute: PrivacyRoute,
   ResultsRoute: ResultsRoute,
   StaffRoute: StaffRoute,
+  TermsRoute: TermsRoute,
   TrainRoute: TrainRoute,
   ModulesCreateRoute: ModulesCreateRoute,
   ModulesMergeRoute: ModulesMergeRoute,

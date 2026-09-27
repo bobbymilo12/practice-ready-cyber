@@ -279,6 +279,13 @@ function AuthPage() {
             )}
           </form>
         </Card>
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          By continuing, you acknowledge the{" "}
+          <a href="/privacy" className="underline">
+            Privacy Notice
+          </a>
+          .
+        </p>
       </div>
     </Shell>
   );

@@ -83,6 +83,12 @@ export function Shell({ children, className = "" }: { children: ReactNode; class
       <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
       <footer className="mt-16 border-t border-border">
         <div className="mx-auto max-w-6xl px-6 py-8 text-xs text-muted-foreground">
+          <nav className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-foreground underline underline-offset-4">
+            <Link to="/privacy">Privacy</Link>
+            <Link to="/cookies">Cookies</Link>
+            <Link to="/terms">Terms</Link>
+            <Link to="/accessibility">Accessibility</Link>
+          </nav>
           PracticeReady supports local onboarding and does not replace statutory or mandatory
           training, clinical protocols or manager judgement.
         </div>

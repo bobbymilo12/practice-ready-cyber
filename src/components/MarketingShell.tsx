@@ -89,7 +89,13 @@ export function MarketingShell({
             <Link to="/" className="font-display text-lg font-semibold">
               PracticeReady
             </Link>
-            <ContactLink className="text-sm underline underline-offset-4" />
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm underline underline-offset-4">
+              <ContactLink />
+              <Link to="/privacy">Privacy</Link>
+              <Link to="/cookies">Cookies</Link>
+              <Link to="/terms">Terms</Link>
+              <Link to="/accessibility">Accessibility</Link>
+            </div>
           </div>
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
             PracticeReady supports local onboarding and does not replace statutory or mandatory

@@ -59,6 +59,13 @@ export function ContactSection() {
           <p id="contact-privacy" className="mt-8 text-sm leading-6 text-muted-foreground">
             Please don't include patient information in your message.
           </p>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Read our{" "}
+            <a href="/privacy" className="underline underline-offset-4">
+              Privacy Notice
+            </a>
+            .
+          </p>
         </div>
         {status === "sent" ? (
           <div role="status" className="marketing-form">

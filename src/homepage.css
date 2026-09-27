@@ -323,9 +323,6 @@
   border-color: #85afc1;
   color: var(--foreground);
 }
-.marketing-home .marketing-footer {
-  display: none;
-}
 @media (max-width: 850px) {
   .marketing-home .marketing-header-inner {
     gap: 0.5rem;

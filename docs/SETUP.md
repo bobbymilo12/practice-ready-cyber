@@ -29,6 +29,19 @@ Set these in the Supabase dashboard's Edge Function secrets:
 | `APP_URL`         | Final app URL, e.g. `https://practice-ready.example`                                                 |
 | `ALLOWED_ORIGINS` | Comma-separated exact origins; include your final URL and any local/preview origins you actually use |
 
+For contact-form notifications, set these in the hosting environment that runs the TanStack server
+function. Do not expose them as `VITE_` variables:
+
+| Secret           | Value                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `RESEND_API_KEY` | Private Resend sending API key                                                       |
+| `CONTACT_FROM`   | Sender on your verified Resend domain, e.g. `PracticeReady <hello@yourdomain.co.uk>` |
+| `CONTACT_TO`     | Inbox that should receive contact enquiries                                          |
+
+The contact form stores the message in `contact_messages`, then sends a plain-text notification
+through Resend with the visitor's email in `Reply-To`. If Resend is unavailable, the message stays
+stored and the server logs the notification failure so it can be resent or handled operationally.
+
 Supabase supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to hosted Edge Functions. Never expose a service-role key or Resend key in a `VITE_` variable or commit them. The migration enables RLS and revokes browser access to all application tables; the Edge Function authenticates the JWT with Supabase and enforces role/practice ownership before accessing records.
 
 ```sh
