@@ -111,7 +111,6 @@ function AboutPage() {
             care. We’re speaking with practices and industry professionals to make sure the platform
             solves real onboarding problems rather than simply adding another training system.
           </p>
-
           <div className="mt-8 flex flex-col items-start justify-between gap-6 rounded-lg bg-secondary px-6 py-8 sm:flex-row sm:items-center md:px-10">
             <div className="max-w-xl">
               <h3 className="font-display text-xl font-bold sm:text-2xl">

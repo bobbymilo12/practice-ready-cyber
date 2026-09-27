@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { useApp } from "@/lib/store";
 import { api, configured, loadWorkspace, signOut, supabase, useConnection } from "@/lib/backend";
+import "@/auth.css";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Log in — PracticeReady" }] }),
@@ -105,7 +106,7 @@ function AuthPage() {
     }
   }
   return (
-    <Shell>
+    <Shell className="auth-shell">
       <div className="mx-auto max-w-lg">
         <h1 className="font-display text-3xl font-bold">
           {reset

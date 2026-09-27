@@ -21,29 +21,46 @@
 }
 .marketing-home .marketing-header-inner {
   width: min(91%, 1310px);
-  min-height: clamp(80px, 8vw, 112px);
+  min-height: 64px;
   gap: 4rem;
 }
 .marketing-home .marketing-brand {
-  font-size: clamp(20px, 2vw, 28px);
+  font-size: 20px;
   letter-spacing: -0.035em;
 }
 .marketing-home .marketing-monogram {
-  width: 2.1rem;
-  height: 2.1rem;
-  font-size: 1.3rem;
+  width: 24px;
+  height: 24px;
+  font-size: 15px;
 }
 .marketing-home .marketing-nav {
-  margin-left: auto;
-  gap: 1.6rem;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  gap: 1.75rem;
 }
-.marketing-home .marketing-nav,
+.marketing-home .marketing-nav {
+  font-size: 16px;
+}
 .marketing-home .marketing-account {
-  font-size: clamp(14px, 1.3vw, 18px);
+  font-size: 14px;
 }
 .marketing-home .marketing-login {
-  border-color: #ffffffb3;
-  padding: 0.65rem 1.3rem;
+  border-color: var(--primary);
+  padding: 0.6rem 1.15rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+.marketing-home .marketing-login:hover {
+  background: #174b68;
+  color: white;
+  box-shadow: 0 6px 18px #03141d4d;
+  transform: translateY(-2px);
 }
 .marketing-home .marketing-nav a:hover,
 .marketing-home .marketing-nav a.active {
@@ -63,7 +80,7 @@
 .home-hero {
   position: relative;
   isolation: isolate;
-  min-height: clamp(540px, 52.75vw, 760px);
+  min-height: clamp(405px, 38vw, 548px);
   color: white;
 }
 .home-hero-image,
@@ -84,12 +101,12 @@
     linear-gradient(180deg, #0005, transparent 35%);
 }
 .home-hero-content {
-  padding-top: clamp(128px, 12.7vw, 183px);
+  padding-top: clamp(100px, 12.7vw, 168px);
   padding-bottom: 26px;
 }
 .marketing-home .home-hero h1 {
   font-family: var(--font-display);
-  font-size: clamp(54px, 5.3vw, 76px);
+  font-size: clamp(42px, 5.3vw, 76px);
   font-weight: 700;
   line-height: 1.01;
   letter-spacing: -0.045em;
@@ -97,7 +114,7 @@
 }
 .home-hero-description {
   max-width: min(41vw, 590px);
-  font-size: clamp(15px, 1.45vw, 20px);
+  font-size: clamp(13px, 1.45vw, 20px);
   line-height: 1.5;
 }
 .home-actions {
@@ -129,7 +146,7 @@
 }
 .home-positioning {
   background: #f5f2ec;
-  padding-block: clamp(34px, 3.5vw, 50px);
+  padding-block: clamp(28px, 3.5vw, 50px);
 }
 .home-positioning-inner {
   display: grid;
@@ -158,7 +175,7 @@
   display: grid;
   grid-template-columns: 51.6% 48.4%;
   align-items: center;
-  padding-block: 15px 18px;
+  padding-block: 12px 14px;
   max-width: 1440px;
   margin-inline: auto;
   background: #faf9f5;
@@ -182,7 +199,7 @@
 }
 .home-value-image {
   width: 100%;
-  height: clamp(344px, 33.6vw, 484px);
+  height: clamp(260px, 33.6vw, 484px);
   object-fit: cover;
   object-position: center 36%;
   border-radius: 16px 0 0 16px;
@@ -215,7 +232,7 @@
 }
 .home-process {
   background: #eff5f2;
-  padding-block: clamp(30px, 3.1vw, 44px) clamp(40px, 4.2vw, 60px);
+  padding-block: clamp(26px, 3.1vw, 44px) clamp(34px, 4.2vw, 60px);
 }
 .home-process .home-wrap {
   width: min(86%, 1238px);
@@ -270,7 +287,7 @@
   background: #e7f3f7;
   margin: 0 0 0 8px;
   border-radius: 30px 0 0 30px;
-  min-height: clamp(200px, 19.5vw, 282px);
+  min-height: clamp(146px, 19.5vw, 282px);
 }
 .home-final-photo {
   position: absolute;
@@ -306,19 +323,24 @@
   border-color: #85afc1;
   color: var(--foreground);
 }
+.marketing-home .marketing-footer {
+  display: none;
+}
 @media (max-width: 850px) {
   .marketing-home .marketing-header-inner {
     gap: 0.5rem;
-    min-height: 104px;
+    min-height: 72px;
   }
   .marketing-home .marketing-nav {
+    position: static;
     margin-left: 0;
+    transform: none;
   }
   .home-hero-content {
-    padding-top: 145px;
+    padding-top: 112px;
   }
   .home-hero {
-    min-height: 620px;
+    min-height: 430px;
   }
   .home-hero-description {
     max-width: 470px;

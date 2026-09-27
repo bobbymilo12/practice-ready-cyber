@@ -52,7 +52,7 @@
 
   /* Base */
   --background: oklch(1 0 0);
-  --foreground: oklch(0.22 0.05 260);      /* dark navy */
+  --foreground: oklch(0.22 0.05 260); /* dark navy */
   --surface: oklch(0.985 0.005 240);
   --surface-muted: oklch(0.965 0.012 230);
 
@@ -92,8 +92,17 @@
   * {
     border-color: var(--color-border);
   }
+  :where(a, button, summary, [role="button"], input[type="checkbox"], input[type="radio"]):not(
+      :disabled
+    ):not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  :where(button:disabled, input:disabled, [aria-disabled="true"]) {
+    cursor: not-allowed;
+  }
   html {
     font-family: var(--font-sans);
+    scrollbar-gutter: stable;
   }
   body {
     background-color: var(--color-background);
@@ -101,7 +110,10 @@
     font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
   }
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: var(--font-display);
     letter-spacing: 0;
   }

@@ -24,7 +24,7 @@
   outline-offset: 4px;
 }
 .marketing-wrap {
-  width: min(100% - 3rem, 70rem);
+  width: min(88%, 1268px);
   margin-inline: auto;
 }
 .marketing-header {
@@ -32,11 +32,12 @@
   background: #faf8f3;
 }
 .marketing-header-inner {
-  min-height: 88px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
+  position: relative;
 }
 .marketing-brand {
   display: flex;
@@ -44,7 +45,7 @@
   gap: 0.65rem;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   letter-spacing: -0.04em;
 }
 .marketing-monogram {
@@ -61,8 +62,13 @@
 .marketing-account {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  font-size: 0.875rem;
+  gap: 1.75rem;
+  font-size: 1rem;
+}
+.marketing-nav {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 .marketing-nav a {
   padding-block: 0.7rem;
@@ -78,8 +84,21 @@
 .marketing-login {
   border: 1px solid var(--primary);
   border-radius: 0.35rem;
-  padding: 0.6rem 1rem;
+  padding: 0.6rem 1.15rem;
   white-space: nowrap;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.marketing-login:hover {
+  background: #174b68;
+  color: white;
+  box-shadow: 0 5px 14px #172c4333;
+  transform: translateY(-2px);
 }
 .marketing-skip {
   position: absolute;
@@ -146,6 +165,7 @@
 }
 .marketing-page {
   padding-block: 4rem;
+  background: var(--background);
 }
 .marketing-page > section:first-child {
   max-width: 52rem;
@@ -156,6 +176,11 @@
 .marketing-page .marketing-pillar {
   border-top: 2px solid #94aaa1;
   padding-top: 1.5rem;
+}
+.marketing-faq-page > section:nth-child(2) {
+  border-color: #d9ddd7;
+  background: #fffefa;
+  box-shadow: 0 8px 30px #172c430b;
 }
 .marketing-honeypot {
   position: absolute;
@@ -176,10 +201,12 @@
     padding-top: 1rem;
   }
   .marketing-nav {
+    position: static;
     order: 3;
     width: 100%;
     justify-content: center;
     gap: 2rem;
+    transform: none;
   }
   .marketing-account {
     margin-left: auto;
@@ -308,10 +335,10 @@
   margin-bottom: 2.5rem;
 }
 .marketing-page {
-  background: white;
+  background: var(--background);
 }
 .marketing:has(.marketing-page) main {
-  background: white;
+  background: var(--background);
 }
 .marketing-footer {
   background: #faf8f3;

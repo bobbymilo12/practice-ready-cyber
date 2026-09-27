@@ -75,7 +75,7 @@ function FaqsPage() {
   const account = useApp((s) => s.account);
   return (
     <MarketingShell>
-      <div className="marketing-wrap marketing-page">
+      <div className="marketing-wrap marketing-page marketing-faq-page">
         <section className="pb-12 pt-2 lg:pt-6">
           <p className="marketing-eyebrow mb-6 inline-flex items-center gap-2">
             <HelpCircle aria-hidden="true" className="h-3.5 w-3.5" />
