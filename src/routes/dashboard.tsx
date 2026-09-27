@@ -32,6 +32,7 @@ function Dashboard() {
   const trainees = useApp((s) => s.trainees);
   const assignments = useApp((s) => s.assignments);
   const setupComplete = useApp((s) => s.setupComplete);
+  const removeDraftModule = useApp((s) => s.removeDraftModule);
 
   const drafts = modules.flatMap((m) => m.scenarios.filter((s) => s.status === "draft"));
   const published = modules.filter((m) => m.published);
@@ -212,17 +213,30 @@ function Dashboard() {
               <p className="text-sm text-muted-foreground">No drafts right now.</p>
             )}
             {draftModules.map((m) => (
-              <Link
+              <div
                 key={m.id}
-                to="/modules/review"
-                search={{ id: m.id }}
-                className="block rounded-lg border border-border p-3 text-sm hover:border-primary/40"
+                className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm"
               >
-                <div className="font-medium">{m.title}</div>
-                <div className="text-xs text-muted-foreground">
-                  {m.scenarios.length} scenarios · manager review required
-                </div>
-              </Link>
+                <Link
+                  to="/modules/review"
+                  search={{ id: m.id }}
+                  className="min-w-0 flex-1 hover:text-primary"
+                >
+                  <div className="font-medium">{m.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {m.scenarios.length} scenarios · manager review required
+                  </div>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Delete this draft module?")) removeDraftModule(m.id);
+                  }}
+                  className="shrink-0 text-xs text-destructive hover:underline"
+                >
+                  Delete draft
+                </button>
+              </div>
             ))}
           </div>
         </Card>

@@ -1,9 +1,21 @@
 // Loaded dynamically only for a local development mock session. No network operations belong here.
-import { defaultPracticeData, type Account, type Module, type Trainee } from "./store";
+import {
+  defaultPracticeData,
+  type Account,
+  type Module,
+  type Trainee,
+  type TrainingPackage,
+} from "./store";
 import type { PracticeState, Snapshot } from "./backend";
 import { devRole } from "./dev-mode";
 import { practiceScenarios } from "./practice-scenarios";
-import { startSession, answerSession, advanceSession, type TrainingSession } from "./training";
+import {
+  startSession,
+  answerSession,
+  advanceSession,
+  submitSession,
+  type TrainingSession,
+} from "./training";
 
 const storageKey = "practiceready-dev-workspace-v1";
 const traineeId = "dev-trainee-jamie";
@@ -42,16 +54,31 @@ function seed(): Workspace {
         .map((s) => ({ ...s, status: i < 2 ? "approved" : "draft" })),
     }),
   );
+  const induction: TrainingPackage = {
+    id: "dev-induction",
+    title: "Induction Package",
+    description: "Basic local onboarding for new GP reception and administrative starters.",
+    kind: "induction",
+    moduleIds: modules.map((m) => m.id),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  modules.forEach((m) => {
+    m.packageId = induction.id;
+  });
   return {
     state: {
       practiceData,
       modules,
+      packages: [induction],
       assignments: modules.slice(0, 2).map((m, i) => ({
         id: `dev-assignment-${i}`,
         moduleId: m.id,
         traineeId,
         assignedAt: Date.now(),
         status: "assigned",
+        packageId: induction.id,
       })),
       setupComplete: true,
       emojiMarks: {},
@@ -104,6 +131,7 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
           : {
               practiceData: { ...state.practiceData, staff: [] },
               modules: state.modules.filter((m) => assignments.some((a) => a.moduleId === m.id)),
+              packages: state.packages,
               assignments,
               emojiMarks: state.emojiMarks,
             },
@@ -134,6 +162,27 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
           inviteStatus: "Mock only — no email sent",
           invitedAt: Date.now(),
         });
+      const trainee = workspace.trainees.find((t) => t.email === email);
+      const induction = state.packages.find((p) => p.kind === "induction");
+      if (trainee && induction) {
+        for (const moduleId of induction.moduleIds) {
+          const module = state.modules.find((m) => m.id === moduleId);
+          if (
+            module?.published &&
+            !module.needsReview &&
+            !state.assignments.some((a) => a.traineeId === trainee.id && a.moduleId === moduleId)
+          ) {
+            state.assignments.push({
+              id: `dev-assignment-${crypto.randomUUID()}`,
+              traineeId: trainee.id,
+              moduleId,
+              packageId: induction.id,
+              assignedAt: Date.now(),
+              status: "assigned",
+            });
+          }
+        }
+      }
     } else {
       if (body.id === traineeId)
         throw new Error(
@@ -165,13 +214,15 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
       );
       if (index < 0) throw new Error("Mock training attempt not found.");
       let session = workspace.sessions[index];
-      if (action === "answer" || action === "continue") {
+      if (action === "answer" || action === "continue" || action === "submit") {
         if (!session.result && session.queue[session.index] !== body.scenarioId)
           throw new Error("Reload your training to continue.");
         session =
           action === "answer"
             ? answerSession(session, body.value)
-            : advanceSession(session, module.title);
+            : action === "continue"
+              ? advanceSession(session, module.title)
+              : submitSession(session, module.title);
         if (session.result) session.result.traineeName = account.name;
       } else if (
         action === "confidence" &&

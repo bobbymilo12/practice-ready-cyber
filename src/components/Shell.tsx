@@ -71,7 +71,10 @@ export function Shell({ children, className = "" }: { children: ReactNode; class
         </div>
       </header>
       {saving && (
-        <p role="status" className="px-6 pt-2 text-right text-xs text-muted-foreground">
+        <p
+          role="status"
+          className="pointer-events-none fixed right-6 top-20 z-20 rounded-full bg-surface px-3 py-1 text-xs text-muted-foreground shadow-sm"
+        >
           Saving practice changes…
         </p>
       )}

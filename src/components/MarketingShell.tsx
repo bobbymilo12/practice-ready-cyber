@@ -71,7 +71,10 @@ export function MarketingShell({
         </div>
       </header>
       {saving && (
-        <p role="status" className="marketing-wrap pt-3 text-sm">
+        <p
+          role="status"
+          className="pointer-events-none fixed right-6 top-20 z-20 rounded-full bg-surface px-3 py-1 text-sm shadow-sm"
+        >
           Saving practice changes…
         </p>
       )}

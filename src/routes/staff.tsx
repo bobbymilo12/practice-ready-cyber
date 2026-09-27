@@ -18,6 +18,16 @@ function Staff() {
     module: state.modules.find((m) => m.id === a.moduleId),
     ...assignmentProgress(a, sessions),
   }));
+  const induction = state.packages.find((p) => p.kind === "induction");
+  const inductionRows = induction
+    ? rows.filter((row) => induction.moduleIds.includes(row.assignment.moduleId))
+    : [];
+  const inductionCompleted = inductionRows.filter((row) => row.completed).length;
+  const inductionProgress = inductionRows.length
+    ? Math.round(
+        (inductionRows.reduce((sum, row) => sum + row.fraction, 0) / inductionRows.length) * 100,
+      )
+    : 0;
   const completed = rows.filter((r) => r.completed).length;
   const overall = rows.length
     ? Math.round((rows.reduce((sum, r) => sum + r.fraction, 0) / rows.length) * 100)
@@ -70,6 +80,41 @@ function Staff() {
           />
         </Card>
       </section>
+      {induction && (
+        <Card className="mt-6 border-primary/30 bg-surface">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Training package</p>
+              <h2 className="mt-1 font-display text-xl font-semibold">{induction.title}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{induction.description}</p>
+            </div>
+            <p className="text-sm font-semibold">
+              {inductionCompleted} of {inductionRows.length} modules complete
+            </p>
+          </div>
+          <progress
+            aria-label="Induction Package progress"
+            value={inductionProgress}
+            max={100}
+            className="mt-4 h-2 w-full accent-primary"
+          />
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {inductionRows.map((row) => (
+              <li
+                key={row.assignment.id}
+                className="flex items-center justify-between gap-3 text-sm"
+              >
+                <span>{row.module?.title ?? "Induction module"}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {row.completed && row.latest?.result
+                    ? `${Math.round((row.latest.result.correct / Math.max(row.latest.result.total, 1)) * 100)}%`
+                    : row.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {allDone && (
         <div role="status" className="mt-6 rounded-2xl border border-accent bg-accent/10 p-6">
           <h2 className="text-xl font-bold">All assigned training completed!</h2>

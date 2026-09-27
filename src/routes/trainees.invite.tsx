@@ -94,7 +94,8 @@ function InvitePage() {
         </Link>
         <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">Invite a trainee</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Send login details to the trainee’s work email, then assign their training.
+          Send login details to the trainee’s work email. Their practice Induction Package is
+          assigned automatically when published modules are ready.
         </p>
 
         <Card className="mt-6">

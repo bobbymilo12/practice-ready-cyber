@@ -15,6 +15,7 @@ export const supabase =
 export type PracticeState = Pick<
   AppState,
   | "modules"
+  | "packages"
   | "assignments"
   | "practiceData"
   | "setupComplete"
@@ -50,6 +51,7 @@ let generation = 0;
 let started = false;
 const practiceState = (s: AppState): PracticeState => ({
   modules: s.modules,
+  packages: s.packages,
   assignments: s.assignments,
   practiceData: s.practiceData,
   setupComplete: s.setupComplete,
@@ -100,6 +102,7 @@ function clearWorkspace() {
   useApp.setState({
     account: null,
     modules: [],
+    packages: [],
     assignments: [],
     trainees: [],
     results: [],
@@ -149,6 +152,7 @@ async function fetchWorkspace() {
       .sort((a, b) => b.completedAt - a.completedAt);
     useApp.setState({
       ...snapshot.state,
+      packages: snapshot.state.packages ?? [],
       practiceData: { ...emptyPractice(), ...snapshot.state.practiceData },
       account: snapshot.account,
       trainees: snapshot.trainees,

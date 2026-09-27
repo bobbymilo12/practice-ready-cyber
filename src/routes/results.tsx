@@ -98,6 +98,57 @@ function Results() {
           </div>
         </Card>
 
+        {attempt && (
+          <Card className="mt-5">
+            <h2 className="font-display text-xl font-semibold">Question review</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Your selected answer, the correct answer and the practice guidance are shown after
+              submission.
+            </p>
+            <ol className="mt-5 space-y-4">
+              {attempt.answers.map((answer, index) => {
+                const scenario = attempt.scenarios.find((item) => item.id === answer.scenarioId);
+                if (!scenario) return null;
+                const selected = Array.isArray(answer.value)
+                  ? answer.value.join(" → ")
+                  : scenario.kind === "mcq"
+                    ? scenario.options[answer.value]
+                    : "Selected order";
+                const correct =
+                  scenario.kind === "mcq"
+                    ? scenario.options[scenario.correctIndex]
+                    : scenario.steps.join(" → ");
+                return (
+                  <li key={answer.scenarioId} className="rounded-xl border border-border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <h3 className="font-semibold">
+                        {index + 1}. {scenario.title}
+                      </h3>
+                      <Badge tone={answer.correct ? "approved" : "draft"}>
+                        {answer.correct ? "Correct" : "Incorrect"}
+                      </Badge>
+                    </div>
+                    <p className="mt-3 text-sm">
+                      <strong>Your answer:</strong> {selected}
+                    </p>
+                    <p className="mt-2 text-sm">
+                      <strong>Correct answer:</strong> {correct}
+                    </p>
+                    <p className="mt-3 whitespace-pre-line text-sm text-muted-foreground">
+                      {scenario.learningPoint}
+                    </p>
+                    {scenario.managerNote && (
+                      <p className="mt-3 whitespace-pre-line text-sm">
+                        <strong>From your manager:</strong> {scenario.managerNote}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </Card>
+        )}
+
         {assignments.length > 0 && remaining.length === 0 && (
           <Card className="mt-5 border-accent">
             <h2 className="text-xl font-semibold">All assigned training completed!</h2>

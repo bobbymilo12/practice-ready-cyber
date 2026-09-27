@@ -54,6 +54,20 @@ function TraineeDetail() {
   const assignedModules = assigned
     .map((a) => modules.find((m) => m.id === a.moduleId))
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
+  const induction = useApp((s) => s.packages.find((p) => p.kind === "induction"));
+  const inductionAssignments = induction
+    ? assigned.filter((a) => induction.moduleIds.includes(a.moduleId))
+    : [];
+  const inductionProgress = inductionAssignments.length
+    ? Math.round(
+        (inductionAssignments.reduce(
+          (sum, assignment) => sum + assignmentProgress(assignment, sessions).fraction,
+          0,
+        ) /
+          inductionAssignments.length) *
+          100,
+      )
+    : 0;
 
   const perModule = assignedModules.map((m) => {
     const attempts = myResults
@@ -106,6 +120,28 @@ function TraineeDetail() {
           <div className="h-full rounded-full bg-accent" style={{ width: `${overall}%` }} />
         </div>
       </Card>
+
+      {induction && (
+        <Card className="mt-6 border-primary/30 bg-surface">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Training package</p>
+              <h2 className="mt-1 font-display text-xl font-semibold">{induction.title}</h2>
+            </div>
+            <span className="text-sm font-semibold">{inductionProgress}% overall</span>
+          </div>
+          <progress
+            aria-label="Induction Package progress"
+            value={inductionProgress}
+            max={100}
+            className="mt-4 h-2 w-full accent-primary"
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            {inductionAssignments.filter((a) => assignmentProgress(a, sessions).completed).length}{" "}
+            of {inductionAssignments.length} modules complete
+          </p>
+        </Card>
+      )}
 
       <h2 className="mt-10 font-display text-xl font-semibold">Module results</h2>
       <div className="mt-4 space-y-4">

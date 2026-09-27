@@ -104,6 +104,58 @@ function Training({ id }: { id: string }) {
         </Card>
       </Shell>
     );
+  if (!preview && session?.review)
+    return (
+      <Shell>
+        <div className="mx-auto max-w-3xl">
+          <Link to="/staff" className="text-sm text-primary">
+            ← Save and exit
+          </Link>
+          <h1 className="mt-5 font-display text-2xl font-bold">Review your answers</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Check your selected answers before submitting this module. Your score and feedback will
+            only be shown after submission.
+          </p>
+          <Card className="mt-6">
+            <ol className="space-y-4">
+              {session.queue.map((scenarioId, index) => {
+                const reviewScenario = session.scenarios.find((item) => item.id === scenarioId);
+                const selected = session.answers.find((item) => item.scenarioId === scenarioId);
+                if (!reviewScenario || !selected) return null;
+                return (
+                  <li key={scenarioId} className="rounded-xl border border-border p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Question {index + 1}
+                    </p>
+                    <h2 className="mt-1 font-semibold">{reviewScenario.title}</h2>
+                    <p className="mt-2 text-sm">
+                      Selected answer:{" "}
+                      {Array.isArray(selected.value)
+                        ? selected.value.join(" → ")
+                        : reviewScenario.kind === "mcq"
+                          ? reviewScenario.options[selected.value]
+                          : "Selected order"}
+                    </p>
+                  </li>
+                );
+              })}
+            </ol>
+            <button
+              disabled={busy}
+              onClick={() => void act("submit")}
+              className="mt-6 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              {busy ? "Submitting…" : "Submit module"}
+            </button>
+            {error && (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </Card>
+        </div>
+      </Shell>
+    );
   if (!scenario)
     return (
       <Shell>
@@ -128,7 +180,7 @@ function Training({ id }: { id: string }) {
               ? "Manager preview · no results recorded"
               : busy
                 ? "Saving…"
-                : "Checked answers saved to your account"}
+                : "Answers saved to your account"}
           </span>
         </div>
         <h1 className="mt-5 font-display text-2xl font-bold">{module.title}</h1>
@@ -196,14 +248,14 @@ function ScenarioBlock({
   isLast: boolean;
 }) {
   const [localAnswer, setLocalAnswer] = useState<SavedAnswer>();
-  const saved = preview ? localAnswer : answer;
+  const selected = preview ? localAnswer : answer;
   const [items, setItems] = useState<string[]>(() => {
     if (Array.isArray(answer?.value)) return answer.value;
     if (scenario.kind !== "order") return [];
     return [...scenario.steps.slice(1), scenario.steps[0]];
   });
   const check = (value: number | string[]) => {
-    if (busy || saved) return;
+    if (busy || selected) return;
     if (preview)
       setLocalAnswer({
         scenarioId: scenario.id,
@@ -233,17 +285,14 @@ function ScenarioBlock({
           {scenario.options.map((option, i) => (
             <button
               key={i}
-              disabled={busy || Boolean(saved)}
+              disabled={busy || Boolean(selected)}
               onClick={() => check(i)}
-              className={`flex w-full gap-3 rounded-xl border p-4 text-left text-sm disabled:cursor-default ${saved && i === scenario.correctIndex ? "border-accent bg-accent/10" : saved?.value === i ? "border-destructive bg-destructive/5" : "border-border hover:border-primary"}`}
+              className={`flex w-full gap-3 rounded-xl border p-4 text-left text-sm disabled:cursor-default ${selected?.value === i ? "border-primary bg-primary/10" : "border-border hover:border-primary"}`}
             >
               <span className="font-semibold">{String.fromCharCode(65 + i)}.</span>
               <span>
                 {option}
-                {saved && i === scenario.correctIndex && (
-                  <strong className="ml-2">Best answer</strong>
-                )}
-                {saved?.value === i && <span className="ml-2">(Your answer)</span>}
+                {selected?.value === i && <span className="ml-2 text-primary">(Selected)</span>}
               </span>
             </button>
           ))}
@@ -261,7 +310,7 @@ function ScenarioBlock({
               >
                 <span>{i + 1}.</span>
                 <span className="flex-1">{step}</span>
-                {!saved && (
+                {!selected && (
                   <div className="flex gap-2">
                     <button
                       aria-label={`Move step ${i + 1} up`}
@@ -284,39 +333,20 @@ function ScenarioBlock({
               </li>
             ))}
           </ol>
-          {!saved && (
+          {!selected && (
             <button
               disabled={busy}
               onClick={() => check(items)}
               className="mt-4 rounded-xl bg-primary px-4 py-3 text-sm text-primary-foreground disabled:opacity-50"
             >
-              Check my order
+              Select this order
             </button>
           )}
         </>
       )}
-      {saved && (
-        <div role="status" className="mt-6 rounded-xl border border-border bg-surface p-4">
-          <h3 className={`font-semibold ${saved.correct ? "text-primary" : "text-destructive"}`}>
-            {saved.correct ? "Correct" : "Not quite — let's learn from it"}
-          </h3>
-          {!saved.correct && scenario.kind === "order" && (
-            <>
-              <p className="mt-3 font-medium">Correct order</p>
-              <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm">
-                {scenario.steps.map((step, i) => (
-                  <li key={i}>{step}</li>
-                ))}
-              </ol>
-            </>
-          )}
-          <p className="mt-3 text-sm">{scenario.learningPoint}</p>
-          {scenario.managerNote && (
-            <div className="mt-4 rounded-lg border border-accent/40 p-3 text-sm">
-              <strong>From your manager</strong>
-              <p className="mt-1 whitespace-pre-line">{scenario.managerNote}</p>
-            </div>
-          )}
+      {selected && (
+        <div className="mt-6 rounded-xl border border-border bg-surface p-4">
+          <p className="text-sm">Answer selected. You can review all answers before submitting.</p>
           <button
             disabled={busy}
             onClick={onContinue}
@@ -327,7 +357,7 @@ function ScenarioBlock({
               : isLast
                 ? preview
                   ? "Finish preview"
-                  : "Finish module"
+                  : "Review answers"
                 : "Continue →"}
           </button>
         </div>

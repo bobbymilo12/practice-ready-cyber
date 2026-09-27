@@ -5,6 +5,7 @@ import {
   answerSession,
   assignmentProgress,
   startSession,
+  submitSession,
 } from "../src/lib/training.ts";
 import { practiceScenarios } from "../src/lib/practice-scenarios.ts";
 import type { Assignment, Module, PracticeData, Scenario } from "../src/lib/store.ts";
@@ -64,6 +65,7 @@ test("missed questions receive a different approved scenario and preserve the fi
   session = advanceSession(session, module.title);
   session = answerSession(session, 1);
   session = advanceSession(session, module.title);
+  session = submitSession(session, module.title);
   assert.equal(session.result?.correct, 1);
   assert.equal(session.result?.total, 2);
   assert.deepEqual(session.result?.wrongTitles, []);
@@ -96,7 +98,9 @@ test("unapproved followups never reach training", () => {
   const m = { ...module, scenarios: [question, { ...followup, status: "draft" as const }] };
   const session = answerSession(startSession(m, assignment, "attempt"), 0);
   assert.deepEqual(session.queue, ["q1"]);
-  assert.deepEqual(advanceSession(session, m.title).result?.wrongTitles, ["Booking"]);
+  const review = advanceSession(session, m.title);
+  assert.equal(review.review, true);
+  assert.deepEqual(submitSession(review, m.title).result?.wrongTitles, ["Booking"]);
 });
 
 test("unanswered, invalid and unavailable module operations fail", () => {
@@ -113,6 +117,7 @@ test("unanswered, invalid and unavailable module operations fail", () => {
 test("completion and an optional retake do not erase the achievement", () => {
   let session = startSession({ ...module, scenarios: [question] }, assignment, "attempt");
   session = advanceSession(answerSession(session, 1), module.title);
+  session = submitSession(session, module.title);
   const retake = startSession(module, assignment, "retake");
   assert.equal(assignmentProgress(assignment, [session, retake]).status, "Completed");
   assert.equal(assignmentProgress(assignment, [session, retake]).fraction, 1);

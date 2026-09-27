@@ -3,6 +3,7 @@ import {
   advanceSession,
   answerSession,
   startSession,
+  submitSession,
   type TrainingSession,
 } from "../../src/lib/training";
 import type { Assignment, Module } from "../../src/lib/store";
@@ -148,6 +149,11 @@ async function mockAccount(page: Page, mustReset = false, empty = false) {
             sessions[i],
             modules.find((m) => m.id === sessions[i].moduleId)!.title,
           );
+        if (body.action === "submit")
+          sessions[i] = submitSession(
+            sessions[i],
+            modules.find((m) => m.id === sessions[i].moduleId)!.title,
+          );
         if (body.action === "confidence") sessions[i].result!.confidence = body.value;
         payload = { session: sessions[i] };
       }
@@ -181,13 +187,18 @@ test("password change, saved feedback, different followup, next module and compl
   await page.getByRole("link", { name: "Continue Training" }).click();
   await page.getByRole("button", { name: "Begin training" }).click();
   await page.getByRole("button", { name: "Guess the process" }).click();
-  await expect(page.getByRole("heading", { name: /Not quite/ })).toBeVisible();
+  await expect(
+    page.getByText("Answer selected. You can review all answers before submitting."),
+  ).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: /Not quite/ })).toBeVisible();
+  await expect(
+    page.getByText("Answer selected. You can review all answers before submitting."),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Continue →", exact: true }).click();
   await expect(page.getByText("Extra practice", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Check the local rules again" }).click();
-  await page.getByRole("button", { name: "Finish module" }).click();
+  await page.getByRole("button", { name: "Review answers" }).click();
+  await page.getByRole("button", { name: "Submit module" }).click();
   await expect(page.getByRole("heading", { name: "Improved with extra practice" })).toBeVisible();
   expect(sessions[0].result?.correct).toBe(0);
   await page.getByRole("button", { name: "4 — Confident", exact: true }).click();
@@ -197,7 +208,8 @@ test("password change, saved feedback, different followup, next module and compl
   await page.getByRole("button", { name: "Move step 3 up" }).click();
   await page.getByRole("button", { name: "Move step 2 up" }).click();
   await page.getByRole("button", { name: "Check my order" }).click();
-  await page.getByRole("button", { name: "Finish module" }).click();
+  await page.getByRole("button", { name: "Review answers" }).click();
+  await page.getByRole("button", { name: "Submit module" }).click();
   await expect(
     page.getByRole("heading", { name: "All assigned training completed!" }),
   ).toBeVisible();
@@ -216,7 +228,9 @@ test("failed answer can be retried, and trainee cannot open manager routes", asy
   await expect(page.getByRole("alert")).toContainText("Could not save");
   await expect(page.getByRole("heading", { name: "Correct", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Check the local rules" }).click();
-  await expect(page.getByRole("heading", { name: "Correct", exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Answer selected. You can review all answers before submitting."),
+  ).toBeVisible();
 });
 
 test("unassigned trainee has an empty homepage, not the published library", async ({ page }) => {

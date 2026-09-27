@@ -5,8 +5,30 @@ import type { AppointmentCapabilities } from "./appointment-capabilities";
 import { create } from "zustand";
 import { practiceScenarios } from "./practice-scenarios";
 
-import type { ScenarioStatus, MCQScenario, OrderScenario, Scenario, Difficulty, ModuleLength, Module, TrainingResult, Assignment } from "./training-types";
-export type { ScenarioStatus, MCQScenario, OrderScenario, Scenario, Difficulty, ModuleLength, Module, TrainingResult, Assignment } from "./training-types";
+import type {
+  ScenarioStatus,
+  MCQScenario,
+  OrderScenario,
+  Scenario,
+  Difficulty,
+  ModuleLength,
+  Module,
+  TrainingResult,
+  Assignment,
+  TrainingPackage,
+} from "./training-types";
+export type {
+  ScenarioStatus,
+  MCQScenario,
+  OrderScenario,
+  Scenario,
+  Difficulty,
+  ModuleLength,
+  Module,
+  TrainingResult,
+  Assignment,
+  TrainingPackage,
+} from "./training-types";
 
 // ------------- Accounts, trainees, assignments -------------
 export type AccountRole = "manager" | "trainee";
@@ -201,7 +223,12 @@ export const defaultPracticeData: PracticeData = {
       name: "Anna Bright",
       role: "Nurse Practitioner",
       clinics: "Minor illness, UTIs, ear infections, wound review",
-      capabilities: ["Minor illness", "Wound review", "Urgent same-day triage", "New patient checks"],
+      capabilities: [
+        "Minor illness",
+        "Wound review",
+        "Urgent same-day triage",
+        "New patient checks",
+      ],
     },
     {
       id: "s3",
@@ -222,7 +249,12 @@ export const defaultPracticeData: PracticeData = {
       name: "Sarah Khan",
       role: "Practice Pharmacist",
       clinics: "Medication reviews, high-risk drug monitoring, prescription queries",
-      capabilities: ["Medication reviews", "Prescription queries", "Mental health support", "Fit notes"],
+      capabilities: [
+        "Medication reviews",
+        "Prescription queries",
+        "Mental health support",
+        "Fit notes",
+      ],
     },
   ],
   rolePolicies: {
@@ -258,6 +290,7 @@ export const defaultPracticeData: PracticeData = {
 // ------------- App state -------------
 export interface AppState {
   modules: Module[];
+  packages: TrainingPackage[];
   answers: Record<string, string>;
   currentDraftId: string | null;
   lastResult: TrainingResult | null;
@@ -271,12 +304,20 @@ export interface AppState {
 
   setAnswer: (key: string, value: string) => void;
   resetAnswers: () => void;
-  createDraftModule: (type: string, title: string, topicKey: string, seed: Scenario[], difficulty?: Difficulty, length?: ModuleLength) => string;
+  createDraftModule: (
+    type: string,
+    title: string,
+    topicKey: string,
+    seed: Scenario[],
+    difficulty?: Difficulty,
+    length?: ModuleLength,
+  ) => string;
   updateScenario: (moduleId: string, s: Scenario) => void;
   deleteScenario: (moduleId: string, scenarioId: string) => void;
   approveScenario: (moduleId: string, scenarioId: string) => void;
   regenerateScenario: (moduleId: string, scenarioId: string) => void;
   publishModule: (moduleId: string) => void;
+  removeDraftModule: (moduleId: string) => void;
   clearReviewFlag: (moduleId: string) => void;
   setLastResult: (r: TrainingResult) => void;
   addResult: (r: TrainingResult) => void;
@@ -285,7 +326,12 @@ export interface AppState {
   // Accounts & team
   removeTrainee: (id: string) => void;
   activateTrainee: (id: string) => void;
-  assignModule: (traineeId: string, moduleId: string, dueDate?: string, status?: Assignment["status"]) => void;
+  assignModule: (
+    traineeId: string,
+    moduleId: string,
+    dueDate?: string,
+    status?: Assignment["status"],
+  ) => void;
   reassignModule: (traineeId: string, moduleId: string) => void;
   unassignModule: (traineeId: string, moduleId: string) => void;
   markResult: (traineeId: string, moduleId: string, completedAt: number, emoji: string) => void;
@@ -319,6 +365,26 @@ export interface AppState {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+function markInductionNeedsReview(state: Pick<AppState, "modules" | "packages">) {
+  const induction = state.packages.find((p) => p.kind === "induction");
+  if (!induction) return {};
+  const moduleIds = new Set(induction.moduleIds);
+  return {
+    packages: state.packages.map((p) =>
+      p.id === induction.id ? { ...p, version: p.version + 1, updatedAt: Date.now() } : p,
+    ),
+    modules: state.modules.map((m) =>
+      moduleIds.has(m.id)
+        ? {
+            ...m,
+            needsReview: m.published || m.needsReview,
+            reviewReason: "Practice information changed. Re-check this induction module.",
+          }
+        : m,
+    ),
+  };
+}
+
 // ------------- Setup questions per topic -------------
 export interface SetupQuestion {
   key: string;
@@ -331,124 +397,497 @@ export interface SetupQuestion {
 // covers what, repeat prescription turnaround and controlled-drug rules are
 // pulled from practiceData and do not appear here.
 const APPOINTMENT_QUESTIONS: SetupQuestion[] = [
-  { key: "sameDayProcess", q: "Step-by-step: how does your practice handle a same-day appointment request from first hello to booking?", placeholder: "e.g. Ask triage questions from script → check duty list → book duty or escalate" },
-  { key: "urgentSymptoms", q: "Which symptoms must reception treat as same-day urgent, and who do they route to?", placeholder: "e.g. Chest pain → 999 + duty GP; suspected stroke → 999; suicidal ideation → duty GP now" },
-  { key: "under5", q: "Anything specific about how under-5 appointments are handled beyond 'always same-day with a GP'?", placeholder: "e.g. Always safeguarding flag check; take temperature history; two-hour call-back rule" },
-  { key: "mentalHealth", q: "How are mental health appointments booked in practice — and any dedicated slots?", placeholder: "e.g. Duty GP triage same day; MH practitioner clinic Thu; crisis line for emergencies" },
-  { key: "homeVisits", q: "Home visits: cut-off time, who decides, what details must reception take?", placeholder: "e.g. Requests before 10:30; duty GP triages; take name, address, phone, reason" },
-  { key: "telephone", q: "When do you book telephone vs face-to-face, and are there video slots?", placeholder: "e.g. Admin/results by phone; exams and children F2F; video for follow-ups" },
-  { key: "cancelDNA", q: "How are cancellations, DNAs and repeated no-shows handled locally?", placeholder: "e.g. Offer rebook, code DNA in EMIS, flag 3+ DNAs to manager" },
-  { key: "escalate", q: "Who is on the escalation ladder when reception is unsure about an appointment?", placeholder: "e.g. Duty GP → senior receptionist → practice manager" },
-  { key: "localExtras", q: "Any local systems, templates or extras staff must know for booking?", placeholder: "e.g. EMIS same-day template, PCN evening hub, interpreter service" },
+  {
+    key: "sameDayProcess",
+    q: "Step-by-step: how does your practice handle a same-day appointment request from first hello to booking?",
+    placeholder: "e.g. Ask triage questions from script → check duty list → book duty or escalate",
+  },
+  {
+    key: "urgentSymptoms",
+    q: "Which symptoms must reception treat as same-day urgent, and who do they route to?",
+    placeholder:
+      "e.g. Chest pain → 999 + duty GP; suspected stroke → 999; suicidal ideation → duty GP now",
+  },
+  {
+    key: "under5",
+    q: "Anything specific about how under-5 appointments are handled beyond 'always same-day with a GP'?",
+    placeholder:
+      "e.g. Always safeguarding flag check; take temperature history; two-hour call-back rule",
+  },
+  {
+    key: "mentalHealth",
+    q: "How are mental health appointments booked in practice — and any dedicated slots?",
+    placeholder:
+      "e.g. Duty GP triage same day; MH practitioner clinic Thu; crisis line for emergencies",
+  },
+  {
+    key: "homeVisits",
+    q: "Home visits: cut-off time, who decides, what details must reception take?",
+    placeholder: "e.g. Requests before 10:30; duty GP triages; take name, address, phone, reason",
+  },
+  {
+    key: "telephone",
+    q: "When do you book telephone vs face-to-face, and are there video slots?",
+    placeholder: "e.g. Admin/results by phone; exams and children F2F; video for follow-ups",
+  },
+  {
+    key: "cancelDNA",
+    q: "How are cancellations, DNAs and repeated no-shows handled locally?",
+    placeholder: "e.g. Offer rebook, code DNA in EMIS, flag 3+ DNAs to manager",
+  },
+  {
+    key: "escalate",
+    q: "Who is on the escalation ladder when reception is unsure about an appointment?",
+    placeholder: "e.g. Duty GP → senior receptionist → practice manager",
+  },
+  {
+    key: "localExtras",
+    q: "Any local systems, templates or extras staff must know for booking?",
+    placeholder: "e.g. EMIS same-day template, PCN evening hub, interpreter service",
+  },
 ];
 
 const PRESCRIPTION_QUESTIONS: SetupQuestion[] = [
-  { key: "runOut", q: "A patient has run out of essential medication today — any nuances beyond your standard emergency supply process?", placeholder: "e.g. Insulin — always duty GP not pharmacist; epilepsy — same-day GP call-back within 1h" },
-  { key: "acute", q: "How are acute (non-repeat) prescription requests handled?", placeholder: "e.g. Not through repeats — book duty GP call-back or pharmacist review" },
-  { key: "reviewsOverdue", q: "How do staff handle overdue medication reviews when the patient calls chasing?", placeholder: "e.g. Alert on system, book with Sarah Khan (pharmacist) before reissue" },
-  { key: "safeguarding", q: "Safeguarding flags in prescription requests that must be escalated?", placeholder: "e.g. Repeated early requests, opioid escalation, mental health med queries from third parties" },
-  { key: "queries", q: "Which medication queries can reception answer vs must route on?", placeholder: "e.g. Timings/collection = reception; interactions/side effects = pharmacist; dose change = duty GP" },
-  { key: "escalate", q: "Escalation chain when a prescription issue can't be resolved by reception?", placeholder: "e.g. Pharmacist Sarah Khan → duty GP → prescriptions manager" },
-  { key: "localExtras", q: "Local rules, shared care protocols or systems staff must know for prescriptions?", placeholder: "e.g. Shared care with mental health team, high-risk register in EMIS" },
+  {
+    key: "runOut",
+    q: "A patient has run out of essential medication today — any nuances beyond your standard emergency supply process?",
+    placeholder:
+      "e.g. Insulin — always duty GP not pharmacist; epilepsy — same-day GP call-back within 1h",
+  },
+  {
+    key: "acute",
+    q: "How are acute (non-repeat) prescription requests handled?",
+    placeholder: "e.g. Not through repeats — book duty GP call-back or pharmacist review",
+  },
+  {
+    key: "reviewsOverdue",
+    q: "How do staff handle overdue medication reviews when the patient calls chasing?",
+    placeholder: "e.g. Alert on system, book with Sarah Khan (pharmacist) before reissue",
+  },
+  {
+    key: "safeguarding",
+    q: "Safeguarding flags in prescription requests that must be escalated?",
+    placeholder:
+      "e.g. Repeated early requests, opioid escalation, mental health med queries from third parties",
+  },
+  {
+    key: "queries",
+    q: "Which medication queries can reception answer vs must route on?",
+    placeholder:
+      "e.g. Timings/collection = reception; interactions/side effects = pharmacist; dose change = duty GP",
+  },
+  {
+    key: "escalate",
+    q: "Escalation chain when a prescription issue can't be resolved by reception?",
+    placeholder: "e.g. Pharmacist Sarah Khan → duty GP → prescriptions manager",
+  },
+  {
+    key: "localExtras",
+    q: "Local rules, shared care protocols or systems staff must know for prescriptions?",
+    placeholder: "e.g. Shared care with mental health team, high-risk register in EMIS",
+  },
 ];
 
 const URGENT_QUESTIONS: SetupQuestion[] = [
-  { key: "chestPain", q: "Exact reception response to a caller reporting chest pain — words and actions.", placeholder: "e.g. 'Please hang up and dial 999 now, I'll alert a GP' — flag duty GP, log time" },
-  { key: "stroke", q: "Response to FAST signs (face, arm, speech, time)?", placeholder: "e.g. 999 immediately; note time of onset; alert duty GP" },
-  { key: "breathing", q: "Response to severe breathing difficulty?", placeholder: "e.g. 999 if unable to speak full sentences; otherwise urgent duty GP triage" },
-  { key: "bleeding", q: "Response to uncontrolled bleeding?", placeholder: "e.g. 999, advise pressure with clean cloth, alert duty" },
-  { key: "suicidal", q: "Response to a caller expressing suicidal thoughts — do NOT hang up.", placeholder: "e.g. Keep on line, urgent duty GP, share crisis line 0300 000 0000" },
-  { key: "sepsis", q: "Sepsis red flags reception should recognise?", placeholder: "e.g. New confusion, mottled skin, fever + rigors, no urine in 12h" },
-  { key: "pregnancy", q: "Urgent symptoms in pregnancy and where to route them?", placeholder: "e.g. Bleeding / reduced movements → maternity triage number" },
-  { key: "childUnder2", q: "Unwell child under 2 — who takes the call and what slot type?", placeholder: "e.g. Always duty GP same-day; never ANP; never routine" },
-  { key: "collapseCall", q: "Caller reports someone has collapsed at home — what does reception do?", placeholder: "e.g. 999 first, keep them on line for CPR instructions, alert clinician" },
-  { key: "collapseSurgery", q: "Patient collapses in the waiting room — exact sequence?", placeholder: "e.g. Emergency buzzer, nearest clinician, 999, do not move" },
-  { key: "dutyTeam", q: "Who is the duty team today and how do reception contact them?", placeholder: "e.g. Duty GP on rota — Teams #duty, ext 401" },
-  { key: "escalate", q: "Escalation if the duty GP is unreachable?", placeholder: "e.g. Second duty → senior partner → practice manager" },
-  { key: "documentation", q: "How must urgent calls be documented in EMIS/SystmOne?", placeholder: "e.g. Urgent template, timestamp, actions taken, patient words in quotes" },
-  { key: "neverDo", q: "What must reception never do during an urgent call?", placeholder: "e.g. Never give clinical advice, never book routine and end call, never leave line if suicidal" },
+  {
+    key: "chestPain",
+    q: "Exact reception response to a caller reporting chest pain — words and actions.",
+    placeholder: "e.g. 'Please hang up and dial 999 now, I'll alert a GP' — flag duty GP, log time",
+  },
+  {
+    key: "stroke",
+    q: "Response to FAST signs (face, arm, speech, time)?",
+    placeholder: "e.g. 999 immediately; note time of onset; alert duty GP",
+  },
+  {
+    key: "breathing",
+    q: "Response to severe breathing difficulty?",
+    placeholder: "e.g. 999 if unable to speak full sentences; otherwise urgent duty GP triage",
+  },
+  {
+    key: "bleeding",
+    q: "Response to uncontrolled bleeding?",
+    placeholder: "e.g. 999, advise pressure with clean cloth, alert duty",
+  },
+  {
+    key: "suicidal",
+    q: "Response to a caller expressing suicidal thoughts — do NOT hang up.",
+    placeholder: "e.g. Keep on line, urgent duty GP, share crisis line 0300 000 0000",
+  },
+  {
+    key: "sepsis",
+    q: "Sepsis red flags reception should recognise?",
+    placeholder: "e.g. New confusion, mottled skin, fever + rigors, no urine in 12h",
+  },
+  {
+    key: "pregnancy",
+    q: "Urgent symptoms in pregnancy and where to route them?",
+    placeholder: "e.g. Bleeding / reduced movements → maternity triage number",
+  },
+  {
+    key: "childUnder2",
+    q: "Unwell child under 2 — who takes the call and what slot type?",
+    placeholder: "e.g. Always duty GP same-day; never ANP; never routine",
+  },
+  {
+    key: "collapseCall",
+    q: "Caller reports someone has collapsed at home — what does reception do?",
+    placeholder: "e.g. 999 first, keep them on line for CPR instructions, alert clinician",
+  },
+  {
+    key: "collapseSurgery",
+    q: "Patient collapses in the waiting room — exact sequence?",
+    placeholder: "e.g. Emergency buzzer, nearest clinician, 999, do not move",
+  },
+  {
+    key: "dutyTeam",
+    q: "Who is the duty team today and how do reception contact them?",
+    placeholder: "e.g. Duty GP on rota — Teams #duty, ext 401",
+  },
+  {
+    key: "escalate",
+    q: "Escalation if the duty GP is unreachable?",
+    placeholder: "e.g. Second duty → senior partner → practice manager",
+  },
+  {
+    key: "documentation",
+    q: "How must urgent calls be documented in EMIS/SystmOne?",
+    placeholder: "e.g. Urgent template, timestamp, actions taken, patient words in quotes",
+  },
+  {
+    key: "neverDo",
+    q: "What must reception never do during an urgent call?",
+    placeholder:
+      "e.g. Never give clinical advice, never book routine and end call, never leave line if suicidal",
+  },
 ];
 
 const RESULTS_QUESTIONS: SetupQuestion[] = [
-  { key: "whoReleases", q: "Which clinicians release results and how do reception know status?", placeholder: "e.g. Duty GP each morning; results flagged as N/A/A/UA in EMIS" },
-  { key: "canShare", q: "Which results can reception read to a patient and which must a clinician give?", placeholder: "e.g. Reception may say 'normal, no action'; abnormal / new diagnosis = clinician only" },
-  { key: "identity", q: "How do staff verify patient identity before sharing results?", placeholder: "e.g. Full name, DOB, first line of address" },
-  { key: "thirdParty", q: "Third-party requests (family, carer) — what is allowed?", placeholder: "e.g. Only with written consent on file; safeguarding check for under-16s" },
-  { key: "urgent", q: "How are urgent / abnormal results flagged and escalated?", placeholder: "e.g. Abnormal → duty GP call within 24h; critical → same day" },
-  { key: "childrenResults", q: "Rules for children's or teenager's results?", placeholder: "e.g. Under 13 to parent; 13–16 Gillick; 16+ patient only" },
-  { key: "systemSteps", q: "Steps in EMIS/SystmOne when reception passes on a result.", placeholder: "e.g. Open patient record → results tab → template → task GP" },
-  { key: "escalate", q: "Escalation route if unsure?", placeholder: "e.g. Duty GP > practice manager" },
-  { key: "neverDo", q: "What must reception never do with results?", placeholder: "e.g. Never share by voicemail, never guess normal, never interpret abnormal" },
-  { key: "tone", q: "What tone and phrasing works well?", placeholder: "e.g. 'Your result is with the doctor for review, they'll call you if action is needed'" },
+  {
+    key: "whoReleases",
+    q: "Which clinicians release results and how do reception know status?",
+    placeholder: "e.g. Duty GP each morning; results flagged as N/A/A/UA in EMIS",
+  },
+  {
+    key: "canShare",
+    q: "Which results can reception read to a patient and which must a clinician give?",
+    placeholder:
+      "e.g. Reception may say 'normal, no action'; abnormal / new diagnosis = clinician only",
+  },
+  {
+    key: "identity",
+    q: "How do staff verify patient identity before sharing results?",
+    placeholder: "e.g. Full name, DOB, first line of address",
+  },
+  {
+    key: "thirdParty",
+    q: "Third-party requests (family, carer) — what is allowed?",
+    placeholder: "e.g. Only with written consent on file; safeguarding check for under-16s",
+  },
+  {
+    key: "urgent",
+    q: "How are urgent / abnormal results flagged and escalated?",
+    placeholder: "e.g. Abnormal → duty GP call within 24h; critical → same day",
+  },
+  {
+    key: "childrenResults",
+    q: "Rules for children's or teenager's results?",
+    placeholder: "e.g. Under 13 to parent; 13–16 Gillick; 16+ patient only",
+  },
+  {
+    key: "systemSteps",
+    q: "Steps in EMIS/SystmOne when reception passes on a result.",
+    placeholder: "e.g. Open patient record → results tab → template → task GP",
+  },
+  {
+    key: "escalate",
+    q: "Escalation route if unsure?",
+    placeholder: "e.g. Duty GP > practice manager",
+  },
+  {
+    key: "neverDo",
+    q: "What must reception never do with results?",
+    placeholder: "e.g. Never share by voicemail, never guess normal, never interpret abnormal",
+  },
+  {
+    key: "tone",
+    q: "What tone and phrasing works well?",
+    placeholder:
+      "e.g. 'Your result is with the doctor for review, they'll call you if action is needed'",
+  },
 ];
 
 const DIFFICULT_QUESTIONS: SetupQuestion[] = [
-  { key: "commonTriggers", q: "What are the common triggers for angry calls at your practice?", placeholder: "e.g. Long waits, no same-day slot, prescription delays" },
-  { key: "descalation", q: "Preferred de-escalation phrases?", placeholder: "e.g. 'I can hear this is frustrating, let me see what I can do'" },
-  { key: "abuse", q: "Zero-tolerance line — when does a call get ended and how?", placeholder: "e.g. Swearing / threats — warn once, end call, log incident" },
-  { key: "callback", q: "When should reception offer a call-back vs stay on the line?", placeholder: "e.g. Call-back if resolving needs another team; stay on line if distress or safety" },
-  { key: "escalate", q: "Who does reception hand a distressed caller to?", placeholder: "e.g. Senior receptionist, duty GP, practice manager" },
-  { key: "safeguarding", q: "Safeguarding cues in difficult calls (DA, coercion, self-harm)?", placeholder: "e.g. Third-party in room, coded language, requesting a doctor to 'get out'" },
-  { key: "log", q: "How are difficult calls logged and reviewed?", placeholder: "e.g. Incident log + Datix, weekly manager review" },
-  { key: "neverDo", q: "What must staff never do in a difficult call?", placeholder: "e.g. Never match the caller's tone, never make promises, never hang up on distress" },
-  { key: "tone", q: "Tone rules?", placeholder: "e.g. Calm, low pace, short sentences, name the emotion" },
+  {
+    key: "commonTriggers",
+    q: "What are the common triggers for angry calls at your practice?",
+    placeholder: "e.g. Long waits, no same-day slot, prescription delays",
+  },
+  {
+    key: "descalation",
+    q: "Preferred de-escalation phrases?",
+    placeholder: "e.g. 'I can hear this is frustrating, let me see what I can do'",
+  },
+  {
+    key: "abuse",
+    q: "Zero-tolerance line — when does a call get ended and how?",
+    placeholder: "e.g. Swearing / threats — warn once, end call, log incident",
+  },
+  {
+    key: "callback",
+    q: "When should reception offer a call-back vs stay on the line?",
+    placeholder:
+      "e.g. Call-back if resolving needs another team; stay on line if distress or safety",
+  },
+  {
+    key: "escalate",
+    q: "Who does reception hand a distressed caller to?",
+    placeholder: "e.g. Senior receptionist, duty GP, practice manager",
+  },
+  {
+    key: "safeguarding",
+    q: "Safeguarding cues in difficult calls (DA, coercion, self-harm)?",
+    placeholder: "e.g. Third-party in room, coded language, requesting a doctor to 'get out'",
+  },
+  {
+    key: "log",
+    q: "How are difficult calls logged and reviewed?",
+    placeholder: "e.g. Incident log + Datix, weekly manager review",
+  },
+  {
+    key: "neverDo",
+    q: "What must staff never do in a difficult call?",
+    placeholder:
+      "e.g. Never match the caller's tone, never make promises, never hang up on distress",
+  },
+  {
+    key: "tone",
+    q: "Tone rules?",
+    placeholder: "e.g. Calm, low pace, short sentences, name the emotion",
+  },
 ];
 
 const FIRST_WEEK_QUESTIONS: SetupQuestion[] = [
-  { key: "systems", q: "Which systems will the new starter use in week 1?", placeholder: "e.g. EMIS Web, Docman, Accurx, NHS App admin, Teams" },
-  { key: "buddy", q: "Who is the buddy / senior receptionist they should sit with?", placeholder: "e.g. Jenna R. mornings, Tomek P. afternoons" },
-  { key: "shadow", q: "What should they shadow before taking calls solo?", placeholder: "e.g. 2 days on reception, 1 day on prescriptions, 1 day on results" },
-  { key: "phrasesGreet", q: "Standard greeting and hold phrases?", placeholder: "e.g. 'Good morning, Willow Lane, how can I help?'" },
-  { key: "confidentiality", q: "Confidentiality basics they must know on day 1?", placeholder: "e.g. Screen locking, no info to third parties, no info in waiting room" },
-  { key: "safeguarding", q: "What safeguarding basics does day 1 need to cover?", placeholder: "e.g. Who is safeguarding lead, how to flag a concern" },
-  { key: "escalate", q: "When to stop and ask for help — worked examples?", placeholder: "e.g. Anything urgent, anything about a child, any complaint" },
-  { key: "neverDo", q: "Common week-1 mistakes to prevent?", placeholder: "e.g. Booking chest pain into routine, sharing results without ID check" },
+  {
+    key: "systems",
+    q: "Which systems will the new starter use in week 1?",
+    placeholder: "e.g. EMIS Web, Docman, Accurx, NHS App admin, Teams",
+  },
+  {
+    key: "buddy",
+    q: "Who is the buddy / senior receptionist they should sit with?",
+    placeholder: "e.g. Jenna R. mornings, Tomek P. afternoons",
+  },
+  {
+    key: "shadow",
+    q: "What should they shadow before taking calls solo?",
+    placeholder: "e.g. 2 days on reception, 1 day on prescriptions, 1 day on results",
+  },
+  {
+    key: "phrasesGreet",
+    q: "Standard greeting and hold phrases?",
+    placeholder: "e.g. 'Good morning, Willow Lane, how can I help?'",
+  },
+  {
+    key: "confidentiality",
+    q: "Confidentiality basics they must know on day 1?",
+    placeholder: "e.g. Screen locking, no info to third parties, no info in waiting room",
+  },
+  {
+    key: "safeguarding",
+    q: "What safeguarding basics does day 1 need to cover?",
+    placeholder: "e.g. Who is safeguarding lead, how to flag a concern",
+  },
+  {
+    key: "escalate",
+    q: "When to stop and ask for help — worked examples?",
+    placeholder: "e.g. Anything urgent, anything about a child, any complaint",
+  },
+  {
+    key: "neverDo",
+    q: "Common week-1 mistakes to prevent?",
+    placeholder: "e.g. Booking chest pain into routine, sharing results without ID check",
+  },
 ];
 
 const VACCINE_QUESTIONS: SetupQuestion[] = [
-  { key: "types", q: "Which vaccines does your practice commonly book?", placeholder: "e.g. Flu, COVID, childhood imms, pneumococcal, shingles, travel" },
-  { key: "whoAdministers", q: "Which clinicians administer which vaccines?", placeholder: "e.g. Priya (childhood + flu), Marcus HCA (flu, pneumo, B12), Sarah pharmacist (COVID)" },
-  { key: "clinicDays", q: "What are your vaccine clinic days / slots?", placeholder: "e.g. Flu Sat clinics Oct–Nov; childhood imms Tue mornings" },
-  { key: "eligibility", q: "How does reception check eligibility for each?", placeholder: "e.g. Age band on EMIS; at-risk register; pregnancy status" },
-  { key: "unclearEligibility", q: "What should staff do if eligibility is unclear?", placeholder: "e.g. Don't book; task duty GP or immunisation lead to confirm" },
-  { key: "escalate", q: "Which vaccine requests must be escalated (not booked)?", placeholder: "e.g. Post-exposure, immunocompromised, travel to high-risk destinations" },
-  { key: "canSay", q: "What can reception say (and what to avoid)?", placeholder: "e.g. Say: 'The nurse will discuss suitability.' Avoid: 'It's safe for you.'" },
-  { key: "commonMistakes", q: "Common vaccine booking mistakes new starters make?", placeholder: "e.g. Booking pregnant patients into wrong flu clinic; missing spacing rules" },
-  { key: "advice", q: "Which staff members should be asked when unsure?", placeholder: "e.g. Priya (imms lead), duty GP" },
-  { key: "localRules", q: "Local vaccine booking rules to include?", placeholder: "e.g. Spacing between COVID + flu, consent form process" },
+  {
+    key: "types",
+    q: "Which vaccines does your practice commonly book?",
+    placeholder: "e.g. Flu, COVID, childhood imms, pneumococcal, shingles, travel",
+  },
+  {
+    key: "whoAdministers",
+    q: "Which clinicians administer which vaccines?",
+    placeholder:
+      "e.g. Priya (childhood + flu), Marcus HCA (flu, pneumo, B12), Sarah pharmacist (COVID)",
+  },
+  {
+    key: "clinicDays",
+    q: "What are your vaccine clinic days / slots?",
+    placeholder: "e.g. Flu Sat clinics Oct–Nov; childhood imms Tue mornings",
+  },
+  {
+    key: "eligibility",
+    q: "How does reception check eligibility for each?",
+    placeholder: "e.g. Age band on EMIS; at-risk register; pregnancy status",
+  },
+  {
+    key: "unclearEligibility",
+    q: "What should staff do if eligibility is unclear?",
+    placeholder: "e.g. Don't book; task duty GP or immunisation lead to confirm",
+  },
+  {
+    key: "escalate",
+    q: "Which vaccine requests must be escalated (not booked)?",
+    placeholder: "e.g. Post-exposure, immunocompromised, travel to high-risk destinations",
+  },
+  {
+    key: "canSay",
+    q: "What can reception say (and what to avoid)?",
+    placeholder: "e.g. Say: 'The nurse will discuss suitability.' Avoid: 'It's safe for you.'",
+  },
+  {
+    key: "commonMistakes",
+    q: "Common vaccine booking mistakes new starters make?",
+    placeholder: "e.g. Booking pregnant patients into wrong flu clinic; missing spacing rules",
+  },
+  {
+    key: "advice",
+    q: "Which staff members should be asked when unsure?",
+    placeholder: "e.g. Priya (imms lead), duty GP",
+  },
+  {
+    key: "localRules",
+    q: "Local vaccine booking rules to include?",
+    placeholder: "e.g. Spacing between COVID + flu, consent form process",
+  },
 ];
 
 const FIT_NOTE_QUESTIONS: SetupQuestion[] = [
-  { key: "process", q: "What is your local fit note process?", placeholder: "e.g. Request via NHS App or admin form; GP reviews within 3 working days" },
-  { key: "who", q: "Who issues fit notes at your practice?", placeholder: "e.g. Any GP; ANPs can issue for conditions they've seen" },
-  { key: "under7", q: "How are self-cert (under 7 days) enquiries handled?", placeholder: "e.g. Explain SC2, no GP note needed, signpost to employer" },
-  { key: "backdating", q: "Rules on backdating and extensions?", placeholder: "e.g. GP discretion, requires prior contact record" },
-  { key: "collection", q: "How does the patient receive it?", placeholder: "e.g. Digital via NHS App; paper collection needs ID" },
-  { key: "neverPromise", q: "What must reception never promise?", placeholder: "e.g. That a fit note will be issued, or for a specific period" },
-  { key: "urgent", q: "How are urgent (benefits, tribunal, housing) fit note requests handled?", placeholder: "e.g. Flag to duty admin lead, evidence in record" },
-  { key: "escalate", q: "Escalation route?", placeholder: "e.g. Practice manager if patient dissatisfied with GP decision" },
+  {
+    key: "process",
+    q: "What is your local fit note process?",
+    placeholder: "e.g. Request via NHS App or admin form; GP reviews within 3 working days",
+  },
+  {
+    key: "who",
+    q: "Who issues fit notes at your practice?",
+    placeholder: "e.g. Any GP; ANPs can issue for conditions they've seen",
+  },
+  {
+    key: "under7",
+    q: "How are self-cert (under 7 days) enquiries handled?",
+    placeholder: "e.g. Explain SC2, no GP note needed, signpost to employer",
+  },
+  {
+    key: "backdating",
+    q: "Rules on backdating and extensions?",
+    placeholder: "e.g. GP discretion, requires prior contact record",
+  },
+  {
+    key: "collection",
+    q: "How does the patient receive it?",
+    placeholder: "e.g. Digital via NHS App; paper collection needs ID",
+  },
+  {
+    key: "neverPromise",
+    q: "What must reception never promise?",
+    placeholder: "e.g. That a fit note will be issued, or for a specific period",
+  },
+  {
+    key: "urgent",
+    q: "How are urgent (benefits, tribunal, housing) fit note requests handled?",
+    placeholder: "e.g. Flag to duty admin lead, evidence in record",
+  },
+  {
+    key: "escalate",
+    q: "Escalation route?",
+    placeholder: "e.g. Practice manager if patient dissatisfied with GP decision",
+  },
 ];
 
 const HOME_VISIT_QUESTIONS: SetupQuestion[] = [
-  { key: "cutoff", q: "What is the daily cut-off time for home visit requests?", placeholder: "e.g. 10:30 for routine; urgent taken any time" },
-  { key: "who", q: "Who triages home visit requests?", placeholder: "e.g. Duty GP; visits allocated after morning surgery" },
-  { key: "info", q: "What information must reception collect from the caller?", placeholder: "e.g. Name, DOB, address, phone, reason, access instructions, other people at address" },
-  { key: "redFlags", q: "Red-flag symptoms that mean 999 not visit?", placeholder: "e.g. Chest pain, stroke signs, unconscious, severe bleeding" },
-  { key: "houseBound", q: "How do staff verify housebound status?", placeholder: "e.g. Housebound register in EMIS; ask about mobility" },
-  { key: "neverPromise", q: "What must reception never promise?", placeholder: "e.g. A visit time, which GP, that a visit will be agreed" },
-  { key: "escalate", q: "Escalation if duty GP declines but family are unhappy?", placeholder: "e.g. Senior partner or practice manager" },
-  { key: "afterHours", q: "What happens if request comes after cut-off?", placeholder: "e.g. Duty GP decides; if not, signpost 111" },
+  {
+    key: "cutoff",
+    q: "What is the daily cut-off time for home visit requests?",
+    placeholder: "e.g. 10:30 for routine; urgent taken any time",
+  },
+  {
+    key: "who",
+    q: "Who triages home visit requests?",
+    placeholder: "e.g. Duty GP; visits allocated after morning surgery",
+  },
+  {
+    key: "info",
+    q: "What information must reception collect from the caller?",
+    placeholder:
+      "e.g. Name, DOB, address, phone, reason, access instructions, other people at address",
+  },
+  {
+    key: "redFlags",
+    q: "Red-flag symptoms that mean 999 not visit?",
+    placeholder: "e.g. Chest pain, stroke signs, unconscious, severe bleeding",
+  },
+  {
+    key: "houseBound",
+    q: "How do staff verify housebound status?",
+    placeholder: "e.g. Housebound register in EMIS; ask about mobility",
+  },
+  {
+    key: "neverPromise",
+    q: "What must reception never promise?",
+    placeholder: "e.g. A visit time, which GP, that a visit will be agreed",
+  },
+  {
+    key: "escalate",
+    q: "Escalation if duty GP declines but family are unhappy?",
+    placeholder: "e.g. Senior partner or practice manager",
+  },
+  {
+    key: "afterHours",
+    q: "What happens if request comes after cut-off?",
+    placeholder: "e.g. Duty GP decides; if not, signpost 111",
+  },
 ];
 
 const GENERIC_QUESTIONS: SetupQuestion[] = [
-  { key: "context", q: "Describe the exact situation this module should cover.", placeholder: "e.g. Handling test results enquiries by phone" },
-  { key: "process", q: "Step-by-step: your practice's local process.", placeholder: "In your own words" },
-  { key: "commonCalls", q: "Three or four real patient scenarios reception often meets.", placeholder: "Real examples" },
-  { key: "clinicianRoles", q: "Which clinicians / teams are involved and their names?", placeholder: "e.g. Sarah Khan (pharmacist), Dr Owens (duty GP)" },
-  { key: "escalate", q: "When and to whom should staff escalate?", placeholder: "e.g. Duty GP if red flags" },
-  { key: "neverPromise", q: "What should staff never promise or say?", placeholder: "e.g. Clinical opinions, exact timings" },
+  {
+    key: "context",
+    q: "Describe the exact situation this module should cover.",
+    placeholder: "e.g. Handling test results enquiries by phone",
+  },
+  {
+    key: "process",
+    q: "Step-by-step: your practice's local process.",
+    placeholder: "In your own words",
+  },
+  {
+    key: "commonCalls",
+    q: "Three or four real patient scenarios reception often meets.",
+    placeholder: "Real examples",
+  },
+  {
+    key: "clinicianRoles",
+    q: "Which clinicians / teams are involved and their names?",
+    placeholder: "e.g. Sarah Khan (pharmacist), Dr Owens (duty GP)",
+  },
+  {
+    key: "escalate",
+    q: "When and to whom should staff escalate?",
+    placeholder: "e.g. Duty GP if red flags",
+  },
+  {
+    key: "neverPromise",
+    q: "What should staff never promise or say?",
+    placeholder: "e.g. Clinical opinions, exact timings",
+  },
   { key: "tone", q: "Tone and phrases?", placeholder: "e.g. Warm, calm, professional" },
-  { key: "localExtras", q: "Local rules the module must include?", placeholder: "e.g. Templates, safeguarding" },
+  {
+    key: "localExtras",
+    q: "Local rules the module must include?",
+    placeholder: "e.g. Templates, safeguarding",
+  },
 ];
 
 export const TOPICS: {
@@ -979,24 +1418,43 @@ export function draftsForTopic(
   const target = length === "long" ? 15 : length === "medium" ? 10 : 5;
   const { practiceData, answers } = useApp.getState();
   const source = practiceScenarios(topicKey, topicTitle, practiceData, setupAnswers ?? answers);
-  const mainIds = new Set(source.filter((s) => !s.followUpFor).slice(0, target).map((s) => s.id));
-  return source.filter((s) => mainIds.has(s.followUpFor ?? s.id)).map((s, index): Scenario => {
-    if (s.kind !== "mcq") return s;
-    if (format === "order" || (format === "mixed" && Math.floor(index / 2) % 2 === 1)) {
-      return { kind: "order", id: s.id, title: s.title, patientQuote: s.patientQuote,
-        question: "Put these steps for applying the recorded practice guidance in order.",
-        steps: ["Identify which recorded local procedure applies to this request.",
-          `Check the local instructions: ${s.options[s.correctIndex]}`,
-          "Follow those instructions, seeking the named team's help if anything is unclear.",
-          "Document the action taken and the outcome according to the practice process."],
-        learningPoint: s.learningPoint, status: "draft", followUpFor: s.followUpFor };
-    }
-    const offset = difficulty === "easy" && !s.followUpFor ? 0 : Math.floor(Math.random() * s.options.length);
-    return { ...s, options: [...s.options.slice(offset), ...s.options.slice(0, offset)],
-      correctIndex: (s.correctIndex - offset + s.options.length) % s.options.length };
-  });
+  const mainIds = new Set(
+    source
+      .filter((s) => !s.followUpFor)
+      .slice(0, target)
+      .map((s) => s.id),
+  );
+  return source
+    .filter((s) => mainIds.has(s.followUpFor ?? s.id))
+    .map((s, index): Scenario => {
+      if (s.kind !== "mcq") return s;
+      if (format === "order" || (format === "mixed" && Math.floor(index / 2) % 2 === 1)) {
+        return {
+          kind: "order",
+          id: s.id,
+          title: s.title,
+          patientQuote: s.patientQuote,
+          question: "Put these steps for applying the recorded practice guidance in order.",
+          steps: [
+            "Identify which recorded local procedure applies to this request.",
+            `Check the local instructions: ${s.options[s.correctIndex]}`,
+            "Follow those instructions, seeking the named team's help if anything is unclear.",
+            "Document the action taken and the outcome according to the practice process.",
+          ],
+          learningPoint: s.learningPoint,
+          status: "draft",
+          followUpFor: s.followUpFor,
+        };
+      }
+      const offset =
+        difficulty === "easy" && !s.followUpFor ? 0 : Math.floor(Math.random() * s.options.length);
+      return {
+        ...s,
+        options: [...s.options.slice(offset), ...s.options.slice(0, offset)],
+        correctIndex: (s.correctIndex - offset + s.options.length) % s.options.length,
+      };
+    });
 }
-
 
 // ------------- Seeded example module -------------
 const seededModule: Module = {
@@ -1065,265 +1523,332 @@ const replaceInScenario = (s: Scenario, from: string, to: string): Scenario => {
 };
 
 export const useApp = create<AppState>()((set, get) => ({
-      modules: [],
-      answers: {},
-      currentDraftId: null,
-      lastResult: null,
-      results: [],
-      practiceData: defaultPracticeData,
-      account: null,
-      trainees: [],
-      assignments: [],
-      setupComplete: false,
-      emojiMarks: {},
+  modules: [],
+  packages: [],
+  answers: {},
+  currentDraftId: null,
+  lastResult: null,
+  results: [],
+  practiceData: defaultPracticeData,
+  account: null,
+  trainees: [],
+  assignments: [],
+  setupComplete: false,
+  emojiMarks: {},
 
-      setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
-      resetAnswers: () => set({ answers: {} }),
+  setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
+  resetAnswers: () => set({ answers: {} }),
 
-      createDraftModule: (type, title, topicKey, seed, difficulty, length) => {
-        const id = uid();
-        set((s) => ({
-          modules: [
-            ...s.modules,
-            {
-              id,
-              type,
-              title,
-              topicKey,
-              published: false,
-              scenarios: seed,
-              createdAt: Date.now(),
-              difficulty,
-              length,
-            },
-          ],
-          currentDraftId: id,
-        }));
-        return id;
-      },
+  createDraftModule: (type, title, topicKey, seed, difficulty, length) => {
+    const id = uid();
+    set((s) => ({
+      modules: [
+        ...s.modules,
+        {
+          id,
+          type,
+          title,
+          topicKey,
+          published: false,
+          scenarios: seed,
+          createdAt: Date.now(),
+          difficulty,
+          length,
+        },
+      ],
+      currentDraftId: id,
+    }));
+    return id;
+  },
 
-      updateScenario: (moduleId, s) =>
-        set((state) => ({
-          modules: state.modules.map((m) =>
-            m.id === moduleId
-              ? { ...m, needsReview: m.published || m.needsReview, scenarios: m.scenarios.map((x) => (x.id === s.id ? s : x)) }
-              : m,
-          ),
+  updateScenario: (moduleId, s) =>
+    set((state) => ({
+      modules: state.modules.map((m) =>
+        m.id === moduleId
+          ? {
+              ...m,
+              needsReview: m.published || m.needsReview,
+              scenarios: m.scenarios.map((x) => (x.id === s.id ? s : x)),
+            }
+          : m,
+      ),
+    })),
+
+  deleteScenario: (moduleId, scenarioId) =>
+    set((state) => ({
+      modules: state.modules.map((m) =>
+        m.id === moduleId
+          ? {
+              ...m,
+              needsReview: m.published || m.needsReview,
+              scenarios: m.scenarios.filter(
+                (x) => x.id !== scenarioId && x.followUpFor !== scenarioId,
+              ),
+            }
+          : m,
+      ),
+    })),
+
+  approveScenario: (moduleId, scenarioId) =>
+    set((state) => ({
+      modules: state.modules.map((m) =>
+        m.id === moduleId
+          ? {
+              ...m,
+              scenarios: m.scenarios.map((x) =>
+                x.id === scenarioId ? { ...x, status: "approved" } : x,
+              ),
+            }
+          : m,
+      ),
+    })),
+
+  regenerateScenario: (moduleId, scenarioId) =>
+    set((state) => {
+      const mod = state.modules.find((m) => m.id === moduleId);
+      if (!mod) return state;
+      const current = mod.scenarios.find((x) => x.id === scenarioId);
+      if (!current) return state;
+      const pool = practiceScenarios(
+        mod.topicKey,
+        mod.title,
+        state.practiceData,
+        state.answers,
+      ).filter((s) => !s.followUpFor);
+      const usedTitles = new Set(mod.scenarios.map((s) => s.title));
+      const sameKind = pool.filter((p) => p.kind === current.kind && !usedTitles.has(p.title));
+      const anyKind = pool.filter((p) => !usedTitles.has(p.title));
+      const pick =
+        sameKind[Math.floor(Math.random() * sameKind.length)] ??
+        anyKind[Math.floor(Math.random() * anyKind.length)] ??
+        pool[Math.floor(Math.random() * pool.length)];
+      if (!pick) return state;
+      const replacement: Scenario = {
+        ...pick,
+        id: current.id,
+        followUpFor: current.followUpFor,
+        status: "draft",
+      };
+      return {
+        modules: state.modules.map((m) =>
+          m.id === moduleId
+            ? {
+                ...m,
+                needsReview: m.published || m.needsReview,
+                scenarios: m.scenarios
+                  .filter((x) => x.followUpFor !== scenarioId)
+                  .map((x) => (x.id === scenarioId ? replacement : x)),
+              }
+            : m,
+        ),
+      };
+    }),
+
+  publishModule: (moduleId) =>
+    set((state) => ({
+      modules: state.modules.map((m) =>
+        m.id === moduleId &&
+        m.scenarios.length > 0 &&
+        m.scenarios.every((s) => s.status === "approved")
+          ? { ...m, published: true, needsReview: false }
+          : m,
+      ),
+    })),
+
+  removeDraftModule: (moduleId) =>
+    set((state) => {
+      const module = state.modules.find((m) => m.id === moduleId);
+      if (!module || module.published) return state;
+      return {
+        modules: state.modules.filter((m) => m.id !== moduleId),
+        assignments: state.assignments.filter((a) => a.moduleId !== moduleId),
+        packages: state.packages.map((p) => ({
+          ...p,
+          moduleIds: p.moduleIds.filter((id) => id !== moduleId),
         })),
+        currentDraftId: state.currentDraftId === moduleId ? null : state.currentDraftId,
+      };
+    }),
 
-      deleteScenario: (moduleId, scenarioId) =>
-        set((state) => ({
-          modules: state.modules.map((m) =>
-            m.id === moduleId
-              ? { ...m, needsReview: m.published || m.needsReview, scenarios: m.scenarios.filter((x) => x.id !== scenarioId && x.followUpFor !== scenarioId) }
-              : m,
-          ),
-        })),
+  setLastResult: (r) => set({ lastResult: r }),
 
-      approveScenario: (moduleId, scenarioId) =>
-        set((state) => ({
-          modules: state.modules.map((m) =>
-            m.id === moduleId
-              ? {
-                  ...m,
-                  scenarios: m.scenarios.map((x) =>
-                    x.id === scenarioId ? { ...x, status: "approved" } : x,
-                  ),
-                }
-              : m,
-          ),
-        })),
+  addResult: (r) =>
+    set((state) => {
+      const acc = state.account;
+      const traineeId =
+        r.traineeId ??
+        state.trainees.find((t) => t.email.toLowerCase() === (acc?.email ?? "").toLowerCase())
+          ?.id ??
+        (acc?.role === "trainee" ? `self:${acc.email.toLowerCase()}` : "self:demo");
+      const enriched: TrainingResult = {
+        ...r,
+        traineeId,
+        traineeName: r.traineeName ?? acc?.name ?? "Demo trainee",
+      };
+      return { results: [enriched, ...state.results].slice(0, 200), lastResult: enriched };
+    }),
 
-      regenerateScenario: (moduleId, scenarioId) =>
-        set((state) => {
-          const mod = state.modules.find((m) => m.id === moduleId);
-          if (!mod) return state;
-          const current = mod.scenarios.find((x) => x.id === scenarioId);
-          if (!current) return state;
-          const pool = practiceScenarios(mod.topicKey, mod.title, state.practiceData, state.answers).filter((s) => !s.followUpFor);
-          const usedTitles = new Set(mod.scenarios.map((s) => s.title));
-          const sameKind = pool.filter(
-            (p) => p.kind === current.kind && !usedTitles.has(p.title),
-          );
-          const anyKind = pool.filter((p) => !usedTitles.has(p.title));
-          const pick =
-            sameKind[Math.floor(Math.random() * sameKind.length)] ??
-            anyKind[Math.floor(Math.random() * anyKind.length)] ??
-            pool[Math.floor(Math.random() * pool.length)];
-          if (!pick) return state;
-          const replacement: Scenario = { ...pick, id: current.id, followUpFor: current.followUpFor, status: "draft" };
-          return {
-            modules: state.modules.map((m) =>
-              m.id === moduleId
-                ? {
-                    ...m,
-                    needsReview: m.published || m.needsReview,
-                    scenarios: m.scenarios.filter((x) => x.followUpFor !== scenarioId).map((x) => (x.id === scenarioId ? replacement : x)),
-                  }
-                : m,
-            ),
-          };
-        }),
-
-      publishModule: (moduleId) =>
-        set((state) => ({
-          modules: state.modules.map((m) =>
-            m.id === moduleId && m.scenarios.length > 0 && m.scenarios.every((s) => s.status === "approved") ? { ...m, published: true, needsReview: false } : m,
-          ),
-        })),
-
-      setLastResult: (r) => set({ lastResult: r }),
-
-      addResult: (r) =>
-        set((state) => {
-          const acc = state.account;
-          const traineeId =
-            r.traineeId ??
-            state.trainees.find(
-              (t) => t.email.toLowerCase() === (acc?.email ?? "").toLowerCase(),
-            )?.id ??
-            (acc?.role === "trainee" ? `self:${acc.email.toLowerCase()}` : "self:demo");
-          const enriched: TrainingResult = {
-            ...r,
-            traineeId,
-            traineeName: r.traineeName ?? acc?.name ?? "Demo trainee",
-          };
-          return { results: [enriched, ...state.results].slice(0, 200), lastResult: enriched };
-        }),
-
-      mergeModules: (moduleIds, title) => {
-        const id = uid();
-        set((state) => {
-          const chosen = state.modules.filter((m) => moduleIds.includes(m.id));
-          const scenarios: Scenario[] = [];
-          const seen = new Set<string>();
-          chosen.forEach((m, mi) => {
-            m.scenarios.forEach((s, si) => {
-              const key = s.title + s.question;
-              if (seen.has(key)) return;
-              seen.add(key);
-              scenarios.push({ ...s, id: `${id}-${mi}-${s.id}`, followUpFor: s.followUpFor ? `${id}-${mi}-${s.followUpFor}` : undefined });
-            });
+  mergeModules: (moduleIds, title) => {
+    const id = uid();
+    set((state) => {
+      const chosen = state.modules.filter((m) => moduleIds.includes(m.id));
+      const scenarios: Scenario[] = [];
+      const seen = new Set<string>();
+      chosen.forEach((m, mi) => {
+        m.scenarios.forEach((s, si) => {
+          const key = s.title + s.question;
+          if (seen.has(key)) return;
+          seen.add(key);
+          scenarios.push({
+            ...s,
+            id: `${id}-${mi}-${s.id}`,
+            followUpFor: s.followUpFor ? `${id}-${mi}-${s.followUpFor}` : undefined,
           });
-          return {
-            modules: [
-              ...state.modules,
+        });
+      });
+      return {
+        modules: [
+          ...state.modules,
+          {
+            id,
+            type: "Merged module",
+            title,
+            topicKey: chosen[0]?.topicKey ?? "custom",
+            published: false,
+            scenarios,
+            createdAt: Date.now(),
+          },
+        ],
+        currentDraftId: id,
+      };
+    });
+    return id;
+  },
+
+  removeTrainee: (id) =>
+    set((state) => ({
+      trainees: state.trainees.filter((t) => t.id !== id),
+      assignments: state.assignments.filter((a) => a.traineeId !== id),
+    })),
+
+  activateTrainee: (id) =>
+    set((state) => ({
+      trainees: state.trainees.map((t) =>
+        t.id === id ? { ...t, status: "active" as TraineeStatus } : t,
+      ),
+    })),
+
+  assignModule: (traineeId, moduleId, dueDate, status = "assigned") =>
+    set((state) =>
+      state.assignments.some((a) => a.traineeId === traineeId && a.moduleId === moduleId)
+        ? state
+        : {
+            assignments: [
+              ...state.assignments,
               {
-                id,
-                type: "Merged module",
-                title,
-                topicKey: chosen[0]?.topicKey ?? "custom",
-                published: false,
-                scenarios,
-                createdAt: Date.now(),
+                id: uid(),
+                traineeId,
+                moduleId,
+                assignedAt: Date.now(),
+                dueDate,
+                status,
               },
             ],
-            currentDraftId: id,
-          };
-        });
-        return id;
-      },
-
-      removeTrainee: (id) =>
-        set((state) => ({
-          trainees: state.trainees.filter((t) => t.id !== id),
-          assignments: state.assignments.filter((a) => a.traineeId !== id),
-        })),
-
-      activateTrainee: (id) =>
-        set((state) => ({
-          trainees: state.trainees.map((t) =>
-            t.id === id ? { ...t, status: "active" as TraineeStatus } : t,
-          ),
-        })),
-
-      assignModule: (traineeId, moduleId, dueDate, status = "assigned") =>
-        set((state) =>
-          state.assignments.some((a) => a.traineeId === traineeId && a.moduleId === moduleId)
-            ? state
-            : {
-                assignments: [
-                  ...state.assignments,
-                  {
-                    id: uid(),
-                    traineeId,
-                    moduleId,
-                    assignedAt: Date.now(),
-                    dueDate,
-                    status,
-                  },
-                ],
-              },
-        ),
-
-      reassignModule: (traineeId, moduleId) => set((state) => ({
-        assignments: state.assignments.map((a) => a.traineeId === traineeId && a.moduleId === moduleId
-          ? { ...a, id: uid(), assignedAt: Date.now(), status: "assigned" as const } : a),
-      })),
-
-      unassignModule: (traineeId, moduleId) =>
-        set((state) => ({
-          assignments: state.assignments.filter(
-            (a) => !(a.traineeId === traineeId && a.moduleId === moduleId),
-          ),
-        })),
-
-      markResult: (traineeId, moduleId, completedAt, emoji) =>
-        set((state) => ({
-          results: state.results.map((r) =>
-            r.traineeId === traineeId && r.moduleId === moduleId && r.completedAt === completedAt
-              ? { ...r, emoji: r.emoji === emoji ? undefined : emoji }
-              : r,
-          ),
-          emojiMarks: {
-            ...state.emojiMarks,
-            [`${traineeId}:${moduleId}:${completedAt}`]: emoji,
           },
-        })),
+    ),
 
-      completeSetup: (generate) => {
-        const created: string[] = [];
-        set((state) => {
-          if (!generate) return { setupComplete: true };
-          const starters = [
-            { key: "appointment-booking", title: "Appointment booking" },
-            { key: "urgent", title: "Urgent symptoms & escalation" },
-            { key: "prescriptions", title: "Prescription requests" },
-            { key: "results", title: "Test results & confidentiality" },
-            { key: "first-week", title: "First week on reception" },
-          ];
-          const existing = new Set(state.modules.map((m) => m.title));
-          const newModules: Module[] = [];
-          for (const s of starters) {
-            const title = `${s.title} — ${state.practiceData.practiceName}`;
-            if (existing.has(title)) continue;
-            const id = uid();
-            created.push(id);
-            newModules.push({
-              id,
-              type: s.title,
-              title,
-              topicKey: s.key,
-              published: false,
-              scenarios: draftsForTopic(s.key, "mixed", s.title, "easy", "short", {}),
-              createdAt: Date.now(),
-            });
-          }
-          return { setupComplete: true, modules: [...state.modules, ...newModules] };
-        });
-        return created;
+  reassignModule: (traineeId, moduleId) =>
+    set((state) => ({
+      assignments: state.assignments.map((a) =>
+        a.traineeId === traineeId && a.moduleId === moduleId
+          ? { ...a, id: uid(), assignedAt: Date.now(), status: "assigned" as const }
+          : a,
+      ),
+    })),
+
+  unassignModule: (traineeId, moduleId) =>
+    set((state) => ({
+      assignments: state.assignments.filter(
+        (a) => !(a.traineeId === traineeId && a.moduleId === moduleId),
+      ),
+    })),
+
+  markResult: (traineeId, moduleId, completedAt, emoji) =>
+    set((state) => ({
+      results: state.results.map((r) =>
+        r.traineeId === traineeId && r.moduleId === moduleId && r.completedAt === completedAt
+          ? { ...r, emoji: r.emoji === emoji ? undefined : emoji }
+          : r,
+      ),
+      emojiMarks: {
+        ...state.emojiMarks,
+        [`${traineeId}:${moduleId}:${completedAt}`]: emoji,
       },
+    })),
 
-      setSameDayReasons: (reasons) =>
-        set((state) => ({ practiceData: { ...state.practiceData, sameDayReasons: reasons } })),
+  completeSetup: (generate) => {
+    const created: string[] = [];
+    set((state) => {
+      if (!generate) return { setupComplete: true };
+      const induction = state.packages.find((p) => p.kind === "induction");
+      const packageId = induction?.id ?? uid();
+      const starters = [
+        { key: "first-week", title: "Getting started at your practice" },
+        { key: "appointment-booking", title: "Appointment bookings" },
+        { key: "prescriptions", title: "Prescription requests" },
+        { key: "difficult", title: "Patient communication and de-escalation" },
+        { key: "urgent", title: "Escalation and safety" },
+        { key: "custom", title: "Putting it together" },
+      ];
+      const existing = new Set(
+        state.modules.filter((m) => m.packageId === packageId).map((m) => m.title),
+      );
+      const newModules: Module[] = [];
+      for (const s of starters) {
+        const title = `${s.title} — ${state.practiceData.practiceName}`;
+        if (existing.has(title)) continue;
+        const id = uid();
+        created.push(id);
+        newModules.push({
+          id,
+          type: s.title,
+          title,
+          topicKey: s.key,
+          published: false,
+          scenarios: draftsForTopic(s.key, "mixed", s.title, "easy", "short", {}),
+          createdAt: Date.now(),
+          packageId,
+        });
+      }
+      const moduleIds = [...(induction?.moduleIds ?? []), ...newModules.map((m) => m.id)];
+      const nextPackage: TrainingPackage = {
+        id: packageId,
+        title: "Induction Package",
+        description: "Basic local onboarding for new GP reception and administrative starters.",
+        kind: "induction",
+        moduleIds,
+        version: (induction?.version ?? 0) + 1,
+        createdAt: induction?.createdAt ?? Date.now(),
+        updatedAt: Date.now(),
+      };
+      return {
+        setupComplete: true,
+        modules: [...state.modules, ...newModules],
+        packages: [...state.packages.filter((p) => p.id !== packageId), nextPackage],
+      };
+    });
+    return created;
+  },
 
+  setSameDayReasons: (reasons) =>
+    set((state) => ({ practiceData: { ...state.practiceData, sameDayReasons: reasons } })),
 
-      clearReviewFlag: (moduleId) =>
-        set((state) => ({
-          modules: state.modules.map((m) =>
-            m.id === moduleId ? { ...m, needsReview: false, reviewReason: undefined } : m,
-          ),
-        })),
+  clearReviewFlag: (moduleId) =>
+    set((state) => ({
+      modules: state.modules.map((m) =>
+        m.id === moduleId ? { ...m, needsReview: false, reviewReason: undefined } : m,
+      ),
+    })),
 
   setRoleRequests: (config) =>
     set((s) => ({
@@ -1333,82 +1858,93 @@ export const useApp = create<AppState>()((set, get) => ({
       },
     })),
   setSafeguardingRoute: (safeguardingRoute) =>
-    set((s) => ({ practiceData: { ...s.practiceData, safeguardingRoute } })),
+    set((s) => ({
+      ...markInductionNeedsReview(s),
+      practiceData: { ...s.practiceData, safeguardingRoute },
+    })),
   setBookingConfig: (bookingConfig) =>
-    set((s) => ({ practiceData: { ...s.practiceData, bookingConfig } })),
+    set((s) => ({
+      ...markInductionNeedsReview(s),
+      practiceData: { ...s.practiceData, bookingConfig },
+    })),
   setPrescriptionConfig: (prescriptionConfig) =>
-    set((s) => ({ practiceData: { ...s.practiceData, prescriptionConfig } })),
-      setPracticeField: (field, value) =>
-        set((state) => ({ practiceData: { ...state.practiceData, [field]: value } })),
+    set((s) => ({
+      ...markInductionNeedsReview(s),
+      practiceData: { ...s.practiceData, prescriptionConfig },
+    })),
+  setPracticeField: (field, value) =>
+    set((state) => ({
+      ...markInductionNeedsReview(state),
+      practiceData: { ...state.practiceData, [field]: value },
+    })),
 
-      setRolePolicy: (field, value) =>
-        set((state) => ({
-          practiceData: {
-            ...state.practiceData,
-            rolePolicies: { ...state.practiceData.rolePolicies, [field]: value },
-          },
-        })),
-
-      addStaff: (s) =>
-        set((state) => ({
-          practiceData: {
-            ...state.practiceData,
-            staff: [...state.practiceData.staff, { ...s, id: uid() }],
-          },
-        })),
-
-      updateStaff: (id, patch) =>
-        set((state) => ({
-          practiceData: {
-            ...state.practiceData,
-            // Keep historical individual fields intact; current scope comes from the shared role.
-            staff: state.practiceData.staff.map((s) => s.id === id ? { ...s, ...patch } : s),
-          },
-        })),
-
-      removeStaff: (id) =>
-        set((state) => ({
-          practiceData: {
-            ...state.practiceData,
-            staff: state.practiceData.staff.filter((s) => s.id !== id),
-          },
-        })),
-
-      replaceStaffName: (oldName, newName, propagate) => {
-        const trimmedOld = oldName.trim();
-        const trimmedNew = newName.trim();
-        if (!trimmedOld || !trimmedNew) return 0;
-        let touched = 0;
-        set((state) => {
-          const staff = state.practiceData.staff.map((s) =>
-            s.name.trim().toLowerCase() === trimmedOld.toLowerCase()
-              ? { ...s, name: trimmedNew }
-              : s,
-          );
-          if (!propagate) {
-            return { practiceData: { ...state.practiceData, staff } };
-          }
-          const modules = state.modules.map((m) => {
-            let moduleTouched = false;
-            const scenarios = m.scenarios.map((sc) => {
-              const next = replaceInScenario(sc, trimmedOld, trimmedNew);
-              if (JSON.stringify(next) !== JSON.stringify(sc)) {
-                touched += 1;
-                moduleTouched = true;
-              }
-              return next;
-            });
-            return moduleTouched
-              ? {
-                  ...m,
-                  scenarios,
-                  needsReview: true,
-                  reviewReason: `Staff changed: "${trimmedOld}" → "${trimmedNew}". Re-check scenarios still reflect current practice.`,
-                }
-              : { ...m, scenarios };
-          });
-          return { practiceData: { ...state.practiceData, staff }, modules };
-        });
-        return touched;
+  setRolePolicy: (field, value) =>
+    set((state) => ({
+      ...markInductionNeedsReview(state),
+      practiceData: {
+        ...state.practiceData,
+        rolePolicies: { ...state.practiceData.rolePolicies, [field]: value },
       },
-    }));
+    })),
+
+  addStaff: (s) =>
+    set((state) => ({
+      practiceData: {
+        ...state.practiceData,
+        staff: [...state.practiceData.staff, { ...s, id: uid() }],
+      },
+    })),
+
+  updateStaff: (id, patch) =>
+    set((state) => ({
+      practiceData: {
+        ...state.practiceData,
+        // Keep historical individual fields intact; current scope comes from the shared role.
+        staff: state.practiceData.staff.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      },
+    })),
+
+  removeStaff: (id) =>
+    set((state) => ({
+      practiceData: {
+        ...state.practiceData,
+        staff: state.practiceData.staff.filter((s) => s.id !== id),
+      },
+    })),
+
+  replaceStaffName: (oldName, newName, propagate) => {
+    const trimmedOld = oldName.trim();
+    const trimmedNew = newName.trim();
+    if (!trimmedOld || !trimmedNew) return 0;
+    let touched = 0;
+    set((state) => {
+      const staff = state.practiceData.staff.map((s) =>
+        s.name.trim().toLowerCase() === trimmedOld.toLowerCase() ? { ...s, name: trimmedNew } : s,
+      );
+      if (!propagate) {
+        return { practiceData: { ...state.practiceData, staff } };
+      }
+      const modules = state.modules.map((m) => {
+        let moduleTouched = false;
+        const scenarios = m.scenarios.map((sc) => {
+          const next = replaceInScenario(sc, trimmedOld, trimmedNew);
+          if (JSON.stringify(next) !== JSON.stringify(sc)) {
+            touched += 1;
+            moduleTouched = true;
+          }
+          return next;
+        });
+        return moduleTouched
+          ? {
+              ...m,
+              scenarios,
+              needsReview: true,
+              reviewReason: `Staff changed: "${trimmedOld}" → "${trimmedNew}". Re-check scenarios still reflect current practice.`,
+            }
+          : { ...m, scenarios };
+      });
+      return { practiceData: { ...state.practiceData, staff }, modules };
+    });
+    return touched;
+  },
+}));

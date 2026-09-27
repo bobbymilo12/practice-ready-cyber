@@ -38,9 +38,13 @@ test("local mock roles save isolated data, resume training and enforce trainee r
       name: "Use the process from a previous workplace without checking local guidance.",
     })
     .click();
-  await expect(page.getByRole("heading", { name: /Not quite/ })).toBeVisible();
+  await expect(
+    page.getByText("Answer selected. You can review all answers before submitting."),
+  ).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: /Not quite/ })).toBeVisible();
+  await expect(
+    page.getByText("Answer selected. You can review all answers before submitting."),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Continue →", exact: true }).click();
   // Complete remaining primary and recovery questions using each recorded rule (second option).
   for (let i = 0; i < 2; i++) {
@@ -61,9 +65,10 @@ test("local mock roles save isolated data, resume training and enforce trainee r
     });
     await page.getByRole("button", { name: label }).click();
     await page
-      .getByRole("button", { name: i === 0 ? "Continue →" : "Finish module", exact: true })
+      .getByRole("button", { name: i === 0 ? "Continue →" : "Review answers", exact: true })
       .click();
   }
+  await page.getByRole("button", { name: "Submit module" }).click();
   await expect(page).toHaveURL(/\/results/);
   await page.getByRole("link", { name: "Switch mock role" }).click();
   await page.getByRole("button", { name: "Continue as Manager", exact: true }).click();

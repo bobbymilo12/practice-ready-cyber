@@ -3,7 +3,7 @@ import type { Assignment, Module, Scenario, TrainingResult } from "./training-ty
 export interface SavedAnswer {
   scenarioId: string;
   value: number | string[];
-  correct: boolean;
+  correct?: boolean;
   title: string;
   followUpFor?: string;
 }
@@ -18,6 +18,7 @@ export interface TrainingSession {
   index: number;
   answers: SavedAnswer[];
   updatedAt: number;
+  review?: boolean;
   result?: TrainingResult;
 }
 
@@ -42,6 +43,7 @@ export function startSession(module: Module, assignment: Assignment, id: string)
 
 export function answerSession(session: TrainingSession, value: unknown): TrainingSession {
   if (session.result) throw new Error("This attempt is already complete.");
+  if (session.review) throw new Error("Review your answers before submitting the module.");
   const scenarioId = session.queue[session.index];
   if (session.answers.some((a) => a.scenarioId === scenarioId)) return session;
   const scenario = session.scenarios.find((s) => s.id === scenarioId);
@@ -88,10 +90,17 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
 
 export function advanceSession(session: TrainingSession, moduleTitle: string): TrainingSession {
   if (session.result) return session;
+  if (session.review) return session;
   if (!session.answers.some((a) => a.scenarioId === session.queue[session.index]))
     throw new Error("Answer this scenario first.");
   if (session.index + 1 < session.queue.length)
     return { ...session, index: session.index + 1, updatedAt: Date.now() };
+  return { ...session, review: true, updatedAt: Date.now() };
+}
+
+export function submitSession(session: TrainingSession, moduleTitle: string): TrainingSession {
+  if (session.result) return session;
+  if (!session.review) throw new Error("Review every answer before submitting the module.");
   const initial = session.answers.filter((a) => !a.followUpFor);
   const recovered = session.answers
     .filter((a) => a.followUpFor && a.correct)

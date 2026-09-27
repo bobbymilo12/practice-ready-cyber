@@ -1,5 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { advanceSession, answerSession, startSession } from "../../../src/lib/training.ts";
+import {
+  advanceSession,
+  answerSession,
+  startSession,
+  submitSession,
+} from "../../../src/lib/training.ts";
 import type { Assignment, Module } from "../../../src/lib/training-types.ts";
 import type { TrainingSession } from "../../../src/lib/training.ts";
 
@@ -133,6 +138,9 @@ Deno.serve(async (request) => {
           : {
               practiceData: { practiceName: state.practiceData?.practiceName ?? "Your practice" },
               modules: modules.filter((m) => m.published && mine.some((a) => a.moduleId === m.id)),
+              packages: (state.packages ?? []).filter((p: { moduleIds?: string[] }) =>
+                (p.moduleIds ?? []).some((moduleId) => mine.some((a) => a.moduleId === moduleId)),
+              ),
               assignments: mine,
               emojiMarks: Object.fromEntries(
                 Object.entries(state.emojiMarks ?? {}).filter(([key]) =>
@@ -192,6 +200,7 @@ Deno.serve(async (request) => {
       // Explicit allowlist; credentials, profiles, results and sessions cannot be overwritten here.
       const clean = {
         modules: next.modules,
+        packages: Array.isArray(next.packages) ? next.packages : [],
         assignments: next.assignments,
         practiceData: next.practiceData,
         setupComplete: Boolean(next.setupComplete),
@@ -294,6 +303,41 @@ Deno.serve(async (request) => {
         if (!existing) await admin.auth.admin.deleteUser(traineeId);
         fail("Could not save the invitation. Please try again.");
       }
+      const induction = (state.packages ?? []).find(
+        (p: { kind?: string }) => p.kind === "induction",
+      );
+      const inductionModuleIds = new Set(
+        (induction?.moduleIds ?? []).filter((moduleId: string) =>
+          modules.some((m) => m.id === moduleId && m.published && !m.needsReview),
+        ),
+      );
+      if (induction && inductionModuleIds.size) {
+        const assignments = [...(state.assignments ?? [])];
+        for (const moduleId of inductionModuleIds) {
+          if (!assignments.some((a) => a.traineeId === traineeId && a.moduleId === moduleId)) {
+            assignments.push({
+              id: crypto.randomUUID(),
+              traineeId,
+              moduleId,
+              packageId: induction.id,
+              assignedAt: Date.now(),
+              status: "assigned",
+            });
+          }
+        }
+        const nextState = { ...state, assignments };
+        const { data: savedPractice, error: assignmentError } = await admin
+          .from("practices")
+          .update({ state: nextState, version: practice.version + 1 })
+          .eq("id", practice.id)
+          .eq("version", practice.version)
+          .select("version")
+          .maybeSingle();
+        check(assignmentError);
+        if (!savedPractice) fail("The practice changed while the invitation was being created.");
+        practice.version = savedPractice.version;
+        state.assignments = assignments;
+      }
       const loginUrl = new URL("/auth", appUrl);
       loginUrl.searchParams.set("practice", practice.id);
       loginUrl.searchParams.set("email", email);
@@ -331,8 +375,7 @@ Deno.serve(async (request) => {
         .update({ invite_status: sent ? "sent" : "failed" })
         .eq("id", traineeId);
       check(deliveryError);
-      if (!sent)
-        fail(`${deliveryMessage} Please check the address or try again later.`);
+      if (!sent) fail(`${deliveryMessage} Please check the address or try again later.`);
       return reply({ ok: true });
     }
 
@@ -396,6 +439,9 @@ Deno.serve(async (request) => {
         fail("Your progress changed on another device. Reload to continue.");
       session = advanceSession(session, module.title);
       if (session.result) session.result.traineeName = profile.name;
+    } else if (action === "submit") {
+      session = submitSession(session, module.title);
+      session.result.traineeName = profile.name;
     } else if (action === "confidence") {
       if (!session.result || !Number.isInteger(body.value) || body.value < 1 || body.value > 5)
         fail("Choose a confidence from 1 to 5.");

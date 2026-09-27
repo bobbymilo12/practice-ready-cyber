@@ -13,8 +13,14 @@ function Review() {
   const { id } = Route.useSearch();
   const nav = useNavigate();
   const module = useApp((s) => s.modules.find((m) => m.id === id));
-  const { approveScenario, deleteScenario, regenerateScenario, updateScenario, publishModule } =
-    useApp();
+  const {
+    approveScenario,
+    deleteScenario,
+    regenerateScenario,
+    updateScenario,
+    publishModule,
+    removeDraftModule,
+  } = useApp();
 
   if (!module) {
     return (
@@ -36,9 +42,7 @@ function Review() {
     <Shell>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm text-muted-foreground">
-            {module.type} · Draft review
-          </p>
+          <p className="text-sm text-muted-foreground">{module.type} · Draft review</p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
             Review draft scenarios
           </h1>
@@ -46,16 +50,30 @@ function Review() {
             Manager review required. Approve every scenario, then publish the module for staff.
           </p>
         </div>
-        <button
-          onClick={() => {
-            publishModule(module.id);
-            nav({ to: "/dashboard" });
-          }}
-          disabled={!allApproved}
-          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-        >
-          Publish module
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              publishModule(module.id);
+              nav({ to: "/dashboard" });
+            }}
+            disabled={!allApproved}
+            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+          >
+            Publish module
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("Delete this draft module?")) {
+                removeDraftModule(module.id);
+                void nav({ to: "/dashboard" });
+              }
+            }}
+            className="rounded-xl border border-destructive/40 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/5"
+          >
+            Delete draft
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 space-y-5">

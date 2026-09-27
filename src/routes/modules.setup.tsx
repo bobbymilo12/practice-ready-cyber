@@ -27,6 +27,7 @@ function Setup() {
   const { topic, title } = Route.useSearch();
   const nav = useNavigate();
   const { answers, setAnswer, resetAnswers, createDraftModule, practiceData } = useApp();
+  const [draftAnswers, setDraftAnswers] = useState<Record<string, string>>(answers);
 
   const topicDef = TOPICS.find((t) => t.key === topic) ?? TOPICS[TOPICS.length - 1];
   const questions = topicDef.questions;
@@ -52,7 +53,7 @@ function Setup() {
       let id = draftId;
       if (!id) {
         const topicAnswers = Object.fromEntries(
-          questions.map((q) => [q.key, answers[q.key] ?? ""]),
+          questions.map((q) => [q.key, draftAnswers[q.key] ?? ""]),
         );
         const seed = draftsForTopic(topic, format, title, difficulty, length, topicAnswers);
         id = createDraftModule(title, `${title} — draft`, topic, seed, difficulty, length);
@@ -124,8 +125,13 @@ function Setup() {
             </label>
             <textarea
               id="module-answer"
-              value={answers[current.key] ?? ""}
-              onChange={(e) => setAnswer(current.key, e.target.value)}
+              value={draftAnswers[current.key] ?? ""}
+              onChange={(e) =>
+                setDraftAnswers((currentAnswers) => ({
+                  ...currentAnswers,
+                  [current.key]: e.target.value,
+                }))
+              }
               placeholder={current.placeholder}
               rows={4}
               className="mt-4 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none ring-primary/30 focus:ring-2"
@@ -133,7 +139,10 @@ function Setup() {
 
             <div className="mt-5 flex items-center justify-between">
               <button
-                onClick={() => setStep((s) => Math.max(0, s - 1))}
+                onClick={() => {
+                  setAnswer(current.key, draftAnswers[current.key] ?? "");
+                  setStep((s) => Math.max(0, s - 1));
+                }}
                 disabled={step === 0}
                 className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-40"
               >
@@ -141,14 +150,20 @@ function Setup() {
               </button>
               {step < total - 1 ? (
                 <button
-                  onClick={() => setStep((s) => s + 1)}
+                  onClick={() => {
+                    setAnswer(current.key, draftAnswers[current.key] ?? "");
+                    setStep((s) => s + 1);
+                  }}
                   className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
                 >
                   Next →
                 </button>
               ) : (
                 <button
-                  onClick={() => setPhase("options")}
+                  onClick={() => {
+                    setAnswer(current.key, draftAnswers[current.key] ?? "");
+                    setPhase("options");
+                  }}
                   className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
                 >
                   Choose training options →

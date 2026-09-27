@@ -32,6 +32,17 @@ export type Scenario = MCQScenario | OrderScenario;
 export type Difficulty = "easy" | "intermediate" | "advanced";
 export type ModuleLength = "short" | "medium" | "long";
 
+export interface TrainingPackage {
+  id: string;
+  title: string;
+  description: string;
+  kind: "induction" | "custom";
+  moduleIds: string[];
+  version: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Module {
   id: string;
   type: string;
@@ -44,6 +55,7 @@ export interface Module {
   length?: ModuleLength;
   needsReview?: boolean;
   reviewReason?: string;
+  packageId?: string;
 }
 
 export interface TrainingResult {
@@ -69,4 +81,5 @@ export interface Assignment {
   assignedAt: number;
   dueDate?: string;
   status: "assigned" | "in_progress" | "completed" | "overdue";
+  packageId?: string;
 }
