@@ -1,6 +1,8 @@
 export type ScenarioStatus = "draft" | "approved";
 
 export interface MCQScenario {
+  // Optional generation metadata; old saved scenarios remain valid.
+  followUpSituation?: string;
   kind: "mcq";
   id: string;
   title: string;

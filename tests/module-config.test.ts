@@ -131,8 +131,10 @@ test("length limits distinct primary scenarios, preserves recovery links and rep
     assert.equal(new Set(primary.map((s) => s.title)).size, primary.length);
     for (const s of primary) {
       const follow = generated.find((f) => f.followUpFor === s.id);
-      assert.ok(follow?.kind === "mcq" && s.kind === "mcq");
-      assert.equal(follow.options[follow.correctIndex], s.options[s.correctIndex]);
+      if (follow) {
+        assert.ok(follow.kind === "mcq" && s.kind === "mcq");
+        assert.equal(follow.options[follow.correctIndex], s.options[s.correctIndex]);
+      }
     }
   }
 });
@@ -151,7 +153,7 @@ test("deleted contacts and cross-topic answers are excluded; settings survive JS
   assert.ok(JSON.stringify(scenarios).includes(settings.extra));
 });
 
-test("regeneration retains settings, avoids duplicate primaries and preserves reviewed recovery answers", () => {
+test("regeneration retains settings, avoids duplicates and omits unsupported recovery questions", () => {
   const p = empty();
   p.localConfidentiality = "Check the recorded consent";
   p.dutyContact = "Duty team via internal message";
@@ -174,19 +176,11 @@ test("regeneration retains settings, avoids duplicate primaries and preserves re
   assert.equal(regenerated.needsReview, true);
   const main = regenerated.scenarios.filter((s) => !s.followUpFor);
   assert.equal(new Set(main.map((s) => s.title)).size, main.length);
-  assert.ok(regenerated.scenarios.some((s) => s.followUpFor === primary.id));
+  assert.ok(!regenerated.scenarios.some((s) => s.followUpFor));
   assert.ok(primary.kind === "mcq");
   const edited = { ...primary, correctIndex: 2, status: "approved" as const };
   const revised = reviseConfiguredScenario(regenerated, edited);
-  const recovery = revised.scenarios.find((s) => s.followUpFor === primary.id)!;
-  assert.ok(recovery.kind === "mcq");
-  assert.equal(recovery.correctIndex, 2);
-  assert.equal(recovery.status, "draft");
-  const refreshed = regenerateConfiguredScenario(revised, recovery.id, p).scenarios.find(
-    (s) => s.id === recovery.id,
-  )!;
-  assert.ok(refreshed.kind === "mcq");
-  assert.equal(refreshed.correctIndex, 2);
+  assert.equal(revised.scenarios.find((s) => s.id === primary.id)?.status, "draft");
 });
 
 test("custom options only become guidance when explicitly selected, and cannot leak between questions", () => {
@@ -221,10 +215,13 @@ test("multi-select preserves legacy answers, has exclusive exclusion and never m
   assert.deepEqual(selectedValues(f, settings), ["NHS App"]);
   settings = selectAnswer(settings, f, "Telephone");
   const question = configuredScenarios("prescriptions", "Prescriptions", p, settings).find(
-    (s) => s.title === f.label,
+    (s) => s.title === `${f.label}: NHS App`,
   )!;
   assert.ok(question.kind === "mcq");
-  assert.equal(question.options[question.correctIndex], "NHS App; Telephone");
+  assert.equal(
+    question.options[question.correctIndex],
+    "Explain how to submit the request using NHS App",
+  );
   assert.ok(!question.options.slice(1).includes("Telephone"));
   settings = selectAnswer(settings, f, EXCLUDE_QUESTION);
   assert.deepEqual(moduleFacts("prescriptions", p, settings), []);
@@ -279,4 +276,87 @@ test("a selected custom answer is never also offered as an incorrect alternative
   assert.equal(scenario.options.length, 4);
   assert.equal(new Set(scenario.options).size, 4);
   assert.equal(scenario.options[scenario.correctIndex], settings.customOptions.chasing[0].label);
+});
+
+test("explicit rule lists become focused applications with distinct supported follow-ups", () => {
+  const p = empty();
+  p.sameDayReasons = [
+    "under-5 illness -> same-day GP; suspected sepsis -> same-day GP; when unsure -> duty triage",
+  ];
+  const scenarios = generateConfiguredModule("urgent", "Urgent", p, defaultModuleSettings());
+  const main = scenarios.filter((s) => !s.followUpFor);
+  assert.equal(main.length, 3);
+  for (const scenario of main) {
+    assert.ok(scenario.kind === "mcq");
+    assert.ok(!scenario.options[scenario.correctIndex].includes(";"));
+    assert.ok(
+      !/recorded|saved|according to your practice/i.test(scenario.patientQuote + scenario.question),
+    );
+    assert.ok(!/booking team|promise a same-day|any free slot/i.test(JSON.stringify(scenario)));
+  }
+  const child = main.find((s) => s.patientQuote.includes("3-year-old"))!;
+  const follow = scenarios.find((s) => s.followUpFor === child.id)!;
+  assert.ok(follow.patientQuote.includes("comes to reception"));
+  assert.ok(child.kind === "mcq" && follow.kind === "mcq");
+  assert.equal(child.options[child.correctIndex], follow.options[follow.correctIndex]);
+  assert.equal(scenarios.filter((s) => s.followUpFor).length, 1);
+  const module = {
+    id: "m",
+    type: "Urgent",
+    title: "Urgent",
+    topicKey: "urgent",
+    settings: defaultModuleSettings(),
+    scenarios,
+    published: false,
+    createdAt: 1,
+  };
+  const refreshed = regenerateConfiguredScenario(module, follow.id, p);
+  assert.equal(
+    refreshed.scenarios.find((s) => s.id === follow.id)?.patientQuote,
+    follow.patientQuote,
+  );
+  const revised = reviseConfiguredScenario(module, {
+    ...child,
+    options: ["Manager changed this rule", ...child.options.slice(1)],
+    correctIndex: 0,
+  });
+  assert.ok(!revised.scenarios.some((s) => s.followUpFor === child.id));
+});
+
+test("unselected setup choices cannot invent local teams in distractors", () => {
+  const settings = defaultModuleSettings();
+  settings.answers.preference = topicFields["appointment-booking"].find(
+    (f) => f.key === "preference",
+  )!.options[0];
+  const scenarios = configuredScenarios("appointment-booking", "Booking", empty(), settings);
+  assert.ok(scenarios.length);
+  assert.ok(!JSON.stringify(scenarios).includes("booking team"));
+});
+
+test("structured same-day criteria stay separate and use the configured process", () => {
+  const p = empty();
+  p.bookingConfig = {
+    version: 1,
+    sameDayPathway: { selected: ["unwell-child", "urinary"], custom: [], instruction: "" },
+    sameDayProcess: { id: "triage", other: "" },
+    sameDayInstruction: "",
+    sendUncertainToDutyClinician: false,
+    escalation: {
+      contact: { kind: "unconfirmed" },
+      method: { id: "", other: "" },
+      instruction: "",
+    },
+    routineProcess: { id: "", other: "" },
+    routineInstruction: "",
+  };
+  p.sameDayReasons = ["Stale legacy criteria"];
+  const settings = defaultModuleSettings();
+  settings.answers.sameDay = "Stale direct booking";
+  const scenarios = configuredScenarios("urgent", "Urgent", p, settings);
+  assert.equal(scenarios.length, 2);
+  for (const s of scenarios) {
+    assert.ok(s.kind === "mcq");
+    assert.equal(s.options[s.correctIndex], "Send the request for clinical triage before booking");
+  }
+  assert.ok(!JSON.stringify(scenarios).includes("Stale"));
 });

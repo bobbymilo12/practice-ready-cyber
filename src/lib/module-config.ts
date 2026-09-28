@@ -1,5 +1,18 @@
+import {
+  applications,
+  applicationMistakes,
+  naturalSituation,
+  explicitRules,
+} from "./scenario-applications.ts";
 import type { Module, PracticeData, Scenario } from "./store";
-import { practiceSummary, configMissing, safeguardingMissing } from "./practice-config.ts";
+import {
+  practiceSummary,
+  configMissing,
+  safeguardingMissing,
+  sameDayGroups,
+  choiceText,
+  sameDayProcesses,
+} from "./practice-config.ts";
 import { effectiveRequestsForStaff, selectedRequests, staffForRequest } from "./role-requests.ts";
 
 export interface ModuleSettings {
@@ -541,6 +554,14 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
   const add = (label: string, rule: string | undefined, situation: string) => {
     if (rule?.trim()) facts.push({ label, rule: rule.trim(), situation });
   };
+  const sameDayProcess = p.bookingConfig
+    ? [
+        choiceText(p.bookingConfig.sameDayProcess, sameDayProcesses),
+        p.bookingConfig.sameDayInstruction,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : s.rolePolicies.gpsSameDay;
   const booking = ["appointment-booking", "first-week"].includes(topic);
   if (booking) {
     const methodLabels: Record<string, string> = {
@@ -560,7 +581,7 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
     );
     add(
       "Same-day booking",
-      s.rolePolicies.gpsSameDay,
+      sameDayProcess,
       "A patient asks for an appointment today. What booking process applies?",
     );
     add(
@@ -649,11 +670,33 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
       s.urgentNumbers,
       "A colleague asks where to find the practice’s recorded urgent contact information. Which entry is recorded?",
     );
-    add(
-      "Same-day pathway criteria",
-      s.sameDayReasons.join("\n"),
-      "You are checking whether a request is covered by the recorded same-day pathway. Which local information should you consult? These criteria do not authorise automatic booking or establish an emergency response.",
-    );
+  }
+  if (["urgent", "appointment-booking", "first-week"].includes(topic)) {
+    const b = p.bookingConfig;
+    const conditions = b
+      ? [
+          ...b.sameDayPathway.selected.map(
+            (id) => sameDayGroups.flatMap((g) => g.options).find((o) => o.id === id)?.label ?? "",
+          ),
+          ...b.sameDayPathway.custom,
+        ]
+      : p.sameDayReasons;
+    const process = sameDayProcess;
+    for (const condition of conditions.filter(Boolean)) {
+      if (explicitRules(condition).length) add("Same-day request", condition, "");
+      else if (process && !/depends/i.test(process))
+        add(
+          `Same-day request: ${condition}`,
+          process,
+          `A caller describes their concern as “${condition}”. What would you do next?`,
+        );
+    }
+    if (b?.sameDayPathway.instruction && explicitRules(b.sameDayPathway.instruction).length)
+      add(
+        "Same-day request",
+        b.sameDayPathway.instruction,
+        "A caller needs help today. What would you do next?",
+      );
   }
   if (topic === "first-week") {
     add(
@@ -697,7 +740,7 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
     );
   for (const f of topicFields[topic] ?? []) {
     if (f.showWhen && !f.showWhen(p, settings)) continue;
-    const known = f.known?.(s);
+    const known = f.key === "sameDay" ? sameDayProcess : f.known?.(s);
     const selected = selectedValues(f, settings);
     const options = questionOptions(f, p, settings);
     // Exclusion wins over malformed multi-select combinations. Saved setup stays authoritative.
@@ -768,7 +811,10 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
     settings.extra,
     `A colleague asks about the additional local procedure for this topic. Which instruction has the manager recorded?`,
   );
-  return facts.filter((f, i) => facts.findIndex((other) => other.rule === f.rule) === i);
+  return facts.filter(
+    (f, i) =>
+      facts.findIndex((other) => other.rule === f.rule && other.situation === f.situation) === i,
+  );
 }
 const relevantRequest = (topic: string, label: string) => {
   if (["appointment-booking", "first-week"].includes(topic)) return true;
@@ -797,20 +843,16 @@ export function configuredScenarios(
     kind: "mcq",
     id: crypto.randomUUID(),
     title: label,
-    patientQuote: situation,
-    question: "Which response follows the recorded practice information?",
+    patientQuote: naturalSituation(situation),
+    question: "What would you do next?",
     options: [
       answer,
-      ...[
-        ...new Set([
-          ...alternatives,
-          "Use an unconfirmed process instead of the recorded instructions.",
-          "Ignore the recorded local instructions.",
-        ]),
-      ].filter((value) => value.trim().toLowerCase() !== answer.trim().toLowerCase()),
+      ...[...new Set([...alternatives, ...applicationMistakes(situation)])].filter(
+        (value) => value.trim().toLowerCase() !== answer.trim().toLowerCase(),
+      ),
     ].slice(0, 4),
     correctIndex: 0,
-    learningPoint: `${source}\nRecorded guidance: ${answer}`,
+    learningPoint: source,
     status: "draft",
   });
   const fieldLabels = new Set((topicFields[topic] ?? []).map((f) => f.label));
@@ -819,69 +861,18 @@ export function configuredScenarios(
       Number(fieldLabels.has(b.label) || b.label === "Local exception") -
       Number(fieldLabels.has(a.label) || a.label === "Local exception"),
   );
-  const distractors: Record<string, string[]> = {
-    "appointment-booking": [
-      "Book any free slot without checking the request type.",
-      "Promise the patient a same-day appointment before checking the booking process.",
-      "Use the clinician’s job title instead of their saved responsibilities.",
-    ],
-    prescriptions: [
-      "Promise that the prescription will be issued immediately.",
-      "Change the requested medication without clinician authorisation.",
-      "Bypass the recorded prescription pathway.",
-    ],
-    urgent: [
-      "Decide a clinical response using a rule from a previous workplace.",
-      "Delay the handover without checking the recorded escalation process.",
-      "Assume any available colleague is the recorded urgent contact.",
-    ],
-    results: [
-      "Interpret the result yourself before it has been reviewed.",
-      "Share the result without checking the recorded confidentiality procedure.",
-      "Promise the patient that an unreviewed result is normal.",
-    ],
-    vaccines: [
-      "Choose a vaccine clinic solely because it has space.",
-      "Confirm clinical suitability without recorded authorisation.",
-      "Assume everyone with the same job title handles the same vaccine requests.",
-    ],
-    "fit-notes": [
-      "Promise that a fit note will be issued before a decision is recorded.",
-      "Choose the dates on the fit note without authorisation.",
-      "Bypass the recorded fit note request pathway.",
-    ],
-    "home-visits": [
-      "Promise a visit before the request has been reviewed.",
-      "Allocate a visit using a colleague’s job title alone.",
-      "Discard the request without following the recorded handover process.",
-    ],
-    difficult: [
-      "Guarantee an outcome before speaking to the responsible team.",
-      "Ignore the recorded complaints procedure.",
-      "Give out another patient’s information to resolve the disagreement.",
-    ],
-    "first-week": [
-      "Use a previous employer’s procedures without checking this practice’s instructions.",
-      "Guess the next step instead of checking the saved process.",
-      "Promise an outcome before checking with the responsible team.",
-    ],
-  };
-  const factual = facts.map((f) => {
-    const config = (topicFields[topic] ?? []).find((field) => field.label === f.label);
-    const alternatives =
-      config && !config.multiple && !config.known?.(practiceSummary(p))
-        ? optionsForField(config, p)
-            .map((value) => answerText(value, p))
-            .filter((value) => value !== f.rule)
-        : [];
-    return make(
-      f.label,
-      f.situation,
-      f.rule,
-      [...alternatives, ...(distractors[topic] ?? distractors["first-week"])],
-      `${title} · ${f.label}`,
-    );
-  });
+  const factual = facts.flatMap((f) =>
+    applications(f).map((application) => ({
+      ...make(
+        application.label,
+        application.situation,
+        application.rule,
+        applicationMistakes(application.situation),
+        application.feedback,
+      ),
+      followUpSituation: application.followUpSituation,
+    })),
+  );
   const requests = new Map<string, string>();
   for (const role of Object.values(p.roleRequests ?? {}))
     for (const r of selectedRequests(role))
@@ -903,21 +894,21 @@ export function configuredScenarios(
     routing.push(
       make(
         `Routing: ${label}`,
-        `A patient asks about ${label.toLowerCase()}. Which ${eligible.length ? "team members" : "roles"} have this request recorded in their responsibilities?`,
-        names,
+        `A patient needs help with ${label.toLowerCase()}. Who can handle this request?`,
+        `Approach ${names}`,
         [
-          "Any employee with the same job title, without checking individual exceptions.",
-          "Whoever has a free slot, regardless of their recorded responsibilities.",
-          "No one at the practice handles this request.",
+          "Use the clinician the patient saw last time, assuming they cover this request too.",
+          "Treat the patient’s preferred clinician as confirmation they can handle the request.",
+          "Choose by earliest availability before matching the request to a clinician’s responsibilities.",
         ],
-        "Confirmed role responsibilities and individual overrides. This identifies scope, not clinical eligibility or permission to book. Follow the recorded booking process.",
+        `${names} can handle ${label.toLowerCase()} at this practice. Responsibility alone does not authorise a booking.`,
       ),
     );
     for (const exception of staff.filter((s) => s.individualException))
       routing.push(
         make(
           `Individual exception: ${exception.employee.name} · ${label}`,
-          `A colleague suggests ${exception.employee.name} for ${label.toLowerCase()} based on their role title. What does the saved individual exception say?`,
+          `A colleague suggests ${exception.employee.name} for ${label.toLowerCase()} based on their role title. Can they handle this request?`,
           exception.canHandle
             ? "This request is included for this employee."
             : "This request is excluded for this employee.",
@@ -928,7 +919,7 @@ export function configuredScenarios(
             "Ignore the individual exception and use only the role title.",
             "Assume availability changes the employee’s responsibilities.",
           ],
-          "The employee’s saved override takes precedence over the shared role configuration.",
+          `${exception.employee.name} ${exception.canHandle ? "can" : "does not"} handle ${label.toLowerCase()} at this practice. Individual responsibilities take precedence over the shared role.`,
         ),
       );
   }
@@ -938,15 +929,26 @@ export function configuredScenarios(
     if (factual[i]) pool.push(factual[i]);
     if (routing[i]) pool.push(routing[i]);
   }
-  return pool;
+  return pool.filter(
+    (scenario, index) =>
+      pool.findIndex(
+        (other) =>
+          other.patientQuote === scenario.patientQuote &&
+          other.kind === "mcq" &&
+          scenario.kind === "mcq" &&
+          other.options[other.correctIndex] === scenario.options[scenario.correctIndex],
+      ) === index,
+  );
 }
-export function configuredFollowUp(s: Scenario): Scenario {
+export function configuredFollowUp(s: Scenario): Scenario | undefined {
+  if (s.kind !== "mcq" || !s.followUpSituation) return undefined;
   return {
     ...s,
     id: crypto.randomUUID(),
     followUpFor: s.id,
     title: `${s.title} — follow-up`,
-    patientQuote: `A colleague asks you to check the local instructions for “${s.title}” before they act. Which recorded guidance should you point them to?`,
+    patientQuote: s.followUpSituation,
+    followUpSituation: undefined,
     status: "draft",
   };
 }
@@ -959,30 +961,38 @@ export function generateConfiguredModule(
   const count = Number.isInteger(settings.count) ? Math.min(100, Math.max(1, settings.count)) : 12;
   return configuredScenarios(topic, title, p, settings)
     .slice(0, count)
-    .flatMap((s, index) => [
-      {
-        ...s,
-        options:
-          s.kind === "mcq"
-            ? [...s.options.slice(index % 4), ...s.options.slice(0, index % 4)]
-            : undefined,
-        ...(s.kind === "mcq" ? { correctIndex: (4 - (index % 4)) % 4 } : {}),
-      } as Scenario,
-      configuredFollowUp(s),
-    ]);
+    .flatMap((s, index) => {
+      const offset = s.kind === "mcq" ? index % s.options.length : 0;
+      const primary: Scenario =
+        s.kind === "mcq"
+          ? {
+              ...s,
+              options: [...s.options.slice(offset), ...s.options.slice(0, offset)],
+              correctIndex: (s.correctIndex - offset + s.options.length) % s.options.length,
+            }
+          : s;
+      const follow = configuredFollowUp(primary);
+      return follow ? [primary, follow] : [primary];
+    });
 }
 
 export function reviseConfiguredScenario(module: Module, scenario: Scenario): Module {
   return {
     ...module,
     needsReview: module.published || module.needsReview,
-    scenarios: module.scenarios.map((current) =>
-      current.id === scenario.id
-        ? { ...scenario, status: "draft" }
-        : current.followUpFor === scenario.id
-          ? { ...configuredFollowUp(scenario), id: current.id }
+    // An edit can change the underlying rule. Remove dependent recovery questions;
+    // regenerating from configuration can safely produce a new pair.
+    scenarios: module.scenarios
+      .filter((current) => current.followUpFor !== scenario.id)
+      .map((current) =>
+        current.id === scenario.id
+          ? {
+              ...scenario,
+              status: "draft",
+              ...(scenario.kind === "mcq" ? { followUpSituation: undefined } : {}),
+            }
           : current,
-    ),
+      ),
   };
 }
 
@@ -996,25 +1006,20 @@ export function regenerateConfiguredScenario(
   if (!current) return module;
   if (current.followUpFor) {
     const primary = module.scenarios.find((s) => s.id === current.followUpFor);
-    return primary
-      ? reviseConfiguredScenario(module, { ...configuredFollowUp(primary), id: current.id })
-      : module;
+    const follow = primary && configuredFollowUp(primary);
+    return follow ? reviseConfiguredScenario(module, { ...follow, id: current.id }) : module;
   }
   const pool = configuredScenarios(module.topicKey, module.type, practice, module.settings);
-  const primaryTitle = current.followUpFor
-    ? module.scenarios.find((s) => s.id === current.followUpFor)?.title
-    : current.title;
+  const primaryTitle = current.title;
   const used = new Set(
     module.scenarios.filter((s) => s.id !== scenarioId && !s.followUpFor).map((s) => s.title),
   );
-  const pick = current.followUpFor
-    ? pool.find((s) => s.title === primaryTitle)
-    : (pool.find((s) => !used.has(s.title) && s.title !== current.title) ??
-      pool.find((s) => s.title === primaryTitle));
+  const pick =
+    pool.find((s) => !used.has(s.title) && s.title !== current.title) ??
+    pool.find((s) => s.title === primaryTitle);
   if (!pick) return module;
-  const replacement = current.followUpFor
-    ? { ...configuredFollowUp(pick), id: current.id, followUpFor: current.followUpFor }
-    : { ...pick, id: current.id };
+  const replacement: Scenario = { ...pick, id: current.id };
+  const follow = configuredFollowUp(replacement);
   return {
     ...module,
     needsReview: module.published || module.needsReview,
@@ -1022,7 +1027,7 @@ export function regenerateConfiguredScenario(
       ...module.scenarios
         .filter((s) => s.followUpFor !== scenarioId)
         .map((s) => (s.id === scenarioId ? replacement : s)),
-      ...(!current.followUpFor ? [configuredFollowUp(replacement)] : []),
+      ...(follow ? [follow] : []),
     ],
   };
 }
