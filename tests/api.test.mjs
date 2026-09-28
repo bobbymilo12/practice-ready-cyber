@@ -274,3 +274,64 @@ test("failed invitation email reports failure and preserves an account for resen
     globalThis.fetch = realFetch;
   }
 });
+
+test("packages and module settings survive manager save and filtered trainee load", async () => {
+  reset("manager");
+  const state = structuredClone(tables.practices[0].state);
+  state.modules = [state.modules[0]];
+  state.assignments = [
+    { id: "bob-configured", moduleId: "m1", traineeId: "bob", packageId: "induction" },
+  ];
+  state.modules[0].packageId = "induction";
+  state.modules[0].settings = {
+    version: 1,
+    answers: {},
+    extra: "Confirmed process",
+    length: "thorough",
+    count: 22,
+  };
+  state.packages = [
+    { id: "induction", kind: "induction", moduleIds: ["m1"] },
+    { id: "private-package", kind: "custom", moduleIds: ["private-module"] },
+  ];
+  const saved = await call({ action: "save-practice", state, version: 1 });
+  assert.equal(saved.status, 200);
+  const manager = await call({ action: "load" });
+  assert.deepEqual(manager.data.state.packages, state.packages);
+  assert.deepEqual(manager.data.state.modules[0].settings, state.modules[0].settings);
+  user = { id: "bob" };
+  const trainee = await call({ action: "load" });
+  assert.deepEqual(trainee.data.state.packages, [state.packages[0]]);
+  assert.equal(trainee.data.state.assignments[0].packageId, "induction");
+});
+
+test("invitation assigns only ready induction modules and resend does not duplicate assignments", async (t) => {
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () => new Response(JSON.stringify({ id: "mock-email" }), { status: 200 }),
+  );
+  reset("manager");
+  const state = tables.practices[0].state;
+  state.modules[0].settings = { version: 1, answers: {}, extra: "", length: "quick", count: 6 };
+  state.modules.push(
+    { id: "draft", published: false },
+    { id: "review", published: true, needsReview: true },
+  );
+  state.packages = [
+    { id: "induction", kind: "induction", moduleIds: ["m1", "draft", "review", "missing"] },
+  ];
+  for (let i = 0; i < 2; i++) {
+    const response = await call({
+      action: "invite",
+      email: "new@practice.test",
+      name: "New Starter",
+      role: "Receptionist",
+    });
+    assert.equal(response.status, 200, JSON.stringify(response.data));
+    tables.profiles.find((p) => p.id === "invited").last_invite_at = new Date(0).toISOString();
+  }
+  const assigned = tables.practices[0].state.assignments.filter((a) => a.packageId === "induction");
+  assert.equal(assigned.length, 1);
+  assert.equal(assigned[0].moduleId, "m1");
+});

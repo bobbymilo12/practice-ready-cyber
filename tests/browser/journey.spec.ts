@@ -207,7 +207,7 @@ test("password change, saved feedback, different followup, next module and compl
   await page.getByRole("button", { name: "Begin training" }).click();
   await page.getByRole("button", { name: "Move step 3 up" }).click();
   await page.getByRole("button", { name: "Move step 2 up" }).click();
-  await page.getByRole("button", { name: "Check my order" }).click();
+  await page.getByRole("button", { name: "Select this order" }).click();
   await page.getByRole("button", { name: "Review answers" }).click();
   await page.getByRole("button", { name: "Submit module" }).click();
   await expect(

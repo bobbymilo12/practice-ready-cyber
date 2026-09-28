@@ -53,6 +53,7 @@ export interface Module {
   createdAt: number;
   difficulty?: Difficulty;
   length?: ModuleLength;
+  settings?: import("./module-config").ModuleSettings;
   needsReview?: boolean;
   reviewReason?: string;
   packageId?: string;

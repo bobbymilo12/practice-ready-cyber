@@ -54,6 +54,7 @@ function CreateModule() {
             void nav({
               to: "/modules/setup",
               search: {
+                id: "",
                 topic: topic.key,
                 title: selected === "custom" ? customTitle.trim() : topic.title,
               },

@@ -156,7 +156,9 @@ test("guided setup validates, resumes, preserves details and waits for a success
   await page.getByRole("button", { name: "Create starter drafts" }).click();
   await expect(page.getByRole("heading", { name: "Your practice is set up" })).toBeVisible();
   const saved = backend.state();
-  expect(saved.modules).toHaveLength(5);
+  expect(saved.modules).toHaveLength(6);
+  expect(saved.packages).toHaveLength(1);
+  expect(saved.packages[0].moduleIds).toEqual(saved.modules.map((m: { id: string }) => m.id));
   expect(JSON.stringify(saved.modules)).not.toContain("Unrelated old answer");
   expect(JSON.stringify(saved.modules)).toContain("Contact our safeguarding lead");
   expect(saved.practiceData.address).toBe(defaultPracticeData.address);

@@ -441,7 +441,7 @@ Deno.serve(async (request) => {
       if (session.result) session.result.traineeName = profile.name;
     } else if (action === "submit") {
       session = submitSession(session, module.title);
-      session.result.traineeName = profile.name;
+      if (session.result) session.result.traineeName = profile.name;
     } else if (action === "confidence") {
       if (!session.result || !Number.isInteger(body.value) || body.value < 1 || body.value > 5)
         fail("Choose a confidence from 1 to 5.");

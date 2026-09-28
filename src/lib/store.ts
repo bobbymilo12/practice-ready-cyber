@@ -3,6 +3,13 @@ import type { SafeguardingRoute } from "./practice-config";
 import type { BookingConfig, PrescriptionConfig } from "./practice-config";
 import type { AppointmentCapabilities } from "./appointment-capabilities";
 import { create } from "zustand";
+import {
+  defaultModuleSettings,
+  generateConfiguredModule,
+  regenerateConfiguredScenario,
+  reviseConfiguredScenario,
+  type ModuleSettings,
+} from "./module-config";
 import { practiceScenarios } from "./practice-scenarios";
 
 import type {
@@ -311,7 +318,9 @@ export interface AppState {
     seed: Scenario[],
     difficulty?: Difficulty,
     length?: ModuleLength,
+    settings?: ModuleSettings,
   ) => string;
+  configureModule: (id: string, settings: ModuleSettings, scenarios: Scenario[]) => void;
   updateScenario: (moduleId: string, s: Scenario) => void;
   deleteScenario: (moduleId: string, scenarioId: string) => void;
   approveScenario: (moduleId: string, scenarioId: string) => void;
@@ -1539,7 +1548,7 @@ export const useApp = create<AppState>()((set, get) => ({
   setAnswer: (key, value) => set((s) => ({ answers: { ...s.answers, [key]: value } })),
   resetAnswers: () => set({ answers: {} }),
 
-  createDraftModule: (type, title, topicKey, seed, difficulty, length) => {
+  createDraftModule: (type, title, topicKey, seed, difficulty, length, settings) => {
     const id = uid();
     set((s) => ({
       modules: [
@@ -1554,6 +1563,7 @@ export const useApp = create<AppState>()((set, get) => ({
           createdAt: Date.now(),
           difficulty,
           length,
+          settings,
         },
       ],
       currentDraftId: id,
@@ -1561,16 +1571,27 @@ export const useApp = create<AppState>()((set, get) => ({
     return id;
   },
 
-  updateScenario: (moduleId, s) =>
+  configureModule: (id, settings, scenarios) =>
     set((state) => ({
       modules: state.modules.map((m) =>
-        m.id === moduleId
-          ? {
-              ...m,
-              needsReview: m.published || m.needsReview,
-              scenarios: m.scenarios.map((x) => (x.id === s.id ? s : x)),
-            }
-          : m,
+        m.id === id ? { ...m, settings, scenarios, needsReview: m.published || m.needsReview } : m,
+      ),
+    })),
+
+  updateScenario: (moduleId, scenario) =>
+    set((state) => ({
+      modules: state.modules.map((module) =>
+        module.id !== moduleId
+          ? module
+          : module.settings
+            ? reviseConfiguredScenario(module, scenario)
+            : {
+                ...module,
+                needsReview: module.published || module.needsReview,
+                scenarios: module.scenarios.map((current) =>
+                  current.id === scenario.id ? scenario : current,
+                ),
+              },
       ),
     })),
 
@@ -1607,6 +1628,12 @@ export const useApp = create<AppState>()((set, get) => ({
     set((state) => {
       const mod = state.modules.find((m) => m.id === moduleId);
       if (!mod) return state;
+      if (mod.settings)
+        return {
+          modules: state.modules.map((m) =>
+            m.id === moduleId ? regenerateConfiguredScenario(m, scenarioId, state.practiceData) : m,
+          ),
+        };
       const current = mod.scenarios.find((x) => x.id === scenarioId);
       if (!current) return state;
       const pool = practiceScenarios(
@@ -1815,7 +1842,16 @@ export const useApp = create<AppState>()((set, get) => ({
           title,
           topicKey: s.key,
           published: false,
-          scenarios: draftsForTopic(s.key, "mixed", s.title, "easy", "short", {}),
+          settings: s.key === "custom" ? undefined : defaultModuleSettings(),
+          scenarios:
+            s.key === "custom"
+              ? draftsForTopic(s.key, "mixed", s.title, "easy", "short", {})
+              : generateConfiguredModule(
+                  s.key,
+                  s.title,
+                  state.practiceData,
+                  defaultModuleSettings(),
+                ),
           createdAt: Date.now(),
           packageId,
         });

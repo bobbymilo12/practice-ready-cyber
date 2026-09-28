@@ -76,6 +76,22 @@ function Review() {
         </div>
       </div>
 
+      {module.settings && (
+        <Card className="mt-6">
+          <p>
+            {module.scenarios.filter((s) => !s.followUpFor).length} scenarios · Requested length:{" "}
+            {module.settings.length} ({module.settings.count})
+          </p>
+          <Link
+            className="text-primary underline"
+            to="/modules/setup"
+            search={{ id: module.id, topic: module.topicKey, title: module.type }}
+          >
+            Edit settings and regenerate module
+          </Link>
+        </Card>
+      )}
+
       <div className="mt-8 space-y-5">
         {module.scenarios.map((s) => (
           <ScenarioCard
@@ -177,10 +193,27 @@ function ScenarioCard({
         )}
       </p>
 
+      {editing && draft.kind === "mcq" && (
+        <label className="mt-3 block text-sm">
+          Best answer
+          <select
+            className="ml-3 rounded-lg border border-input bg-background p-2"
+            value={draft.correctIndex}
+            onChange={(e) => setDraft({ ...draft, correctIndex: Number(e.target.value) })}
+          >
+            {draft.options.map((_, i) => (
+              <option key={i} value={i}>
+                Option {String.fromCharCode(65 + i)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       {scenario.kind === "mcq" && draft.kind === "mcq" && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {scenario.options.map((opt, i) => {
-            const isBest = i === scenario.correctIndex;
+            const isBest = i === (editing ? draft.correctIndex : scenario.correctIndex);
             return (
               <div
                 key={i}
@@ -308,7 +341,10 @@ function ScenarioCard({
               Approve
             </button>
             <button
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                setDraft(scenario);
+                setEditing(true);
+              }}
               className="rounded-lg border border-border px-3 py-2 text-sm"
             >
               Edit

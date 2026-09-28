@@ -210,6 +210,7 @@ export function initializeBackend() {
     if (applying || !useConnection.getState().ready || state.account?.role !== "manager") return;
     if (
       state.modules !== previous.modules ||
+      state.packages !== previous.packages ||
       state.assignments !== previous.assignments ||
       state.answers !== previous.answers ||
       state.currentDraftId !== previous.currentDraftId ||
