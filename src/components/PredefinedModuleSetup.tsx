@@ -8,6 +8,7 @@ import { ModuleQuestion } from "./ModuleQuestion";
 import { configMissing } from "@/lib/practice-config";
 import {
   fieldsForTopic,
+  extraRuleLabels,
   moduleFacts,
   defaultModuleSettings,
   lengthOptions,
@@ -188,10 +189,10 @@ export function PredefinedModuleSetup({
                     ))}
                     <details open={settings.extra ? true : undefined}>
                       <summary className="cursor-pointer text-primary">
-                        + Add something specific to your practice
+                        + Add practice-specific {extraRuleLabels[topic] ?? "local"} rule
                       </summary>
                       <label className="mt-3 block text-sm">
-                        Additional local rule or procedure
+                        Additional {extraRuleLabels[topic] ?? "local"} rule or procedure
                         <textarea
                           className={input}
                           rows={3}

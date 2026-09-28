@@ -3,6 +3,9 @@ import test from "node:test";
 import type { PracticeData } from "../src/lib/store.ts";
 import {
   fieldsForTopic,
+  questionOptions,
+  questionNeedsDetails,
+  extraRuleLabels,
   selectedValues,
   selectAnswer,
   EXCLUDE_QUESTION,
@@ -359,4 +362,116 @@ test("structured same-day criteria stay separate and use the configured process"
     assert.equal(s.options[s.correctIndex], "Send the request for clinical triage before booking");
   }
   assert.ok(!JSON.stringify(scenarios).includes("Stale"));
+});
+
+test("all nine defaults use concrete choices and retain a topic-specific local rule entry", () => {
+  const p = empty();
+  for (const [topic, fields] of Object.entries(topicFields)) {
+    assert.ok(extraRuleLabels[topic]);
+    for (const f of fieldsForTopic(topic, p)) {
+      assert.ok(f.addLabel);
+      assert.ok(
+        !/saved|recorded|booking team|prescription team|vaccination team|results team|responsible team/i.test(
+          f.label + f.options.join(" "),
+        ),
+        `${topic}: ${f.key}`,
+      );
+    }
+    const settings = defaultModuleSettings();
+    settings.extra =
+      "When a request arrives through our local service -> contact Alex using the internal phone";
+    assert.ok(configuredScenarios(topic, topic, p, settings).length);
+    assert.equal(
+      fields.filter((f) => f.legacyOnly).length,
+      topic === "appointment-booking" ? 2 : 0,
+    );
+  }
+});
+
+test("advice requires an actual contact and resolves renamed people without copying names", () => {
+  const p = empty();
+  const f = topicFields["appointment-booking"].find((f) => f.key === "unavailable")!;
+  let settings = selectAnswer(
+    defaultModuleSettings(),
+    f,
+    "Ask a specified person or role for advice",
+  );
+  assert.ok(questionNeedsDetails(f, settings, p));
+  assert.deepEqual(moduleFacts("appointment-booking", p, settings), []);
+  p.staff = [{ id: "alex", name: "Alex", role: "GP", clinics: "" }];
+  settings.answerDetails = {
+    unavailable: { contact: "staff:alex", instruction: "Call the internal phone." },
+  };
+  settings = JSON.parse(JSON.stringify(settings));
+  assert.ok(!questionNeedsDetails(f, settings, p));
+  assert.ok(
+    moduleFacts("appointment-booking", p, settings).some(
+      (f) => f.rule.includes("Alex — GP") && f.rule.includes("internal phone"),
+    ),
+  );
+  p.staff[0].name = "Alex Smith";
+  assert.ok(
+    moduleFacts("appointment-booking", p, settings).some((f) => f.rule.includes("Alex Smith")),
+  );
+  p.staff = [];
+  assert.ok(questionNeedsDetails(f, settings, p));
+  assert.deepEqual(moduleFacts("appointment-booking", p, settings), []);
+});
+
+test("an unspecified local process never becomes guidance and unselected details stay inactive", () => {
+  const p = empty();
+  const f = topicFields.vaccines.find((f) => f.key === "clinicFull")!;
+  let settings = selectAnswer(
+    defaultModuleSettings(),
+    f,
+    "Follow another practice-specific process",
+  );
+  assert.ok(questionNeedsDetails(f, settings, p));
+  assert.deepEqual(moduleFacts("vaccines", p, settings), []);
+  settings.answerDetails = { clinicFull: { instruction: "Ask Jo to arrange a callback." } };
+  assert.equal(moduleFacts("vaccines", p, settings)[0].rule, "Ask Jo to arrange a callback.");
+  settings = selectAnswer(settings, f, EXCLUDE_QUESTION);
+  assert.deepEqual(moduleFacts("vaccines", p, settings), []);
+});
+
+test("booking escalation is offered only when configured and uses the actual practice route", () => {
+  const p = empty();
+  const f = topicFields["appointment-booking"].find((f) => f.key === "unavailable")!;
+  const settings = defaultModuleSettings();
+  assert.ok(
+    !questionOptions(f, p, settings).some((o) => o.value === "practice:booking-escalation"),
+  );
+  p.dutyContact = "Contact Alex via extension 123";
+  assert.ok(
+    questionOptions(f, p, settings).some(
+      (o) =>
+        o.value === "practice:booking-escalation" && o.label.includes("Alex via extension 123"),
+    ),
+  );
+});
+
+test("retired questions and previous answers survive reload without becoming new suggestions", () => {
+  const p = empty();
+  const f = topicFields["appointment-booking"].find((f) => f.key === "appointmentMode")!;
+  const settings = defaultModuleSettings();
+  assert.ok(!fieldsForTopic("appointment-booking", p, settings).includes(f));
+  settings.answers.appointmentMode =
+    "Ask the responsible clinician or team to confirm the appointment mode";
+  const restored = JSON.parse(JSON.stringify(settings));
+  assert.ok(fieldsForTopic("appointment-booking", p, restored).includes(f));
+  assert.ok(
+    questionOptions(f, p, restored).some((o) => o.value === settings.answers.appointmentMode),
+  );
+  assert.equal(restored.answers.appointmentMode, settings.answers.appointmentMode);
+  assert.deepEqual(questionOptions(f, p, defaultModuleSettings()), []);
+  const preference = topicFields["appointment-booking"].find((f) => f.key === "preference")!;
+  restored.answers.preference = "Send the preference to the booking team for review";
+  assert.ok(
+    questionOptions(preference, p, restored).some((o) => o.value === restored.answers.preference),
+  );
+  assert.ok(
+    !questionOptions(preference, p, defaultModuleSettings()).some((o) =>
+      /booking team/.test(o.label),
+    ),
+  );
 });

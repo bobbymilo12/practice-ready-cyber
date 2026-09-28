@@ -1,3 +1,4 @@
+import { legacyModuleOptions } from "./module-config-legacy.ts";
 import {
   applications,
   applicationMistakes,
@@ -21,6 +22,7 @@ export interface ModuleSettings {
   // Optional additions keep existing version-1 modules compatible.
   selections?: Record<string, string[]>;
   customOptions?: Record<string, { id: string; label: string }[]>;
+  answerDetails?: Record<string, { contact?: string; instruction?: string }>;
   extra: string;
   length: "quick" | "standard" | "thorough" | "custom";
   count: number;
@@ -30,6 +32,9 @@ export interface TopicField {
   label: string;
   options: string[];
   multiple?: boolean;
+  detailOptions?: Record<string, "contact" | "process">;
+  addLabel?: string;
+  legacyOnly?: boolean;
   situation?: string;
   showWhen?: (p: PracticeData, settings: ModuleSettings) => boolean;
   known?: (p: PracticeData) => string;
@@ -43,11 +48,33 @@ const field = (
 const channels = ["NHS App", "Practice website / online form", "Telephone", "At reception"];
 const contact = (key: string, label: string, known?: TopicField["known"]) =>
   field(key, label, [], known);
+const advice = "Ask a specified person or role for advice";
+const localProcess = "Follow another practice-specific process";
+const bookingRoute = "practice:booking-escalation";
+const q = (
+  key: string,
+  label: string,
+  options: string[],
+  known?: TopicField["known"],
+): TopicField => ({
+  ...field(key, label, options, known),
+  detailOptions: {
+    [advice]: "contact",
+    [localProcess]: "process",
+    "It depends on the request type": "process",
+  },
+  addLabel: "Add another process",
+});
+const methods = (key: string, label: string, options = channels): TopicField => ({
+  ...q(key, label, options),
+  multiple: true,
+  addLabel: "Add another method",
+});
 export const topicFields: Record<string, TopicField[]> = {
   "appointment-booking": [
-    field(
+    q(
       "sameDay",
-      "How are appropriate same-day requests normally handled?",
+      "How are same-day appointment requests handled?",
       [
         "Reception books directly with an appropriate clinician",
         "Request goes through triage first",
@@ -56,60 +83,36 @@ export const topicFields: Record<string, TopicField[]> = {
       (p) => p.rolePolicies.gpsSameDay,
     ),
     {
-      ...field(
-        "sameDayRoutes",
-        "Which possible routes are used for same-day requests?",
-        [
-          "Direct booking where the recorded request rules permit it",
-          "Clinical triage before booking",
-          "Request sent to the responsible team for a decision",
-        ],
-        (p) => p.bookingConfig?.sameDayInstruction ?? "",
-      ),
-      multiple: true,
+      ...methods("sameDayRoutes", "Which routes are used for same-day requests?", [
+        "Reception books requests that meet the practice’s same-day criteria",
+        "Clinical triage before booking",
+        localProcess,
+      ]),
+      known: (p) => p.bookingConfig?.sameDayInstruction ?? "",
       situation:
-        "A colleague is learning the practice’s same-day process. Which possible routes are recorded? These choices do not decide which route applies to an individual patient.",
+        "A colleague asks how same-day requests are handled. What routes can reception use?",
       showWhen: (p, settings) =>
         p.bookingConfig?.sameDayProcess.id === "depends" ||
         (!practiceSummary(p).rolePolicies.gpsSameDay.trim() &&
           settings.answers.sameDay === "It depends on the request"),
     },
-    {
-      ...field("preference", "What happens if a patient requests a particular GP or clinician?", [
-        "Check that clinician’s recorded responsibilities and availability before offering an appointment",
-        "Send the preference to the booking team for review",
-        "It depends on whether the request is routine or same-day",
-      ]),
-      situation:
-        "A patient asks specifically for their usual clinician. What is the recorded process?",
-    },
-    {
-      ...field(
-        "preferenceRoutes",
-        "Which processes apply when the clinician preference cannot be met?",
-        [
-          "Discuss another clinician who is recorded as handling the request",
-          "Ask the responsible team to review the request before making an offer",
-        ],
-      ),
-      multiple: true,
-      showWhen: (_p, settings) =>
-        settings.answers.preference === "It depends on whether the request is routine or same-day",
-      situation:
-        "A patient’s clinician preference cannot be met. Which possible processes are recorded, subject to the request’s booking rules?",
-    },
-    field(
-      "unavailable",
-      "When the appropriate appointment is unavailable, what should reception do?",
-      [
-        "Refer to the saved appointment escalation route",
-        "Send a request to the booking team for review",
-      ],
-    ),
-    field(
+    q("preference", "What happens if a patient requests a particular GP or clinician?", [
+      "Book with the requested clinician if an appropriate appointment is available",
+      "Offer another suitable clinician if the requested clinician is unavailable",
+      "It depends on the request type",
+      localProcess,
+    ]),
+    q("unavailable", "When the appropriate appointment is unavailable, what should reception do?", [
+      "Offer another clinician who can handle the request",
+      "Offer the next suitable appointment",
+      bookingRoute,
+      advice,
+      localProcess,
+    ]),
+    q(
       "uncertain",
       "When unsure which appointment to book, what should reception do?",
-      ["Refer to the saved appointment escalation route"],
+      [bookingRoute, advice, localProcess],
       (p) =>
         p.bookingConfig?.sendUncertainToDutyClinician
           ? "Send to duty clinician"
@@ -117,37 +120,14 @@ export const topicFields: Record<string, TopicField[]> = {
             ? p.dutyContact
             : "",
     ),
-    {
-      ...field(
-        "appointmentMode",
-        "How should reception handle a request to change between telephone and face-to-face?",
-        [
-          "Check the recorded booking instruction before changing the appointment mode",
-          "Ask the responsible clinician or team to confirm the appointment mode",
-        ],
-      ),
-      situation:
-        "A patient asks to change an appointment from telephone to face-to-face. What should reception do?",
-    },
-    {
-      ...field(
-        "cancellation",
-        "How should a cancelled appointment be handled?",
-        [
-          "Release the slot and offer rebooking under the saved booking process",
-          "Send a rebooking request to the booking team",
-        ],
-        (p) => p.localDNA,
-      ),
-      situation:
-        "A patient cancels and asks for a replacement appointment. What is the local process?",
-    },
+    q("cancellation", "What should reception do when a patient cancels and asks to rebook?", [
+      "Cancel the original appointment and offer another suitable appointment",
+      advice,
+      localProcess,
+    ]),
   ],
   prescriptions: [
-    {
-      ...field("acute", "How should a non-repeat prescription request be submitted?", channels),
-      multiple: true,
-    },
+    methods("acute", "How should a non-repeat prescription request be submitted?"),
     contact("queries", "Who handles prescription queries?", (p) =>
       p.staff
         .filter((person) =>
@@ -156,296 +136,254 @@ export const topicFields: Record<string, TopicField[]> = {
         .map((person) => `${person.name} — ${person.role}`)
         .join("; "),
     ),
-    field(
-      "monitoring",
-      "What should reception do when a medication review is overdue?",
-      ["Send the request for clinician review", "Use the recorded medication monitoring process"],
-      (p) => p.repeatHighRisk,
+    q("monitoring", "What should reception do when a medication review is overdue?", [
+      "Offer a medication review appointment where the clinician has requested one",
+      advice,
+      localProcess,
+    ]),
+    q(
+      "urgentRequest",
+      "How should an urgent prescription request be passed on?",
+      [advice, localProcess],
+      (p) =>
+        !configMissing(p).prescription.some((item) => item.startsWith("Urgent"))
+          ? p.repeatEmergency
+          : "",
     ),
-    {
-      ...field(
-        "urgentRequest",
-        "How should an urgent prescription request be handed over?",
-        [
-          "Refer to the saved appointment escalation route",
-          "Send an urgent clinical-system request to the prescription team",
-        ],
-        (p) =>
-          !configMissing(p).prescription.some((item) => item.startsWith("Urgent"))
-            ? p.repeatEmergency
-            : "",
-      ),
-      situation:
-        "A patient says their prescription request is urgent. Which locally confirmed handover process applies?",
-    },
-    {
-      ...field(
-        "chasing",
-        "What happens when a patient chases a prescription beyond the recorded turnaround?",
-        [
-          "Check the request status and send a query to the prescription team",
-          "Ask the responsible clinician to review the outstanding request",
-        ],
-      ),
-      situation:
-        "A patient says their prescription is still outstanding after the recorded turnaround. What should reception do?",
-    },
-    {
-      ...field(
-        "pharmacyIssue",
-        "What happens when a pharmacy cannot find an expected prescription?",
-        [
-          "Check the recorded prescription destination and status before referring the query",
-          "Send the query to the prescription team for investigation",
-        ],
-      ),
-      situation:
-        "A patient says the pharmacy cannot find a prescription they expected. What is the recorded process?",
-    },
+    q(
+      "chasing",
+      "What should reception do when a prescription takes longer than the practice’s usual turnaround?",
+      ["Check the request’s progress and explain any update to the patient", advice, localProcess],
+    ),
+    q(
+      "pharmacyIssue",
+      "What should reception do if a pharmacy cannot find an expected prescription?",
+      [
+        "Check whether the prescription has been issued and which pharmacy it was sent to",
+        advice,
+        localProcess,
+      ],
+    ),
   ],
   urgent: [
-    contact(
-      "backup",
-      "Who should reception contact if the recorded urgent contact is unavailable?",
-    ),
-    field("record", "Where should the urgent handover be recorded?", [
-      "Clinical system urgent task",
-      "Practice urgent-call template",
+    contact("backup", "Who should reception contact if the usual urgent contact is unavailable?"),
+    q("record", "Where should reception document an urgent handover?", [
+      "Patient’s clinical record",
+      "Clinical system task",
+      localProcess,
     ]),
-    {
-      ...field("handover", "Which details should accompany an urgent handover?", [
-        "Patient identifiers",
-        "Callback number",
-        "Caller’s own description of the concern",
-        "Actions already taken and the time of the call",
-      ]),
-      multiple: true,
-      situation:
-        "You are handing over an urgent request. Which details does this practice require?",
-    },
-    {
-      ...field(
-        "acknowledgement",
-        "How should reception check that an urgent handover has been received?",
-        [
-          "Seek acknowledgement from the receiving team",
-          "Check the clinical-system task acknowledgement",
-        ],
-      ),
-      situation: "An urgent request has been passed on. What is the recorded way to check receipt?",
-    },
+    methods("handover", "Which details should accompany an urgent handover?", [
+      "Patient identifiers",
+      "Callback number",
+      "Caller’s own description of the concern",
+      "Actions already taken and the time of the call",
+    ]),
+    q("acknowledgement", "How should reception check that an urgent handover has been received?", [
+      "Confirm directly with the person receiving the handover",
+      "Check that the clinical system task has been acknowledged",
+      localProcess,
+    ]),
   ],
   results: [
-    field("release", "When may reception pass on a result?", [
+    q("release", "When may reception pass on a result?", [
       "Only when marked as reviewed and authorised for reception to share",
       "All result enquiries go to the reviewing clinician",
+      localProcess,
     ]),
-    field("pending", "How should an unreviewed result enquiry be handled?", [
-      "Send a task to the reviewing clinician",
-      "Refer to the saved appointment escalation route",
+    q("pending", "What should reception do if a result has not yet been reviewed?", [
+      "Explain that the result needs clinician review before it can be shared",
+      advice,
+      localProcess,
     ]),
-    field(
+    q(
       "identity",
-      "Which identity details must be checked?",
-      ["Full name and date of birth", "Full name, date of birth and address"],
+      "Which identity details must be checked before sharing a result?",
+      ["Full name and date of birth", "Full name, date of birth and address", localProcess],
       (p) => p.localConfidentiality,
     ),
-    {
-      ...field(
-        "followup",
-        "What should reception do when a reviewed result includes a follow-up instruction?",
-        [
-          "Arrange the follow-up exactly as recorded by the reviewing clinician",
-          "Pass the instruction to the booking team to arrange",
-        ],
-      ),
-      situation:
-        "A reviewed result includes a follow-up instruction. What should reception do next?",
-    },
-    {
-      ...field("notReceived", "What happens if an expected test result has not arrived?", [
-        "Send a query to the results team",
-        "Ask the requesting clinician to review the missing-result enquiry",
-      ]),
-      situation:
-        "A patient asks for an expected result which is not yet in the record. What is the local process?",
-    },
+    q(
+      "followup",
+      "What should reception do when a reviewed result includes a follow-up instruction?",
+      ["Arrange the follow-up requested by the reviewing clinician", advice, localProcess],
+    ),
+    q("notReceived", "What should reception do if an expected test result has not arrived?", [
+      "Check whether the result has arrived through another route, such as a letter",
+      advice,
+      localProcess,
+    ]),
   ],
   vaccines: [
-    field("eligibility", "How should reception confirm permission to book a vaccine?", [
-      "Check the recorded clinician invitation",
-      "Ask the vaccination team to confirm before booking",
+    q("eligibility", "How should reception check whether a patient can book a vaccination?", [
+      "Check that the patient has been invited for the vaccination",
+      "Check booking instructions provided by a clinician",
+      advice,
+      localProcess,
     ]),
-    field("unclear", "What happens if the vaccine booking instruction is unclear?", [
-      "Refer to the saved appointment escalation route",
-      "Send a query to the vaccination team",
+    q("unclear", "What should reception do if vaccination booking instructions are unclear?", [
+      advice,
+      localProcess,
     ]),
+    q(
+      "clinicFull",
+      "What should reception do when no suitable vaccination appointment is available?",
+      [
+        "Offer the next suitable vaccination appointment",
+        "Use the practice’s vaccination waiting list",
+        advice,
+        localProcess,
+      ],
+    ),
     {
-      ...field(
-        "clinicFull",
-        "What happens when the authorised vaccine clinic has no available appointments?",
-        [
-          "Send the request to the vaccination team to arrange capacity",
-          "Use the practice’s vaccination waiting list",
-        ],
-      ),
-      situation:
-        "A patient has authorisation to book but the specified vaccine clinic is full. What happens next?",
-    },
-    {
-      ...field("waitingList", "Which details are recorded on the vaccination waiting list?", [
+      ...methods("waitingList", "Which details are needed for your vaccination waiting list?", [
         "Patient identifiers",
         "Contact number",
-        "Recorded vaccine invitation",
+        "Vaccination requested",
         "Patient availability",
       ]),
-      multiple: true,
       showWhen: (_p, settings) =>
         settings.answers.clinicFull === "Use the practice’s vaccination waiting list",
-      situation:
-        "A patient is joining the vaccination waiting list. Which details should be recorded?",
     },
-    {
-      ...field(
-        "vaccineAdvice",
-        "How should reception handle a clinical question about a vaccine?",
-        [
-          "Send the question to the vaccination team",
-          "Ask the clinician named in the booking instruction to respond",
-        ],
-      ),
-      situation:
-        "A patient asks reception whether a vaccine is suitable for them. Who should handle the question?",
-    },
+    contact("vaccineAdvice", "Who should reception contact about clinical vaccination questions?"),
   ],
   "fit-notes": [
-    { ...field("request", "How are fit note requests submitted?", channels), multiple: true },
-    field("delivery", "How are issued fit notes provided?", [
+    methods("request", "How are fit note requests submitted?"),
+    q("delivery", "How are issued fit notes provided?", [
       "Secure digital message",
-      "Paper collection under the saved confidentiality procedure",
+      "Paper collection from reception",
       "Patient chooses secure digital message or paper collection",
+      localProcess,
     ]),
-    field("extension", "How are extension or backdating requests handled?", [
-      "Send to the responsible clinician for a decision",
-      "Use the same request pathway as a new fit note",
+    q(
+      "extension",
+      "How are extension or backdating requests submitted for a clinician’s decision?",
+      ["Use the same request pathway as a new fit note", advice, localProcess],
+    ),
+    q("fitNoteChase", "What should reception do when a patient chases a fit note request?", [
+      "Check the request’s progress and explain any update to the patient",
+      advice,
+      localProcess,
     ]),
-    {
-      ...field("fitNoteChase", "How should an outstanding fit note request be chased?", [
-        "Check the request status and send a query to the responsible team",
-        "Refer the enquiry to the clinician reviewing the request",
-      ]),
-      situation: "A patient chases a fit note decision. What should reception do?",
-    },
   ],
   "home-visits": [
-    field("intake", "Where should a home visit request be recorded?", [
-      "Clinical system home visit task",
-      "Practice home visit request template",
+    q("intake", "Where should reception document a home visit request?", [
+      "Clinical system task",
+      "Home visit request list in the clinical system",
+      localProcess,
     ]),
     contact("review", "Who reviews home visit requests?"),
-    field("late", "How are requests received after the routine visiting round handled?", [
-      "Refer to the saved appointment escalation route",
-      "Send to the home visit reviewer for a decision",
+    q("late", "How should reception handle a home visit request later in the day?", [
+      "Use the same process as other home visit requests",
+      advice,
+      localProcess,
     ]),
-    {
-      ...field("visitDetails", "Which details should reception collect for a home visit request?", [
-        "Patient identifiers",
-        "Current location and access information",
-        "Callback number",
-        "Caller’s description of the reason for the request",
-      ]),
-      multiple: true,
-      situation: "A caller requests a home visit. Which details are needed for the local handover?",
-    },
-    {
-      ...field("visitUpdate", "How should a change to a pending home visit request be handled?", [
-        "Send the update to the home visit reviewer",
-        "Refer to the saved appointment escalation route",
-      ]),
-      situation:
-        "A caller provides new information about a pending home visit request. What happens next?",
-    },
+    methods("visitDetails", "Which details should reception collect for a home visit request?", [
+      "Patient identifiers",
+      "Current location and access information",
+      "Callback number",
+      "Caller’s description of the reason for the request",
+    ]),
+    q(
+      "visitUpdate",
+      "How should reception pass on new information about a pending home visit request?",
+      [advice, localProcess],
+    ),
   ],
   difficult: [
     contact("support", "Who supports reception with an unresolved difficult call?"),
-    field(
+    q(
       "complaint",
-      "How should a caller wishing to complain proceed?",
-      ["Send the complaint to the practice manager", "Provide the practice complaint form"],
+      "How can a caller make a complaint?",
+      [
+        "Write to the practice",
+        "Submit a complaint through the practice website",
+        "Make a verbal complaint for staff to document",
+        localProcess,
+      ],
       (p) => p.localComplaints,
     ),
-    field("record", "Where are difficult-call incidents recorded?", [
+    q("record", "Where should staff document a difficult-call incident?", [
       "Practice incident reporting system",
-      "Clinical system incident template",
+      "Patient’s clinical record",
+      localProcess,
     ]),
-    field(
+    q(
       "phrasing",
-      "Which approach should staff use to acknowledge frustration?",
-      [
-        "Acknowledge the concern and explain the next available step",
-        "Offer to involve the named support contact",
-      ],
+      "How should staff acknowledge a caller’s frustration?",
+      ["Acknowledge the concern and explain what can happen next", localProcess],
       (p) => p.rolePolicies.phrasesUse,
     ),
-    {
-      ...field("unresolved", "How should an unresolved non-clinical concern be followed up?", [
-        "Request a callback from the named support contact",
-        "Pass a written handover to the practice manager",
-      ]),
-      situation:
-        "A caller’s non-clinical concern remains unresolved. How should reception arrange follow-up?",
-    },
-    {
-      ...field(
-        "incidentDetails",
-        "Which details are included in a difficult-call incident report?",
-        [
-          "Date and time",
-          "Caller’s own words where relevant",
-          "Actions taken",
-          "Team member notified",
-        ],
-      ),
-      multiple: true,
-      situation:
-        "You need to report a difficult-call incident. Which details does this practice require?",
-    },
+    q("unresolved", "How should an unresolved non-clinical concern be followed up?", [
+      advice,
+      localProcess,
+    ]),
+    methods(
+      "incidentDetails",
+      "Which details should staff include when reporting a difficult-call incident?",
+      ["Date and time", "Caller’s own words where relevant", "Actions taken", "Person notified"],
+    ),
   ],
   "first-week": [
-    contact("buddy", "Who is the new starter’s named buddy?"),
-    field(
-      "supervision",
-      "What should happen before a new starter handles requests independently?",
-      [
-        "Buddy observes and confirms readiness",
-        "Practice manager confirms readiness after shadowing",
-      ],
+    contact("buddy", "Who can the new starter go to for day-to-day support?"),
+    q("supervision", "How is a new starter’s readiness to work independently checked?", [
+      "A supervisor observes them handling requests and gives feedback",
+      "A supervisor reviews their progress after shadowing",
+      localProcess,
+    ]),
+    methods("shadowing", "Which activities should a new starter shadow?", [
+      "Appointment requests",
+      "Prescription requests",
+      "Results enquiries",
+      "Administrative handovers",
+    ]),
+    contact(
+      "accessIssue",
+      "Who should a new starter contact if they cannot access a required system?",
     ),
-    {
-      ...field("shadowing", "Which activities should a new starter shadow?", [
-        "Appointment requests",
-        "Prescription requests",
-        "Results enquiries",
-        "Administrative handovers",
-      ]),
-      multiple: true,
-      situation:
-        "A new starter is planning their supervised induction. Which activities should they shadow?",
-    },
-    {
-      ...field(
-        "accessIssue",
-        "What should a new starter do if they cannot access a required system?",
-        [
-          "Ask their named buddy to raise an access request",
-          "Contact the practice’s system administrator",
-        ],
-      ),
-      situation:
-        "A new starter cannot access a system needed for their work. What is the local process?",
-    },
   ],
 };
+// Preserve previously configured optional questions without asking new managers to complete them.
+topicFields["appointment-booking"].push(
+  {
+    ...q(
+      "appointmentMode",
+      "What is your process for changing an appointment between telephone and face-to-face?",
+      [],
+    ),
+    legacyOnly: true,
+    addLabel: "Add another process",
+  },
+  {
+    ...q(
+      "preferenceRoutes",
+      "Which alternatives apply when a clinician preference cannot be met?",
+      [],
+    ),
+    multiple: true,
+    showWhen: (_p, settings) =>
+      settings.answers.preference === "It depends on whether the request is routine or same-day",
+    legacyOnly: true,
+    addLabel: "Add another process",
+  },
+);
+export const extraRuleLabels: Record<string, string> = {
+  "appointment-booking": "booking",
+  prescriptions: "prescription",
+  urgent: "urgent handover",
+  results: "test result",
+  vaccines: "vaccination",
+  "fit-notes": "fit note",
+  "home-visits": "home visit",
+  difficult: "difficult-call",
+  "first-week": "induction",
+};
+for (const fields of Object.values(topicFields)) {
+  for (const f of fields) {
+    if (!f.addLabel) f.addLabel = "Add another person or role";
+    if (["handover", "waitingList", "visitDetails", "incidentDetails"].includes(f.key))
+      f.addLabel = "Add another detail";
+    if (f.key === "shadowing") f.addLabel = "Add another activity";
+  }
+}
 export const lengthOptions = [
   { key: "quick", label: "Quick", description: "~5 minutes · 5–7 scenarios", count: 6 },
   {
@@ -503,13 +441,46 @@ export function selectAnswer(
     selections: { ...settings.selections, [f.key]: values },
   };
 }
+export function legacySelectedOptions(f: TopicField, settings: ModuleSettings): string[] {
+  const topic = Object.keys(topicFields).find((t) => topicFields[t].includes(f));
+  const previous = topic ? (legacyModuleOptions[topic]?.[f.key] ?? []) : [];
+  return selectedValues(f, settings).filter(
+    (value) => previous.includes(value) && !f.options.includes(value),
+  );
+}
 export function questionOptions(f: TopicField, p: PracticeData, settings: ModuleSettings) {
   return [
     ...optionsForField(f, p).map((value) => ({ value, label: answerText(value, p) })),
+    ...legacySelectedOptions(f, settings).map((value) => ({ value, label: value })),
     ...(settings.customOptions?.[f.key] ?? [])
       .filter((o) => o.id.startsWith("custom:") && o.label.trim())
       .map((o) => ({ value: o.id, label: o.label.trim() })),
   ];
+}
+export function configuredContacts(p: PracticeData): string[] {
+  return [
+    ...new Set([
+      ...p.staff.filter((s) => s.name.trim()).map((s) => `staff:${s.id}`),
+      ...Object.values(p.roleRequests ?? {})
+        .filter((r) => r.confirmed && !r.archived)
+        .map((r) => `role:${r.roleId}`),
+    ]),
+  ];
+}
+export function questionNeedsDetails(
+  f: TopicField,
+  settings: ModuleSettings,
+  p: PracticeData,
+): boolean {
+  return selectedValues(f, settings).some((value) => {
+    const kind = f.detailOptions?.[value],
+      details = settings.answerDetails?.[f.key];
+    return kind === "process"
+      ? !details?.instruction?.trim()
+      : kind === "contact"
+        ? !configuredContacts(p).includes(details?.contact ?? "")
+        : false;
+  });
 }
 export function fieldsForTopic(
   topic: string,
@@ -518,27 +489,28 @@ export function fieldsForTopic(
 ) {
   const summary = practiceSummary(p);
   return (topicFields[topic] ?? []).filter(
-    (f) => (!f.showWhen || f.showWhen(p, settings)) && !f.known?.(summary)?.trim(),
+    (f) =>
+      (!f.legacyOnly || selectedValues(f, settings).some((v) => v !== EXCLUDE_QUESTION)) &&
+      (!f.showWhen || f.showWhen(p, settings)) &&
+      !f.known?.(summary)?.trim(),
   );
 }
 export function optionsForField(f: TopicField, p: PracticeData): string[] {
+  if (f.legacyOnly) return [];
   return f.options.length
     ? f.options.filter(
         (o) =>
-          !o.includes("saved appointment escalation") ||
-          !configMissing(p).booking.includes("Escalation contact and method"),
+          o !== bookingRoute || !configMissing(p).booking.includes("Escalation contact and method"),
       )
-    : [
-        ...new Set([
-          ...p.staff.filter((s) => s.name.trim()).map((s) => `staff:${s.id}`),
-          ...Object.values(p.roleRequests ?? {})
-            .filter((r) => r.confirmed && !r.archived)
-            .map((r) => `role:${r.roleId}`),
-        ]),
-      ];
+    : configuredContacts(p);
 }
 export function answerText(value: string, p: PracticeData) {
-  if (value.startsWith("role:")) return p.roleRequests?.[value.slice(5)]?.label ?? "";
+  if (value === bookingRoute)
+    return `Use the appointment escalation process: ${practiceSummary(p).dutyContact}`;
+  if (value.startsWith("role:")) {
+    const role = p.roleRequests?.[value.slice(5)];
+    return role?.confirmed && !role.archived ? role.label : "";
+  }
   if (!value.startsWith("staff:")) return value;
   const s = p.staff.find((s) => s.id === value.slice(6));
   return s ? `${s.name} — ${s.role}` : "";
@@ -740,6 +712,7 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
     );
   for (const f of topicFields[topic] ?? []) {
     if (f.showWhen && !f.showWhen(p, settings)) continue;
+    if (f.legacyOnly && !selectedValues(f, settings).some((v) => v !== EXCLUDE_QUESTION)) continue;
     const known = f.key === "sameDay" ? sameDayProcess : f.known?.(s);
     const selected = selectedValues(f, settings);
     const options = questionOptions(f, p, settings);
@@ -748,7 +721,18 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
       ? []
       : selected.flatMap((value) => {
           const option = options.find((o) => o.value === value);
-          return option ? [option.label] : [];
+          if (!option) return [];
+          const kind = f.detailOptions?.[value],
+            details = settings.answerDetails?.[f.key];
+          if (kind === "process")
+            return details?.instruction?.trim() ? [details.instruction.trim()] : [];
+          if (kind === "contact") {
+            if (!configuredContacts(p).includes(details?.contact ?? "")) return [];
+            return [
+              `Ask ${answerText(details!.contact!, p)} for advice${details?.instruction?.trim() ? `. ${details.instruction.trim()}` : ""}`,
+            ];
+          }
+          return [option.label];
         });
     const rule = known || choices.join("; ");
     // A conditional branch alone is not an actionable local process.
