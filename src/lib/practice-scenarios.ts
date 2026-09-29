@@ -1,3 +1,9 @@
+import {
+  applications,
+  applicationMistakes,
+  naturalSituation,
+  scenarioQuestion,
+} from "./scenario-applications.ts";
 import { practiceSummary } from "./practice-config.ts";
 import { requestRoleId, effectiveRequestsForStaff } from "./role-requests.ts";
 import type { PracticeData, Scenario } from "./store";
@@ -168,24 +174,32 @@ export function practiceScenarios(
       seen.add(r.rule);
       return true;
     })
-    .flatMap((r) => {
-      const id = crypto.randomUUID();
-      return r.quotes.map((quote, i): Scenario => ({
-        kind: "mcq",
-        id: i ? crypto.randomUUID() : id,
-        followUpFor: i ? id : undefined,
-        title: `${r.title}${i ? " — another situation" : ""}`,
-        patientQuote: quote,
-        question: `Which response follows the information recorded by ${practice.practiceName || "your practice"}?`,
-        options: [
-          "Use the process from a previous workplace without checking local guidance.",
-          r.rule,
-          "Promise that the request will be resolved immediately before checking the local process.",
-          "Ask the patient to try again later without clarifying the request or seeking support.",
-        ],
-        correctIndex: 1,
-        learningPoint: `The recorded local guidance is: ${r.rule}\nUse this guidance to choose the appropriate next step; guessing or making a promise before checking can send the request to the wrong place.`,
-        status: "draft",
-      }));
-    });
+    .flatMap((r) =>
+      applications({ label: r.title, rule: r.rule, situation: r.quotes[0] }).flatMap(
+        (application) => {
+          const id = crypto.randomUUID();
+          const focused = application.label !== r.title;
+          const quotes = focused
+            ? [application.situation, application.followUpSituation].filter((q): q is string => !!q)
+            : r.quotes.map(naturalSituation);
+          return quotes.map((quote, i): Scenario => {
+            const wrong = (application.alternatives ?? applicationMistakes(quote)).filter(
+              (option) => option.trim().toLowerCase() !== application.rule.trim().toLowerCase(),
+            );
+            return {
+              kind: "mcq",
+              id: i ? crypto.randomUUID() : id,
+              followUpFor: i ? id : undefined,
+              title: `${application.label}${i ? " — another situation" : ""}`,
+              patientQuote: quote,
+              question: scenarioQuestion(quote),
+              options: [wrong[0], application.rule, ...wrong.slice(1)].filter(Boolean),
+              correctIndex: 1,
+              learningPoint: application.feedback,
+              status: "draft",
+            };
+          });
+        },
+      ),
+    );
 }

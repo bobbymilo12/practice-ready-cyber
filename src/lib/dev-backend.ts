@@ -13,6 +13,7 @@ import {
   startSession,
   answerSession,
   advanceSession,
+  previousSession,
   submitSession,
   type TrainingSession,
 } from "./training";
@@ -214,7 +215,12 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
       );
       if (index < 0) throw new Error("Mock training attempt not found.");
       let session = workspace.sessions[index];
-      if (action === "answer" || action === "continue" || action === "submit") {
+      if (
+        action === "answer" ||
+        action === "continue" ||
+        action === "previous" ||
+        action === "submit"
+      ) {
         if (!session.result && session.queue[session.index] !== body.scenarioId)
           throw new Error("Reload your training to continue.");
         session =
@@ -222,7 +228,9 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
             ? answerSession(session, body.value)
             : action === "continue"
               ? advanceSession(session, module.title)
-              : submitSession(session, module.title);
+              : action === "previous"
+                ? previousSession(session)
+                : submitSession(session, module.title);
         if (session.result) session.result.traineeName = account.name;
       } else if (
         action === "confidence" &&

@@ -1,3 +1,5 @@
+import { applications, explicitRules } from "../src/lib/scenario-applications.ts";
+import { practiceScenarios } from "../src/lib/practice-scenarios.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PracticeData } from "../src/lib/store.ts";
@@ -288,7 +290,7 @@ test("explicit rule lists become focused applications with distinct supported fo
   ];
   const scenarios = generateConfiguredModule("urgent", "Urgent", p, defaultModuleSettings());
   const main = scenarios.filter((s) => !s.followUpFor);
-  assert.equal(main.length, 3);
+  assert.equal(main.length, 2);
   for (const scenario of main) {
     assert.ok(scenario.kind === "mcq");
     assert.ok(!scenario.options[scenario.correctIndex].includes(";"));
@@ -380,7 +382,7 @@ test("all nine defaults use concrete choices and retain a topic-specific local r
     const settings = defaultModuleSettings();
     settings.extra =
       "When a request arrives through our local service -> contact Alex using the internal phone";
-    assert.ok(configuredScenarios(topic, topic, p, settings).length);
+    assert.ok(moduleFacts(topic, p, settings).some((f) => f.rule === settings.extra));
     assert.equal(
       fields.filter((f) => f.legacyOnly).length,
       topic === "appointment-booking" ? 2 : 0,
@@ -474,4 +476,100 @@ test("retired questions and previous answers survive reload without becoming new
       /booking team/.test(o.label),
     ),
   );
+});
+
+test("explicit same-day headings generate focused actions in both generation paths", () => {
+  const p = empty();
+  p.rolePolicies.gpsSameDay =
+    "Same-day with a GP: safeguarding concerns, mental health crisis, chest pain (after 999), suspected sepsis, new severe headache, under-5 illness. When unsure — duty triage first.";
+  assert.equal(explicitRules(p.rolePolicies.gpsSameDay).length, 7);
+  for (const scenarios of [
+    configuredScenarios("appointment-booking", "Booking", p, defaultModuleSettings()),
+    practiceScenarios("appointment-booking", "Booking", p, {}),
+  ]) {
+    const child = scenarios.find((s) => s.patientQuote.includes("3-year-old"));
+    assert.ok(child?.kind === "mcq");
+    assert.equal(child.options[child.correctIndex], "Arrange a same-day GP appointment");
+    assert.ok(
+      !JSON.stringify(scenarios.map((s) => [s.patientQuote, s.question])).match(
+        /Which response follows|recorded guidance|saved responsibilities/,
+      ),
+    );
+    assert.ok(!child.options.some((o) => o.includes("safeguarding")));
+    assert.ok(scenarios.every((s) => s.status === "draft"));
+    assert.ok(!JSON.stringify(scenarios).includes("chest pain (after 999)"));
+  }
+});
+
+test("grouped bullets preserve explicit relationships; ambiguous free text is not decomposed", () => {
+  assert.equal(
+    explicitRules(
+      "Same-day GP:\n- under-5 illness\n- suspected sepsis\nWhen unsure: duty triage first",
+    ).length,
+    3,
+  );
+  for (const rule of [
+    "Same-day GP: headaches, unless a clinician advises otherwise",
+    "Consider headaches and fever together before deciding",
+    "Same-day GP: cough or fever",
+    "Same-day GP: headache. Check with someone first.",
+  ]) {
+    assert.deepEqual(explicitRules(rule), []);
+    assert.equal(
+      applications({ label: "Rule", rule, situation: "A caller needs help." })[0].rule,
+      rule,
+    );
+  }
+});
+
+test("atomised labels become natural presentations without changing the configured action", () => {
+  const rule =
+    "mental health crisis -> same-day GP; chest pain (after 999) -> same-day GP; under-5 illness -> same-day GP; when unsure -> duty triage first";
+  const before = rule;
+  const generated = applications({ label: "Same-day requests", rule, situation: "" });
+  assert.equal(generated.length, 3);
+  const distress = generated.find((s) => s.situation.includes("struggling to cope"))!;
+  const child = generated.find((s) => s.situation.includes("3-year-old"))!;
+  assert.equal(distress.rule, "Arrange a same-day GP appointment");
+  assert.equal(distress.label, "A distressed caller needs help");
+  assert.ok(
+    !generated.some((s) =>
+      /describes the reason|after 999|Same-day requests:/.test(s.situation + s.label),
+    ),
+  );
+  assert.ok(distress.alternatives?.includes("Contact duty triage first"));
+  assert.notDeepEqual(distress.alternatives, child.alternatives);
+  assert.ok(generated.every((s) => !s.alternatives?.includes(s.rule)));
+  assert.equal(rule, before);
+  for (const condition of [
+    "chest pain (after 999)",
+    "mental health crisis after assessment",
+    "suspected sepsis",
+    "unknown local shorthand",
+  ]) {
+    assert.deepEqual(
+      applications({ label: "Requests", rule: `${condition} -> same-day GP`, situation: "" }),
+      [],
+    );
+  }
+});
+
+test("structured single conditions follow the same conservative presentation rules", () => {
+  assert.deepEqual(
+    applications({
+      label: "Same-day request",
+      condition: "chest pain (after 999)",
+      rule: "Reception books directly",
+      situation: "",
+    }),
+    [],
+  );
+  const generated = applications({
+    label: "Same-day request",
+    condition: "mental health crisis",
+    rule: "Clinical triage is required before booking",
+    situation: "",
+  });
+  assert.equal(generated[0].rule, "Send the request for clinical triage before booking");
+  assert.ok(generated[0].situation.includes("struggling to cope"));
 });

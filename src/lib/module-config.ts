@@ -1,6 +1,7 @@
 import { legacyModuleOptions } from "./module-config-legacy.ts";
 import {
   applications,
+  scenarioQuestion,
   applicationMistakes,
   naturalSituation,
   explicitRules,
@@ -516,6 +517,7 @@ export function answerText(value: string, p: PracticeData) {
   return s ? `${s.name} — ${s.role}` : "";
 }
 interface Fact {
+  condition?: string;
   label: string;
   rule: string;
   situation: string;
@@ -523,8 +525,8 @@ interface Fact {
 export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSettings): Fact[] {
   const s = practiceSummary(p),
     facts: Fact[] = [];
-  const add = (label: string, rule: string | undefined, situation: string) => {
-    if (rule?.trim()) facts.push({ label, rule: rule.trim(), situation });
+  const add = (label: string, rule: string | undefined, situation: string, condition?: string) => {
+    if (rule?.trim()) facts.push({ label, rule: rule.trim(), situation, condition });
   };
   const sameDayProcess = p.bookingConfig
     ? [
@@ -657,11 +659,7 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
     for (const condition of conditions.filter(Boolean)) {
       if (explicitRules(condition).length) add("Same-day request", condition, "");
       else if (process && !/depends/i.test(process))
-        add(
-          `Same-day request: ${condition}`,
-          process,
-          `A caller describes their concern as “${condition}”. What would you do next?`,
-        );
+        add(`Same-day request: ${condition}`, process, "", condition);
     }
     if (b?.sameDayPathway.instruction && explicitRules(b.sameDayPathway.instruction).length)
       add(
@@ -797,7 +795,12 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
   );
   return facts.filter(
     (f, i) =>
-      facts.findIndex((other) => other.rule === f.rule && other.situation === f.situation) === i,
+      facts.findIndex(
+        (other) =>
+          other.rule === f.rule &&
+          other.situation === f.situation &&
+          other.condition === f.condition,
+      ) === i,
   );
 }
 const relevantRequest = (topic: string, label: string) => {
@@ -828,7 +831,7 @@ export function configuredScenarios(
     id: crypto.randomUUID(),
     title: label,
     patientQuote: naturalSituation(situation),
-    question: "What would you do next?",
+    question: scenarioQuestion(situation),
     options: [
       answer,
       ...[...new Set([...alternatives, ...applicationMistakes(situation)])].filter(
@@ -851,7 +854,7 @@ export function configuredScenarios(
         application.label,
         application.situation,
         application.rule,
-        applicationMistakes(application.situation),
+        application.alternatives ?? applicationMistakes(application.situation),
         application.feedback,
       ),
       followUpSituation: application.followUpSituation,

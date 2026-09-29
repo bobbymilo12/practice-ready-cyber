@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
   advanceSession,
+  previousSession,
   answerSession,
   startSession,
   submitSession,
@@ -439,6 +440,10 @@ Deno.serve(async (request) => {
         fail("Your progress changed on another device. Reload to continue.");
       session = advanceSession(session, module.title);
       if (session.result) session.result.traineeName = profile.name;
+    } else if (action === "previous") {
+      if (!session.result && session.queue[session.index] !== body.scenarioId)
+        fail("Your progress changed on another device. Reload to continue.");
+      session = previousSession(session);
     } else if (action === "submit") {
       session = submitSession(session, module.title);
       if (session.result) session.result.traineeName = profile.name;

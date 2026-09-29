@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Shell, Card, Badge } from "@/components/Shell";
+import { Shell, Card } from "@/components/Shell";
 import { useApp, type Scenario } from "@/lib/store";
 import { trainingAction, useConnection } from "@/lib/backend";
 import { type SavedAnswer, type TrainingSession, primaryScenarios } from "@/lib/training";
@@ -193,15 +193,6 @@ function Training({ id }: { id: string }) {
           max={total}
           className="mt-3 h-2 w-full accent-primary"
         />
-        {scenario.followUpFor && (
-          <div className="mt-4">
-            <Badge tone="info">Extra practice</Badge>
-            <p className="mt-2 text-sm">
-              Try a different situation using the topic you found difficult. Your original score
-              stays separate.
-            </p>
-          </div>
-        )}
         {error && (
           <div
             role="alert"
@@ -223,6 +214,10 @@ function Training({ id }: { id: string }) {
               else void nav({ to: "/dashboard" });
             } else void act("continue");
           }}
+          onPrevious={() =>
+            preview ? setPreviewIndex((i) => Math.max(0, i - 1)) : void act("previous")
+          }
+          isFirst={index === 0}
           isLast={index + 1 === total}
         />
       </div>
@@ -237,6 +232,8 @@ function ScenarioBlock({
   preview,
   onAnswer,
   onContinue,
+  onPrevious,
+  isFirst,
   isLast,
 }: {
   scenario: Scenario;
@@ -245,6 +242,8 @@ function ScenarioBlock({
   preview: boolean;
   onAnswer: (value: number | string[]) => void;
   onContinue: () => void;
+  onPrevious: () => void;
+  isFirst: boolean;
   isLast: boolean;
 }) {
   const [localAnswer, setLocalAnswer] = useState<SavedAnswer>();
@@ -255,7 +254,7 @@ function ScenarioBlock({
     return [...scenario.steps.slice(1), scenario.steps[0]];
   });
   const check = (value: number | string[]) => {
-    if (busy || selected) return;
+    if (busy) return;
     if (preview)
       setLocalAnswer({
         scenarioId: scenario.id,
@@ -285,7 +284,8 @@ function ScenarioBlock({
           {scenario.options.map((option, i) => (
             <button
               key={i}
-              disabled={busy || Boolean(selected)}
+              disabled={busy}
+              aria-pressed={selected?.value === i}
               onClick={() => check(i)}
               className={`flex w-full gap-3 rounded-xl border p-4 text-left text-sm disabled:cursor-default ${selected?.value === i ? "border-primary bg-primary/10" : "border-border hover:border-primary"}`}
             >
@@ -300,7 +300,7 @@ function ScenarioBlock({
       ) : (
         <>
           <p className="mt-2 text-xs text-muted-foreground">
-            Use the arrows to arrange the steps, then check your answer.
+            Use the arrows to arrange the steps, then select this order.
           </p>
           <ol className="mt-4 space-y-2">
             {items.map((step, i) => (
@@ -310,7 +310,7 @@ function ScenarioBlock({
               >
                 <span>{i + 1}.</span>
                 <span className="flex-1">{step}</span>
-                {!selected && (
+                {(!preview || !selected) && (
                   <div className="flex gap-2">
                     <button
                       aria-label={`Move step ${i + 1} up`}
@@ -333,7 +333,7 @@ function ScenarioBlock({
               </li>
             ))}
           </ol>
-          {!selected && (
+          {(!preview || !selected) && (
             <button
               disabled={busy}
               onClick={() => check(items)}
@@ -345,23 +345,30 @@ function ScenarioBlock({
         </>
       )}
       {selected && (
-        <div className="mt-6 rounded-xl border border-border bg-surface p-4">
-          <p className="text-sm">Answer selected. You can review all answers before submitting.</p>
-          <button
-            disabled={busy}
-            onClick={onContinue}
-            className="mt-5 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-          >
-            {busy
-              ? "Saving…"
-              : isLast
-                ? preview
-                  ? "Finish preview"
-                  : "Review answers"
-                : "Continue →"}
-          </button>
-        </div>
+        <p className="mt-6 text-sm">
+          Answer selected. You can review all answers before submitting.
+        </p>
       )}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <button
+          disabled={busy || isFirst}
+          onClick={onPrevious}
+          className="rounded-xl border border-border px-4 py-3 text-sm font-semibold disabled:opacity-50"
+        >
+          ← Previous question
+        </button>
+        <button
+          disabled={
+            busy ||
+            !selected ||
+            (scenario.kind === "order" && JSON.stringify(items) !== JSON.stringify(selected.value))
+          }
+          onClick={onContinue}
+          className="ml-auto rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+        >
+          {isLast ? (preview ? "Finish preview" : "Review answers →") : "Next question →"}
+        </button>
+      </div>
     </Card>
   );
 }

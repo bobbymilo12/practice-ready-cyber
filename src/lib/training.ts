@@ -45,7 +45,7 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
   if (session.result) throw new Error("This attempt is already complete.");
   if (session.review) throw new Error("Review your answers before submitting the module.");
   const scenarioId = session.queue[session.index];
-  if (session.answers.some((a) => a.scenarioId === scenarioId)) return session;
+
   const scenario = session.scenarios.find((s) => s.id === scenarioId);
   if (!scenario) throw new Error("Scenario not found.");
   let correct: boolean;
@@ -76,7 +76,7 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
     queue,
     updatedAt: Date.now(),
     answers: [
-      ...session.answers,
+      ...session.answers.filter((a) => a.scenarioId !== scenarioId),
       {
         scenarioId,
         value: value as number | string[],
@@ -85,6 +85,16 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
         followUpFor: scenario.followUpFor,
       },
     ],
+  };
+}
+
+export function previousSession(session: TrainingSession): TrainingSession {
+  if (session.result) return session;
+  return {
+    ...session,
+    review: false,
+    index: session.review ? session.index : Math.max(0, session.index - 1),
+    updatedAt: Date.now(),
   };
 }
 

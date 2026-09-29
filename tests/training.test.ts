@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advanceSession,
+  previousSession,
   answerSession,
   assignmentProgress,
   startSession,
@@ -79,7 +80,10 @@ test("refreshing during feedback retains the submitted answer and prevents dupli
   const resumed = JSON.parse(JSON.stringify(saved));
   assert.equal(resumed.answers[0].value, 0);
   assert.equal(resumed.index, 0);
-  assert.equal(answerSession(resumed, 1), resumed);
+  const changed = answerSession(resumed, 1);
+  assert.equal(changed.answers.length, 1);
+  assert.equal(changed.answers[0].value, 1);
+  assert.equal(changed.answers[0].correct, true);
   assert.equal(advanceSession(resumed, module.title).index, 1);
 });
 
@@ -646,4 +650,30 @@ test("adding library roles preserves older custom data, aliases and role-scoped 
   assert.equal(JSON.stringify(p), before);
   const custom = roleToAdd(p, "Our local role");
   assert.equal(custom.template, undefined);
+});
+
+test("previous navigation retains editable MCQ and ordering answers through reload and submission", () => {
+  let s = startSession(module, assignment, "navigation");
+  assert.equal(previousSession(s).index, 0);
+  s = advanceSession(answerSession(s, 1), module.title);
+  s = answerSession(s, ["Record", "Book", "Check"]);
+  s = previousSession(JSON.parse(JSON.stringify(s)));
+  assert.equal(s.index, 0);
+  assert.equal(s.answers.find((a) => a.scenarioId === "q1")?.value, 1);
+  s = answerSession(s, 0);
+  s = answerSession(s, 1);
+  assert.equal(s.answers.filter((a) => a.scenarioId === "q1").length, 1);
+  s = advanceSession(s, module.title);
+  assert.deepEqual(s.answers.find((a) => a.scenarioId === "q3")?.value, [
+    "Record",
+    "Book",
+    "Check",
+  ]);
+  s = advanceSession(answerSession(s, order.kind === "order" ? order.steps : []), module.title);
+  s = advanceSession(answerSession(s, 1), module.title);
+  s = submitSession(s, module.title);
+  assert.equal(s.result?.correct, 2);
+  assert.equal(s.result?.total, 2);
+  assert.equal(previousSession(s), s);
+  assert.throws(() => answerSession(s, 0), /complete/);
 });
