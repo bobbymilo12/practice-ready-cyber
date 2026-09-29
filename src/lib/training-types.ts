@@ -1,6 +1,23 @@
+export interface CoreScenarioProvenance {
+  kind: "core";
+  conceptId: string;
+  conceptVersion: number;
+  level: import("./core-training-types").TrainingLevel;
+  interaction: "single_choice";
+  recipe: import("./core-training-types").CoreRecipeId;
+  recipeVersion: 1;
+  inputs: {
+    bindingId: string;
+    source: "practice_setup" | "module_setup";
+    paths: string[];
+    snapshot: unknown;
+  }[];
+}
+
 export type ScenarioStatus = "draft" | "approved";
 
 export interface MCQScenario {
+  provenance?: CoreScenarioProvenance;
   // Optional generation metadata; old saved scenarios remain valid.
   followUpSituation?: string;
   kind: "mcq";
@@ -17,6 +34,7 @@ export interface MCQScenario {
 }
 
 export interface OrderScenario {
+  provenance?: CoreScenarioProvenance;
   kind: "order";
   id: string;
   title: string;
