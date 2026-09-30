@@ -234,6 +234,7 @@ export function applications(fact: ScenarioFact): Application[] {
       return [
         {
           label: frame.title,
+          condition: pair.condition,
           rule: pair.action,
           situation: frame.situation,
           followUpSituation: frame.followUpSituation,

@@ -1,4 +1,5 @@
-import { coreTrainingLibrary } from "./core-training-library.ts";
+import { coreForbiddenInferences } from "./core-appointment-recipes.ts";
+import { coreTrainingLibrary, coreBindingSources } from "./core-training-library.ts";
 import type {
   CoreBindingId,
   CoreRecipeId,
@@ -18,17 +19,7 @@ export interface CoreGenerationContext {
   settings: ModuleSettings;
 }
 type ResolvedInput = CoreScenarioProvenance["inputs"][number];
-export const coreBindingSources: Record<CoreBindingId, ResolvedInput["source"]> = {
-  configured_roles: "practice_setup",
-  effective_role_responsibilities: "practice_setup",
-  booking_pathways: "practice_setup",
-  escalation_routes: "practice_setup",
-  request_clarification_rules: "module_setup",
-  clinician_preference: "module_setup",
-  required_request_information: "module_setup",
-  information_handling_rules: "practice_setup",
-  request_recording_method: "module_setup",
-};
+export { coreBindingSources } from "./core-training-library.ts";
 
 /** Closed adapters over explicit selections only. No legacy-text migrations or text inference. */
 export function resolveCoreBinding(
@@ -54,11 +45,7 @@ export function resolveCoreBinding(
     case "effective_role_responsibilities": {
       const capabilities = roles.map((r) => ({ roleId: r.roleId, requests: selectedRequests(r) }));
       const employees = p.staff
-        .filter((s) =>
-          roles.some(
-            (r) => r.roleId === requestRoleId(s.role),
-          ),
-        )
+        .filter((s) => roles.some((r) => r.roleId === requestRoleId(s.role)))
         .map((s) => ({ employeeId: s.id, requests: effectiveRequestsForStaff(p, s.id) }));
       return capabilities.some((r) => r.requests.length) || employees.some((s) => s.requests.length)
         ? resolved({ roles: capabilities, employees }, [
@@ -144,14 +131,9 @@ const recipeLevels: Record<CoreRecipeId, readonly TrainingLevel[]> = {
 };
 export type CoreEligibility =
   | { eligible: false; reasons: string[] }
-  | { eligible: true; recipe: CoreRecipeId; inputs: ResolvedInput[] };
+  | { eligible: true; recipe: CoreRecipeId | "controlled_single_choice"; inputs: ResolvedInput[] };
 
-export function resolveCoreEligibility(
-  concept: CoreTrainingConcept,
-  context: CoreGenerationContext,
-  level: TrainingLevel,
-  interaction: InteractionType,
-): CoreEligibility {
+function corePolicyReasons(concept: CoreTrainingConcept): string[] {
   const reasons: string[] = [];
   if (concept.review.status !== "approved") reasons.push("core_not_approved");
   if (
@@ -159,17 +141,68 @@ export function resolveCoreEligibility(
     concept.sources.some((s) => s.assessment.status !== "content_reviewed")
   )
     reasons.push("editorial_review_required");
+  if (
+    baseConstraints.some((id) => !concept.mustNotAssume.some((c) => c.id === id)) ||
+    concept.mustNotAssume.some((c) => !supportedConstraints.has(c.id))
+  )
+    reasons.push("unsupported_constraint_contract");
+  return reasons;
+}
+
+/** Content availability only, not permission to execute a pattern as a generator prompt. */
+export function resolveCoreTemplateEligibility(
+  concept: CoreTrainingConcept,
+  templateId: string,
+  context: CoreGenerationContext,
+  level: TrainingLevel,
+  interaction: InteractionType = "single_choice",
+): { eligible: boolean; reasons: string[]; inputs: ResolvedInput[] } {
+  const reasons = corePolicyReasons(concept);
+  const template = concept.templates?.find((t) => t.id === templateId);
+  const inputs: ResolvedInput[] = [];
+  if (!template) return { eligible: false, reasons: [...reasons, "unknown_template"], inputs };
+  if (concept.topicKey !== context.topicKey) reasons.push("topic_mismatch");
+  if (!concept.supportedLevels.includes(level) || !template.eligibleLevels.includes(level))
+    reasons.push("level_unavailable");
+  if (
+    interaction !== "single_choice" ||
+    template.interaction !== interaction ||
+    !concept.supportedInteractions.includes(interaction)
+  )
+    reasons.push("interaction_unavailable");
+  if (concept.sensitivity === "safety_critical") reasons.push("safety_critical_recipe_unavailable");
+  if (template.mustNotAssume?.some((c) => !supportedConstraints.has(c.id)))
+    reasons.push("unsupported_constraint_contract");
+  for (const key of [...template.requiredBindings, ...template.optionalBindings]) {
+    const declaration = concept.localBindings.find((b) => b.key === key);
+    if (
+      !declaration ||
+      declaration.source !== coreBindingSources[key] ||
+      (declaration.requirement === "required" && !template.requiredBindings.includes(key))
+    ) {
+      reasons.push(`binding_contract:${key}`);
+      continue;
+    }
+    const input = resolveCoreBinding(key, context);
+    if (input) inputs.push(input);
+    else if (template.requiredBindings.includes(key)) reasons.push(`missing:${key}`);
+  }
+  return { eligible: reasons.length === 0, reasons, inputs };
+}
+
+export function resolveCoreEligibility(
+  concept: CoreTrainingConcept,
+  context: CoreGenerationContext,
+  level: TrainingLevel,
+  interaction: InteractionType,
+): CoreEligibility {
+  const reasons = corePolicyReasons(concept);
   if (concept.topicKey !== context.topicKey) reasons.push("topic_mismatch");
   if (interaction !== "single_choice" || !concept.supportedInteractions.includes(interaction))
     reasons.push("interaction_unavailable");
   const definition = concept.levels?.[level];
   if (!concept.supportedLevels.includes(level) || !definition) reasons.push("level_unavailable");
   if (concept.sensitivity === "safety_critical") reasons.push("safety_critical_recipe_unavailable");
-  if (
-    baseConstraints.some((id) => !concept.mustNotAssume.some((c) => c.id === id)) ||
-    concept.mustNotAssume.some((c) => !supportedConstraints.has(c.id))
-  )
-    reasons.push("unsupported_constraint_contract");
   const inputs: ResolvedInput[] = [];
   if (definition) {
     if (!recipeLevels[definition.recipe]?.includes(level)) reasons.push("recipe_unavailable");
@@ -185,7 +218,12 @@ export function resolveCoreEligibility(
     }
     const required: CoreBindingId[] =
       definition.recipe === "booking_support"
-        ? ["configured_roles", "effective_role_responsibilities", "booking_pathways", "escalation_routes"]
+        ? [
+            "configured_roles",
+            "effective_role_responsibilities",
+            "booking_pathways",
+            "escalation_routes",
+          ]
         : definition.recipe === "information_accuracy" && level !== "learn"
           ? ["required_request_information", "information_handling_rules"]
           : [];
@@ -206,14 +244,115 @@ export function createCoreGenerator(library: readonly CoreTrainingConcept[]) {
     context: CoreGenerationContext,
     level: TrainingLevel,
     interaction: InteractionType = "single_choice",
+    variationIndex = 0,
   ): { scenario?: MCQScenario; eligibility: CoreEligibility } => {
     const concept = registry.find((c) => c.id === conceptId);
     if (!concept) return { eligibility: { eligible: false, reasons: ["unknown_concept"] } };
+    // Explicit legacy level recipes retain their existing behaviour.
+    const template = concept.levels
+      ? undefined
+      : concept.templates?.find((t) => t.executable && t.eligibleLevels.includes(level));
+    if (template?.executable) {
+      const availability = resolveCoreTemplateEligibility(
+        concept,
+        template.id,
+        context,
+        level,
+        interaction,
+      );
+      if (!availability.eligible)
+        return { eligibility: { eligible: false, reasons: availability.reasons } };
+      const recipe = template.executable;
+      const responses = [
+        recipe.correctBehaviour,
+        ...recipe.distractorPatterns.map((d) => d.response),
+      ];
+      // These four recipes contain no local facts. Adding binding-dependent rendering requires
+      // a separately reviewed executor, not interpolating arbitrary content into this one.
+      const valid =
+        ["AB01", "AB03", "AB04", "AB15"].includes(concept.code ?? "") &&
+        !!recipe.approval?.by &&
+        !!recipe.approval?.on &&
+        recipe.id === `${template.id}.recipe` &&
+        recipe.version === 2 &&
+        recipe.eligibleLevel === level &&
+        recipe.interaction === interaction &&
+        recipe.situationPattern === template.pattern &&
+        !recipe.requiredBindings.length &&
+        !recipe.optionalBindings.length &&
+        !template.requiredBindings.length &&
+        !template.optionalBindings.length &&
+        coreForbiddenInferences.every((f) => recipe.forbiddenInferences.includes(f)) &&
+        recipe.forbiddenInferences.every((f) => coreForbiddenInferences.includes(f)) &&
+        recipe.allowedVariations.length > 0 &&
+        recipe.distractorPatterns.length >= 2 &&
+        recipe.allowedVariations.every((v) => v.id.trim() && v.situation.trim()) &&
+        new Set(recipe.allowedVariations.map((v) => v.id)).size ===
+          recipe.allowedVariations.length &&
+        recipe.distractorPatterns.every(
+          (d) => d.id.trim() && d.theme.trim() && d.response.trim(),
+        ) &&
+        new Set(recipe.distractorPatterns.map((d) => d.id)).size ===
+          recipe.distractorPatterns.length &&
+        recipe.correctBehaviour.trim() &&
+        new Set(responses).size === responses.length &&
+        Number.isSafeInteger(variationIndex) &&
+        variationIndex >= 0;
+      if (!valid)
+        return { eligibility: { eligible: false, reasons: ["unsupported_executable_contract"] } };
+      const variation = recipe.allowedVariations[variationIndex % recipe.allowedVariations.length];
+      const otherLevel = concept.templates?.find(
+        (t) => t.executable?.eligibleLevel === (level === "learn" ? "apply" : "learn"),
+      )?.executable;
+      if (
+        otherLevel?.allowedVariations.some((v) => v.situation.trim() === variation.situation.trim())
+      )
+        return { eligibility: { eligible: false, reasons: ["cross_level_duplicate"] } };
+      // Deterministic rotation changes answer position, never the approved answer key.
+      const shift = variationIndex % responses.length;
+      const options = [...responses.slice(shift), ...responses.slice(0, shift)];
+      return {
+        eligibility: {
+          eligible: true,
+          recipe: "controlled_single_choice",
+          inputs: availability.inputs,
+        },
+        scenario: {
+          id: crypto.randomUUID(),
+          kind: "mcq",
+          title: variation.title ?? "Understanding the request",
+          patientQuote: variation.situation,
+          question:
+            level === "learn"
+              ? "Which response best reflects good care navigation?"
+              : "How would you respond?",
+          options,
+          correctIndex: (responses.length - shift) % responses.length,
+          learningPoint: recipe.correctBehaviour,
+          status: "draft",
+          provenance: {
+            kind: "core",
+            conceptId: concept.id,
+            conceptVersion: concept.version,
+            level,
+            interaction: "single_choice",
+            recipe: "controlled_single_choice",
+            templateId: template.id,
+            executableRecipeId: recipe.id,
+            recipeVersion: recipe.version,
+            variationId: variation.id,
+            inputs: structuredClone(availability.inputs),
+          },
+        },
+      };
+    }
     const eligibility = resolveCoreEligibility(concept, context, level, interaction);
     if (!eligibility.eligible) return { eligibility };
-    // Closed, reviewed recipe set: no LLM, arbitrary prompt, symptom classification or free-text interpolation.
+    // Closed recipe set (editorial approval still required): no LLM, arbitrary prompt, symptom classification or free-text interpolation.
     let patientQuote: string, question: string, options: string[];
     switch (eligibility.recipe) {
+      case "controlled_single_choice":
+        return { eligibility: { eligible: false, reasons: ["recipe_unavailable"] } };
       case "navigation_principle":
         patientQuote =
           "A colleague asks whether a job title is enough to decide who can handle a request.";

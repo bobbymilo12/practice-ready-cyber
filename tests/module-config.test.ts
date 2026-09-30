@@ -132,8 +132,12 @@ test("length limits distinct primary scenarios, preserves recovery links and rep
     const pool = configuredScenarios("appointment-booking", "Booking", p, settings);
     const generated = generateConfiguredModule("appointment-booking", "Booking", p, settings);
     const primary = generated.filter((s) => !s.followUpFor);
-    assert.equal(primary.length, Math.min(count, pool.length));
-    assert.equal(new Set(primary.map((s) => s.title)).size, primary.length);
+    assert.equal(
+      primary.length,
+      Math.min(count, pool.length + Math.min(Math.round(count * 0.3), 10)),
+    );
+    assert.equal(generated.length, primary.length);
+    assert.equal(new Set(primary.map((s) => s.patientQuote)).size, primary.length);
     for (const s of primary) {
       const follow = generated.find((f) => f.followUpFor === s.id);
       if (follow) {

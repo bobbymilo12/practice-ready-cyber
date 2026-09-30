@@ -42,7 +42,12 @@ function Review() {
     <Shell>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm text-muted-foreground">{module.type} · Draft review</p>
+          <p className="text-sm text-muted-foreground">
+            {module.type} · Draft review
+            {module.topicKey === "appointment-booking" && module.settings?.trainingLevel
+              ? ` · ${module.settings.trainingLevel === "learn" ? "Learn" : "Apply"}`
+              : ""}
+          </p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
             Review draft scenarios
           </h1>
@@ -95,6 +100,7 @@ function Review() {
       <div className="mt-8 space-y-5">
         {module.scenarios.map((s) => (
           <ScenarioCard
+            appointmentBooking={module.topicKey === "appointment-booking"}
             key={s.id}
             scenario={s}
             onApprove={() => approveScenario(module.id, s.id)}
@@ -127,12 +133,14 @@ function Review() {
 }
 
 function ScenarioCard({
+  appointmentBooking,
   scenario,
   onApprove,
   onDelete,
   onRegenerate,
   onSave,
 }: {
+  appointmentBooking?: boolean;
   scenario: Scenario;
   onApprove: () => void;
   onDelete: () => void;
@@ -304,7 +312,11 @@ function ScenarioCard({
             onSave({ ...scenario, managerNote: note } as Scenario);
           }}
           rows={2}
-          placeholder="e.g. Always check the patient's preferred pharmacy before confirming."
+          placeholder={
+            appointmentBooking
+              ? "e.g. Add any practice-specific context trainees should know."
+              : "e.g. Always check the patient's preferred pharmacy before confirming."
+          }
           className="mt-2 w-full resize-none rounded-lg border border-input bg-background p-2 text-sm outline-none focus:border-primary"
         />
       </div>

@@ -12,7 +12,9 @@ import {
   moduleFacts,
   defaultModuleSettings,
   lengthOptions,
+  trainingLevelOptions,
   configuredScenarios,
+  selectedModuleScenarios,
   generateConfiguredModule,
   type ModuleSettings,
 } from "@/lib/module-config";
@@ -29,7 +31,11 @@ export function PredefinedModuleSetup({
   const { practiceData, modules, createDraftModule, configureModule } = useApp();
   const existing = modules.find((m) => m.id === id);
   const [settings, setSettings] = useState<ModuleSettings>(
-    () => existing?.settings ?? defaultModuleSettings(),
+    () =>
+      existing?.settings ?? {
+        ...defaultModuleSettings(),
+        ...(topic === "appointment-booking" ? { trainingLevel: "learn" as const } : {}),
+      },
   );
   const [phase, setPhase] = useState<"questions" | "length">("questions");
   const [saving, setSaving] = useState(false);
@@ -43,8 +49,11 @@ export function PredefinedModuleSetup({
     selections: {},
     extra: "",
   });
-  const pool = configuredScenarios(topic, title, practiceData, settings);
-  const savedResponsibilities = pool.filter(
+  const pool =
+    topic === "appointment-booking"
+      ? selectedModuleScenarios(topic, title, practiceData, settings)
+      : configuredScenarios(topic, title, practiceData, settings);
+  const savedResponsibilities = configuredScenarios(topic, title, practiceData, settings).filter(
     (s) => s.title.startsWith("Routing:") || s.title.startsWith("Individual exception:"),
   );
   const validCount =
@@ -215,6 +224,46 @@ export function PredefinedModuleSetup({
                 </>
               ) : (
                 <Card className="mt-6 space-y-5">
+                  {topic === "appointment-booking" && (
+                    <fieldset>
+                      <legend className="font-display text-xl font-semibold">Training Level</legend>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {trainingLevelOptions.map((level) => (
+                          <label
+                            key={level.value}
+                            className={`rounded-xl border p-4 ${settings.trainingLevel === level.value ? "border-primary bg-primary/5" : "border-border"}`}
+                          >
+                            <input
+                              type="radio"
+                              disabled={level.disabled}
+                              name="training-level"
+                              value={level.value}
+                              checked={settings.trainingLevel === level.value}
+                              onChange={() =>
+                                level.value !== "handle" &&
+                                setSettings((s) => ({ ...s, trainingLevel: level.value }))
+                              }
+                            />
+                            <span className="ml-2 font-semibold">{level.label}</span>
+                            {level.disabled && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                Coming soon
+                              </span>
+                            )}
+                            <span className="mt-1 block text-sm text-muted-foreground">
+                              {level.description}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {!settings.trainingLevel && (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          This existing module uses mixed levels. Choose a level to use it for
+                          regeneration.
+                        </p>
+                      )}
+                    </fieldset>
+                  )}
                   <h2 className="font-display text-xl font-semibold">
                     How long should this module be?
                   </h2>
@@ -258,12 +307,14 @@ export function PredefinedModuleSetup({
                   {!validCount && <p role="alert">Choose a whole number from 1 to 100.</p>}
                   <p className="text-sm">
                     {Math.min(pool.length, settings.count)} distinct scenarios available for this
-                    module. Follow-up practice after missed answers is additional.
+                    module.
+                    {topic !== "appointment-booking" &&
+                      " Follow-up practice after missed answers is additional."}
                   </p>
                   {pool.length < settings.count && (
                     <p className="rounded-xl bg-surface p-3 text-sm">
-                      Your recorded information supports {pool.length} distinct scenarios, fewer
-                      than the requested {settings.count}. Add further confirmed procedures or role
+                      The available content supports {pool.length} distinct scenarios, fewer than
+                      the requested {settings.count}. Add further confirmed procedures or role
                       responsibilities for wider coverage, or create this shorter draft. We will not
                       invent guidance or repeat scenarios to reach a number.
                     </p>

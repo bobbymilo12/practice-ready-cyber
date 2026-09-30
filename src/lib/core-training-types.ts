@@ -63,7 +63,10 @@ export type CoreBindingId =
   | "clinician_preference"
   | "required_request_information"
   | "information_handling_rules"
-  | "request_recording_method";
+  | "request_recording_method"
+  | "continuity_process"
+  | "next_step_process"
+  | "access_channels";
 
 export type CoreRecipeId =
   "navigation_principle" | "clarify_request" | "information_accuracy" | "booking_support";
@@ -73,7 +76,58 @@ export interface CoreLevelDefinition {
   readonly recipe: CoreRecipeId;
 }
 
+export type CoreForbiddenInference =
+  | "diagnosis"
+  | "clinical_urgency"
+  | "clinician_suitability"
+  | "clinical_questioning"
+  | "local_routing_policy"
+  | "appointment_availability"
+  | "escalation_destination"
+  | "staff_responsibilities";
+
+/** Trusted editorial content, never model- or manager-authored at runtime. */
+export interface CoreExecutableRecipe {
+  readonly approval?: CoreReviewRecord;
+  readonly id: string;
+  readonly version: 1 | 2;
+  readonly eligibleLevel: "learn" | "apply";
+  readonly interaction: "single_choice";
+  readonly situationPattern: string;
+  readonly correctBehaviour: string;
+  readonly allowedVariations: readonly {
+    readonly id: string;
+    readonly situation: string;
+    readonly title?: string;
+  }[];
+  readonly distractorPatterns: readonly {
+    readonly id: string;
+    readonly theme: string;
+    readonly response: string;
+  }[];
+  readonly requiredBindings: readonly CoreBindingId[];
+  readonly optionalBindings: readonly CoreBindingId[];
+  readonly forbiddenInferences: readonly CoreForbiddenInference[];
+}
+
+/** Editorial patterns only; availability does not imply an executable generation recipe. */
+export interface CoreScenarioTemplate {
+  readonly executable?: CoreExecutableRecipe;
+  readonly id: string;
+  readonly eligibleLevels: readonly TrainingLevel[];
+  readonly interaction: InteractionType;
+  readonly intent: string;
+  readonly pattern: string;
+  readonly requiredBindings: readonly CoreBindingId[];
+  readonly optionalBindings: readonly CoreBindingId[];
+  readonly mustNotAssume?: CoreTrainingConcept["mustNotAssume"];
+}
+
 export interface CoreTrainingConcept {
+  readonly code?: string;
+  readonly templates?: readonly CoreScenarioTemplate[];
+  /** Editorial roadmap only; does not enable an interaction. */
+  readonly futureInteractions?: readonly ("multi_select" | "routing")[];
   readonly schemaVersion: 1;
   /** Stable across content revisions. */
   readonly id: string;

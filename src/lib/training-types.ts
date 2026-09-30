@@ -4,8 +4,12 @@ export interface CoreScenarioProvenance {
   conceptVersion: number;
   level: import("./core-training-types").TrainingLevel;
   interaction: "single_choice";
-  recipe: import("./core-training-types").CoreRecipeId;
-  recipeVersion: 1;
+  recipe: import("./core-training-types").CoreRecipeId | "controlled_single_choice";
+  templateId?: string;
+  executableRecipeId?: string;
+  variationId?: string;
+  managerModified?: boolean;
+  recipeVersion: 1 | 2;
   inputs: {
     bindingId: string;
     source: "practice_setup" | "module_setup";
