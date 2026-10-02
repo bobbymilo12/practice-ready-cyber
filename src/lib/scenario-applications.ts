@@ -6,6 +6,7 @@ export interface ScenarioFact {
   condition?: string;
 }
 export interface Application extends ScenarioFact {
+  validActions?: string[];
   feedback: string;
   followUpSituation?: string;
   alternatives?: string[];
@@ -235,6 +236,7 @@ export function applications(fact: ScenarioFact): Application[] {
         {
           label: frame.title,
           condition: pair.condition,
+          validActions,
           rule: pair.action,
           situation: frame.situation,
           followUpSituation: frame.followUpSituation,

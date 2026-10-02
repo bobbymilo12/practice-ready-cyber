@@ -44,11 +44,11 @@ function baseStructuredBookingExercises(p: PracticeData, settings: ModuleSetting
         b.sameDayProcess.id === "triage"
           ? [
               "Confirm a booking now and arrange triage afterwards.",
-              "Use the routine booking process because the patient wants confirmation now.",
+              "Choose the next step from the patient’s preferred appointment time.",
             ]
           : [
-              "Add an extra triage step before using the confirmed direct-booking process.",
-              "Use the routine process instead of the confirmed same-day process.",
+              "Delay the confirmed next step while checking the outcome of a previous request.",
+              "Choose the next step from the patient’s preferred appointment time.",
             ],
       );
   }
@@ -67,11 +67,11 @@ function baseStructuredBookingExercises(p: PracticeData, settings: ModuleSetting
         b.routineProcess.id === "direct"
           ? [
               "Add a further approval step before booking the routine appointment.",
-              "Use the same-day process because the patient contacted the practice today.",
+              "Choose the next step from when the patient contacted the practice rather than the type of request.",
             ]
           : [
               "Confirm an appointment first and complete the required process afterwards.",
-              "Use the same-day process because the patient contacted the practice today.",
+              "Choose the next step from when the patient contacted the practice rather than the type of request.",
             ],
       );
   }
@@ -171,6 +171,23 @@ export function structuredBookingExercises(
       base.map((other) => other.options[0]),
     ),
   }));
+}
+
+/** Wording only: preserve the configured information without adding clinical or contact detail. */
+export function neutralLearnSituation(condition: string): string {
+  const label = condition.trim().replace(/[.?!]+$/, "");
+  const key = label.toLowerCase();
+  if (key === "mental health crisis" || key === "new severe headache")
+    return `A patient contacts the practice about a ${key}.`;
+  if (/^(?:under[ -]?5(?:s)? illness|illness (?:in )?under[ -]?5s?)$/.test(key))
+    return "The practice is contacted about illness in a child under 5.";
+  if (key === "acutely unwell child")
+    return "The practice is contacted about an acutely unwell child.";
+  if (key === "urinary symptoms / suspected uti")
+    return "A patient contacts the practice about urinary symptoms (suspected UTI).";
+  if (/^(?:when |if )?unsure$/.test(key))
+    return "Reception is unsure which procedure applies to a request.";
+  return `The practice is contacted about ${label}.`;
 }
 
 /** Guard the exercise, not its ID or answer ordering. */

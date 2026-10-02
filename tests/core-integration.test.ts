@@ -358,3 +358,91 @@ test("Handle remains a disabled UI choice and cannot produce Appointment Booking
     );
   }
 });
+
+test("local Learn states the request directly, keeping natural titles and distinct Apply situations", () => {
+  const p = practice();
+  p.roleRequests = {};
+  p.rolePolicies.gpsSameDay =
+    "Same-day with a GP: mental health crisis, new severe headache, under-5 illness. When unsure — duty triage first.";
+  const settings = defaultModuleSettings();
+  const learn = configuredScenarios("appointment-booking", "Booking", p, {
+    ...settings,
+    trainingLevel: "learn",
+  });
+  const apply = configuredScenarios("appointment-booking", "Booking", p, {
+    ...settings,
+    trainingLevel: "apply",
+  });
+  assert.ok(learn.every((s) => !s.patientQuote.startsWith("Request:")));
+  const child = learn.find((s) => s.title === "An unwell young child");
+  assert.equal(child?.patientQuote, "The practice is contacted about illness in a child under 5.");
+  assert.ok(!child?.patientQuote.includes("3-year-old"));
+  for (const [title, request] of [
+    ["A distressed caller needs help", "mental health crisis"],
+    ["A new concern over the phone", "new severe headache"],
+  ]) {
+    const l = learn.find((s) => s.title === title),
+      a = apply.find((s) => s.title === title);
+    assert.ok(l?.kind === "mcq" && a?.kind === "mcq");
+    assert.equal(l.patientQuote, `A patient contacts the practice about a ${request}.`);
+    assert.doesNotMatch(
+      l.patientQuote,
+      /Request:|phone|calls|in.person|today|yesterday|distressed|cope|urgent|emergency/i,
+    );
+    assert.match(l.question, /practice’s procedure/);
+    assert.doesNotMatch(l.patientQuote, /new receptionist|handles a|asks how/);
+    assert.match(a.patientQuote, /^A patient calls/);
+    assert.equal(l.options[l.correctIndex], a.options[a.correctIndex]);
+    assert.notDeepEqual(new Set(l.options), new Set(a.options));
+  }
+});
+
+test("local choices use only explicit unqualified booking actions and vary deterministically", () => {
+  const p = practice();
+  p.bookingConfig = {
+    version: 1,
+    sameDayProcess: { id: "triage", other: "" },
+    routineProcess: { id: "direct", other: "" },
+    sameDayInstruction: "",
+    routineInstruction: "",
+    sameDayPathway: { selected: [], custom: [], instruction: "" },
+    sendUncertainToDutyClinician: false,
+    escalation: {
+      contact: { kind: "role", role: "Duty clinician" },
+      method: { id: "person", other: "" },
+      instruction: "",
+    },
+  };
+  const settings = defaultModuleSettings();
+  const get = (level: "learn" | "apply") =>
+    configuredScenarios("appointment-booking", "Booking", p, { ...settings, trainingLevel: level });
+  const learn = get("learn"),
+    apply = get("apply");
+  const titles = [
+    "An eligible same-day request",
+    "A routine booking request",
+    "An unclear booking route",
+  ];
+  const sets: string[] = [];
+  for (const title of titles) {
+    const l = learn.find((s) => s.title === title)!,
+      a = apply.find((s) => s.title === title)!;
+    assert.ok(l.kind === "mcq" && a.kind === "mcq");
+    assert.equal(l.options[l.correctIndex], a.options[a.correctIndex]);
+    assert.notDeepEqual(new Set(l.options), new Set(a.options));
+    assert.deepEqual(a, { ...get("apply").find((s) => s.title === title)!, id: a.id });
+    assert.doesNotMatch(l.patientQuote, /new receptionist|handles a/);
+    assert.ok(a.options.some((o) => /clinical triage/.test(o)));
+    assert.ok(a.options.some((o) => /Book the routine/.test(o)));
+    sets.push(JSON.stringify(a.options.slice(1).sort()));
+  }
+  assert.equal(new Set(sets).size, 3);
+  p.bookingConfig.routineProcess = { id: "other", other: "Invented booking team" };
+  p.bookingConfig.escalation.instruction = "Use the hidden custom department";
+  const withoutRoutes = get("apply").find((s) => s.title === titles[0])!;
+  assert.ok(withoutRoutes.kind === "mcq");
+  assert.doesNotMatch(
+    JSON.stringify(withoutRoutes.options),
+    /routine appointment|Duty clinician|Invented|hidden custom department/,
+  );
+});

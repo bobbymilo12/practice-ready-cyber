@@ -3,6 +3,8 @@ import {
   exerciseSignature,
   configuredBookingActions,
   localAnswerOptions,
+  bookingActionKey,
+  neutralLearnSituation,
 } from "./appointment-local-scenarios.ts";
 import { appointmentCorePool, regenerateAppointmentCore } from "./core-appointment-selection.ts";
 import { legacyModuleOptions } from "./module-config-legacy.ts";
@@ -867,6 +869,7 @@ export function configuredScenarios(
     alternatives: string[],
     source: string,
     condition?: string,
+    validActions: readonly string[] = [],
   ): Scenario => ({
     kind: "mcq",
     id: crypto.randomUUID(),
@@ -874,7 +877,7 @@ export function configuredScenarios(
     patientQuote:
       topic === "appointment-booking" && settings.trainingLevel === "learn"
         ? condition
-          ? `Request: ${condition.replace(/[.?!]+$/, "")}.`
+          ? neutralLearnSituation(condition)
           : label
         : naturalSituation(situation),
     question:
@@ -891,7 +894,12 @@ export function configuredScenarios(
             // Only focused request->action facts compete with other configured booking actions.
             // Role responsibility questions are not appointment-authorisation questions.
             condition && /^(Arrange|Book|Send|Contact|Use|Ask)\b/i.test(answer)
-              ? structuredActions
+              ? structuredActions.filter(
+                  (action) =>
+                    !validActions.some(
+                      (valid) => bookingActionKey(valid) === bookingActionKey(action),
+                    ),
+                )
               : [],
           )
         : [
@@ -927,6 +935,7 @@ export function configuredScenarios(
           application.alternatives ?? applicationMistakes(application.situation),
           application.feedback,
           application.condition ?? f.condition,
+          application.validActions,
         ),
         followUpSituation: application.followUpSituation,
       })),
