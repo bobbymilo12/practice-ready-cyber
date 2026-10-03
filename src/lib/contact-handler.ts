@@ -43,10 +43,24 @@ async function notifyContactByEmail(data: {
 
 function createContactDatabase() {
   const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const secretKeys = process.env.SUPABASE_SECRET_KEYS;
+  let configuredSecretKey: string | undefined;
+  if (secretKeys) {
+    try {
+      const parsed = JSON.parse(secretKeys) as { default?: unknown };
+      if (typeof parsed.default === "string") configuredSecretKey = parsed.default;
+    } catch {
+      throw new Error("SUPABASE_SECRET_KEYS must be valid JSON.");
+    }
+  }
+  const key =
+    configuredSecretKey ??
+    process.env.SUPABASE_SECRET_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) {
     throw new Error(
-      "Contact form requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or the VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY pair).",
+      "Contact form requires SUPABASE_URL and SUPABASE_SECRET_KEYS (or SUPABASE_SECRET_KEY, the legacy SUPABASE_SERVICE_ROLE_KEY, or the public VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY pair).",
     );
   }
   return createClient<Database>(url, key, {
