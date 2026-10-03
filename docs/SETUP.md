@@ -37,6 +37,10 @@ that runs the TanStack server function. Do not expose them as `VITE_` variables:
 | `SUPABASE_URL`              | Supabase project URL                       |
 | `SUPABASE_SERVICE_ROLE_KEY` | Private Supabase service-role key          |
 
+If the deployment already has `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, the
+contact form can use that public pair as a fallback because the table permits inserts but no reads.
+The service-role pair remains preferred for server deployments.
+
 For contact-form notifications, set these in the same hosting environment:
 
 | Secret           | Value                                                                                |

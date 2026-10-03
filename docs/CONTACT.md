@@ -8,7 +8,7 @@ It writes only after server validation. The optional GP practice is included as 
 in the existing message column, respecting its 2,000-character limit. No database schema change
 is required. The UI limits the message itself to 1,800 characters to leave room for that prefix.
 
-The existing table migration is `drizzle/migrations/0000_create_contact_messages.sql`. It permits public inserts but no public reads. If the table has not been deployed to the connected Supabase project, apply that existing migration; do not create another message store. Supabase public URL/key configuration is the same as before.
+The existing table migration is `drizzle/migrations/0000_create_contact_messages.sql`. It permits public inserts but no public reads. If the table has not been deployed to the connected Supabase project, apply that existing migration; do not create another message store. The server prefers `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, but can use the existing public `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` pair for this insert-only form.
 
 Messages are stored in Supabase, not emailed. The team should review `contact_messages` in the Supabase dashboard. No notification service was added. A hidden honeypot blocks simple bots using the form; this is basic friction, not rate limiting or CAPTCHA protection for the public database endpoint.
 

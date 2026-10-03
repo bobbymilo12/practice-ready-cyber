@@ -1,3 +1,5 @@
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 import { contactSchema, persistContact } from "./contact";
 
 async function notifyContactByEmail(data: {
@@ -39,6 +41,19 @@ async function notifyContactByEmail(data: {
   if (!response.ok) throw new Error(`Resend returned HTTP ${response.status}.`);
 }
 
+function createContactDatabase() {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "Contact form requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or the VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY pair).",
+    );
+  }
+  return createClient<Database>(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export async function handleContactRequest(request: Request): Promise<Response> {
   const input: unknown = await request.json().catch(() => null);
   const parsed = contactSchema.safeParse(input);
@@ -50,8 +65,7 @@ export async function handleContactRequest(request: Request): Promise<Response> 
   }
 
   try {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const result = await persistContact(parsed.data, supabaseAdmin);
+    const result = await persistContact(parsed.data, createContactDatabase());
     try {
       await notifyContactByEmail(parsed.data);
     } catch (error) {
