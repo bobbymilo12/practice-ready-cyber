@@ -6,7 +6,7 @@ The frontend has local public configuration. The database/API deployment and ema
 
 1. Create a Supabase project and record its project reference, project URL and public publishable key (the legacy anonymous key also works). Keep the database password and service-role key private.
 2. Create a Resend account, verify a domain you control and choose a sender such as `PracticeReady <training@yourdomain.co.uk>`.
-3. Decide the app's final HTTPS URL. Use the existing Lovable-connected hosting if desired; no hosting migration is required.
+3. Decide the app's final HTTPS URL and choose a hosting provider for the app server.
 
 ## 2. Apply the database migration and deploy the API
 
@@ -29,8 +29,15 @@ Set these in the Supabase dashboard's Edge Function secrets:
 | `APP_URL`         | Final app URL, e.g. `https://practice-ready.example`                                                 |
 | `ALLOWED_ORIGINS` | Comma-separated exact origins; include your final URL and any local/preview origins you actually use |
 
-For contact-form notifications, set these in the hosting environment that runs the TanStack server
-function. Do not expose them as `VITE_` variables:
+For contact-form submissions, set the Supabase server credentials in the hosting environment
+that runs the TanStack server function. Do not expose them as `VITE_` variables:
+
+| Secret                       | Value                                      |
+| --------------------------- | ------------------------------------------ |
+| `SUPABASE_URL`              | Supabase project URL                       |
+| `SUPABASE_SERVICE_ROLE_KEY` | Private Supabase service-role key          |
+
+For contact-form notifications, set these in the same hosting environment:
 
 | Secret           | Value                                                                                |
 | ---------------- | ------------------------------------------------------------------------------------ |
@@ -42,7 +49,10 @@ The contact form stores the message in `contact_messages`, then sends a plain-te
 through Resend with the visitor's email in `Reply-To`. If Resend is unavailable, the message stays
 stored and the server logs the notification failure so it can be resent or handled operationally.
 
-Supabase supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to hosted Edge Functions. Never expose a service-role key or Resend key in a `VITE_` variable or commit them. The migration enables RLS and revokes browser access to all application tables; the Edge Function authenticates the JWT with Supabase and enforces role/practice ownership before accessing records.
+Never expose a service-role key or Resend key in a `VITE_` variable or commit them. The contact
+server function uses the service-role client only on the server to insert validated messages.
+The migration enables RLS and revokes browser access to all application tables; the Edge Function
+authenticates the JWT with Supabase and enforces role/practice ownership before accessing records.
 
 ```sh
 supabase functions deploy practice-api

@@ -43,9 +43,10 @@ async function notifyContactByEmail(data: {
 export const submitContact = createServerFn({ method: "POST" })
   .validator((data: unknown) => contactSchema.parse(data))
   .handler(async ({ data }) => {
-    // Reuse the existing insert-only public contact table and Supabase connection.
-    const { supabase } = await import("@/integrations/supabase/client");
-    const result = await persistContact(data, supabase);
+    // Contact submissions run on the server, so they must use the server-only
+    // client rather than requiring public browser configuration.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const result = await persistContact(data, supabaseAdmin);
     try {
       await notifyContactByEmail(data);
     } catch (error) {
