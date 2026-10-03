@@ -10,7 +10,7 @@ async function notifyContactByEmail(data: {
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.CONTACT_FROM ?? process.env.INVITE_FROM;
-  const recipient = process.env.CONTACT_TO;
+  const recipient = process.env.CONTACT_TO ?? "practicereadyuk@gmail.com";
   if (!apiKey && !from && !recipient) return;
   if (!apiKey || !from || !recipient) {
     throw new Error("Contact email configuration is incomplete.");
@@ -79,18 +79,23 @@ export async function handleContactRequest(request: Request): Promise<Response> 
   }
 
   try {
-    const result = await persistContact(parsed.data, createContactDatabase());
-    try {
-      await notifyContactByEmail(parsed.data);
-    } catch (error) {
-      console.error("Contact message saved, but email notification failed.", error);
-    }
-    return Response.json(result);
+    await notifyContactByEmail(parsed.data);
   } catch (error) {
-    console.error("Contact message could not be saved.", error);
+    console.error("Contact email could not be sent.", error);
     return Response.json(
       { error: "Your message could not be sent. Please try again." },
-      { status: 500 },
+      { status: 502 },
     );
   }
+
+  try {
+    const database = createContactDatabase();
+    await persistContact(parsed.data, database);
+  } catch (error) {
+    // Email delivery is the primary contact workflow. Database storage is
+    // retained when configured but must not make a successfully sent message fail.
+    console.error("Contact email sent, but database storage failed.", error);
+  }
+
+  return Response.json({ success: true as const });
 }

@@ -10,7 +10,11 @@ is required. The UI limits the message itself to 1,800 characters to leave room 
 
 The existing table migration is `drizzle/migrations/0000_create_contact_messages.sql`. It permits public inserts but no public reads. If the table has not been deployed to the connected Supabase project, apply that existing migration; do not create another message store. The server prefers `SUPABASE_URL` and `SUPABASE_SECRET_KEYS` (or `SUPABASE_SECRET_KEY`), but can use the existing public `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` pair for this insert-only form.
 
-Messages are stored in Supabase, not emailed. The team should review `contact_messages` in the Supabase dashboard. No notification service was added. A hidden honeypot blocks simple bots using the form; this is basic friction, not rate limiting or CAPTCHA protection for the public database endpoint.
+Messages are emailed through Resend to `CONTACT_TO` (defaulting to `practicereadyuk@gmail.com`) and
+use the visitor's address as `Reply-To`. The visitor's address cannot be used as `From` unless its
+domain is verified in Resend. Messages are also stored in Supabase when server credentials are
+configured. A hidden honeypot blocks simple bots using the form; this is basic friction, not rate
+limiting or CAPTCHA protection for the public endpoint.
 
 Validation, optional-field formatting, backend errors and the Supabase REST insert are covered by `node --experimental-strip-types tests/contact.test.ts`. Browser tests exercise validation, pending/success/error states and navigation using a simulated server response. Before release, send one test message on the deployed site and verify its row (including the optional practice name) in the intended Supabase project, then delete that test row.
 
