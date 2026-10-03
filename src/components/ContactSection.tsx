@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { submitContact } from "@/lib/contact.functions";
 
 export function ContactSection() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
@@ -28,7 +27,13 @@ export function ContactSection() {
     setError("");
     setStatus("sending");
     try {
-      const result = await submitContact({ data });
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = (await response.json()) as { success?: boolean };
+      if (!response.ok) throw new Error("Submission failed");
       if (!result?.success) throw new Error("Submission failed");
       setStatus("sent");
     } catch {

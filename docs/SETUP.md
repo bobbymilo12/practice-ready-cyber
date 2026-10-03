@@ -44,10 +44,22 @@ For contact-form notifications, set these in the same hosting environment:
 | `RESEND_API_KEY` | Private Resend sending API key                                                       |
 | `CONTACT_FROM`   | Sender on your verified Resend domain, e.g. `PracticeReady <hello@yourdomain.co.uk>` |
 | `CONTACT_TO`     | Inbox that should receive contact enquiries                                          |
+| `RESEND_WEBHOOK_SECRET` | Signing secret for the Resend `email.received` webhook                         |
 
 The contact form stores the message in `contact_messages`, then sends a plain-text notification
 through Resend with the visitor's email in `Reply-To`. If Resend is unavailable, the message stays
 stored and the server logs the notification failure so it can be resent or handled operationally.
+
+To forward emails sent to a Resend receiving address to `CONTACT_TO`, create a receiving webhook
+in the Resend dashboard with the event `email.received` and this URL:
+
+```text
+https://YOUR_APP_URL/api/resend-receiving
+```
+
+The endpoint verifies Resend's Svix signature before forwarding the original email and its
+attachments. Copy the webhook's signing secret into `RESEND_WEBHOOK_SECRET`; do not expose it to
+the browser or commit it.
 
 Never expose a service-role key or Resend key in a `VITE_` variable or commit them. The contact
 server function uses the service-role client only on the server to insert validated messages.

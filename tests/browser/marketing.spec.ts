@@ -69,7 +69,7 @@ test("contact validates, submits, shows loading/success and retains entries on f
   const form = page.getByRole("form", { name: "Contact PracticeReady" });
   let submissions = 0;
   let fail = true;
-  await page.route("**/_serverFn/**", async (route) => {
+  await page.route("**/api/contact", async (route) => {
     submissions++;
     const body = route.request().postData() ?? "";
     expect(body).toContain("Alex");
