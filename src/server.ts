@@ -1,9 +1,7 @@
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
-import { handleContactRequest } from "./lib/contact-handler";
 import { renderErrorPage } from "./lib/error-page";
-import { handleResendReceiving } from "./lib/resend-receiving";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -49,24 +47,6 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
-      if (new URL(request.url).pathname === "/api/resend-receiving") {
-        if (request.method !== "POST") {
-          return new Response("Method Not Allowed", {
-            status: 405,
-            headers: { Allow: "POST" },
-          });
-        }
-        return await handleResendReceiving(request);
-      }
-      if (new URL(request.url).pathname === "/api/contact") {
-        if (request.method !== "POST") {
-          return new Response("Method Not Allowed", {
-            status: 405,
-            headers: { Allow: "POST" },
-          });
-        }
-        return await handleContactRequest(request);
-      }
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

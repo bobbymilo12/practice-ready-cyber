@@ -2,7 +2,11 @@
 
 The dedicated `/contact` page contains the single contact form. The homepage final CTA and all public Contact Us links navigate there. Public page navigation includes Contact Us; the logged-in application shell is unchanged.
 
-Submission uses the server-only `POST /api/contact` handler in `src/lib/contact-handler.ts`, the existing Supabase connection and `public.contact_messages` table. It writes only after server validation. The optional GP practice is included as a labelled prefix in the existing message column, respecting its 2,000-character limit. No database schema change is required. The UI limits the message itself to 1,800 characters to leave room for that prefix.
+Submission uses the public TanStack server route `POST /api/contact`, backed by
+`src/lib/contact-handler.ts`, the existing Supabase connection and `public.contact_messages` table.
+It writes only after server validation. The optional GP practice is included as a labelled prefix
+in the existing message column, respecting its 2,000-character limit. No database schema change
+is required. The UI limits the message itself to 1,800 characters to leave room for that prefix.
 
 The existing table migration is `drizzle/migrations/0000_create_contact_messages.sql`. It permits public inserts but no public reads. If the table has not been deployed to the connected Supabase project, apply that existing migration; do not create another message store. Supabase public URL/key configuration is the same as before.
 

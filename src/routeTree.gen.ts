@@ -23,6 +23,8 @@ import { Route as ResultsRouteImport } from './routes/results'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TrainRouteImport } from './routes/train'
+import { Route as ApiContactRouteImport } from './routes/api.contact'
+import { Route as ApiResendReceivingRouteImport } from './routes/api.resend-receiving'
 import { Route as ModulesCreateRouteImport } from './routes/modules.create'
 import { Route as ModulesMergeRouteImport } from './routes/modules.merge'
 import { Route as ModulesReviewRouteImport } from './routes/modules.review'
@@ -101,6 +103,16 @@ const TrainRoute = TrainRouteImport.update({
   path: '/train',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiContactRoute = ApiContactRouteImport.update({
+  id: '/api/contact',
+  path: '/api/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiResendReceivingRoute = ApiResendReceivingRouteImport.update({
+  id: '/api/resend-receiving',
+  path: '/api/resend-receiving',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModulesCreateRoute = ModulesCreateRouteImport.update({
   id: '/modules/create',
   path: '/modules/create',
@@ -152,6 +164,8 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/train': typeof TrainRoute
+  '/api/contact': typeof ApiContactRoute
+  '/api/resend-receiving': typeof ApiResendReceivingRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
@@ -175,6 +189,8 @@ export interface FileRoutesByTo {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/train': typeof TrainRoute
+  '/api/contact': typeof ApiContactRoute
+  '/api/resend-receiving': typeof ApiResendReceivingRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
@@ -199,6 +215,8 @@ export interface FileRoutesById {
   '/staff': typeof StaffRoute
   '/terms': typeof TermsRoute
   '/train': typeof TrainRoute
+  '/api/contact': typeof ApiContactRoute
+  '/api/resend-receiving': typeof ApiResendReceivingRoute
   '/modules/create': typeof ModulesCreateRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
@@ -224,6 +242,8 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/train'
+    | '/api/contact'
+    | '/api/resend-receiving'
     | '/modules/create'
     | '/modules/merge'
     | '/modules/review'
@@ -247,6 +267,8 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/train'
+    | '/api/contact'
+    | '/api/resend-receiving'
     | '/modules/create'
     | '/modules/merge'
     | '/modules/review'
@@ -270,6 +292,8 @@ export interface FileRouteTypes {
     | '/staff'
     | '/terms'
     | '/train'
+    | '/api/contact'
+    | '/api/resend-receiving'
     | '/modules/create'
     | '/modules/merge'
     | '/modules/review'
@@ -294,6 +318,8 @@ export interface RootRouteChildren {
   StaffRoute: typeof StaffRoute
   TermsRoute: typeof TermsRoute
   TrainRoute: typeof TrainRoute
+  ApiContactRoute: typeof ApiContactRoute
+  ApiResendReceivingRoute: typeof ApiResendReceivingRoute
   ModulesCreateRoute: typeof ModulesCreateRoute
   ModulesMergeRoute: typeof ModulesMergeRoute
   ModulesReviewRoute: typeof ModulesReviewRoute
@@ -403,6 +429,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrainRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/contact': {
+      id: '/api/contact'
+      path: '/api/contact'
+      fullPath: '/api/contact'
+      preLoaderRoute: typeof ApiContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/resend-receiving': {
+      id: '/api/resend-receiving'
+      path: '/api/resend-receiving'
+      fullPath: '/api/resend-receiving'
+      preLoaderRoute: typeof ApiResendReceivingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/modules/create': {
       id: '/modules/create'
       path: '/modules/create'
@@ -470,6 +510,8 @@ const rootRouteChildren: RootRouteChildren = {
   StaffRoute: StaffRoute,
   TermsRoute: TermsRoute,
   TrainRoute: TrainRoute,
+  ApiContactRoute: ApiContactRoute,
+  ApiResendReceivingRoute: ApiResendReceivingRoute,
   ModulesCreateRoute: ModulesCreateRoute,
   ModulesMergeRoute: ModulesMergeRoute,
   ModulesReviewRoute: ModulesReviewRoute,
