@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { trainingAction, useConnection } from "@/lib/backend";
-import { assignmentProgress } from "@/lib/training";
+import { assignmentProgress, matchingFeedback } from "@/lib/training";
 import { useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/results")({
@@ -109,9 +109,46 @@ function Results() {
               {attempt.answers.map((answer, index) => {
                 const scenario = attempt.scenarios.find((item) => item.id === answer.scenarioId);
                 if (!scenario) return null;
+                if (scenario.kind === "matching") {
+                  const feedback = matchingFeedback(scenario, answer.value);
+                  return (
+                    <li key={answer.scenarioId} className="rounded-xl border border-border p-4">
+                      <h3 className="font-semibold">
+                        {index + 1}. {scenario.title}
+                      </h3>
+                      <p className="mt-2 text-sm">
+                        {feedback.filter((item) => item.correct).length} of {feedback.length}{" "}
+                        matches correct · {answer.correct ? "Correct" : "Incorrect"} scenario
+                      </p>
+                      <ul className="mt-3 space-y-3 text-sm">
+                        {feedback.map((item) => (
+                          <li key={item.id}>
+                            <strong>{item.label}</strong>:{" "}
+                            {scenario.targets.find((t) => t.id === item.selected)?.label ??
+                              "Not selected"}{" "}
+                            — {item.correct ? "Correct" : "Incorrect"}
+                            {!item.correct && (
+                              <p>
+                                Configured match:{" "}
+                                {scenario.targets
+                                  .filter((t) => item.validTargets.includes(t.id))
+                                  .map((t) => t.label)
+                                  .join(" or ")}
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-3 text-sm text-muted-foreground">{scenario.learningPoint}</p>
+                      {scenario.managerNote && (
+                        <p className="mt-3 text-sm">From your manager: {scenario.managerNote}</p>
+                      )}
+                    </li>
+                  );
+                }
                 const selected = Array.isArray(answer.value)
                   ? answer.value.join(" → ")
-                  : scenario.kind === "mcq"
+                  : scenario.kind === "mcq" && typeof answer.value === "number"
                     ? scenario.options[answer.value]
                     : "Selected order";
                 const correct =

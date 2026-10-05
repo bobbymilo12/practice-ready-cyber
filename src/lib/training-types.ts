@@ -51,7 +51,33 @@ export interface OrderScenario {
   followUpFor?: string;
 }
 
-export type Scenario = MCQScenario | OrderScenario;
+export interface MatchingScenario {
+  kind: "matching";
+  // Absent in older reusable-target matching exercises.
+  pairingMode?: "one_to_one";
+  id: string;
+  title: string;
+  question: string;
+  items: { id: string; label: string }[];
+  targets: { id: string; label: string; kind: "role" }[];
+  // All configured relationships within the presented targets, not just an intended answer.
+  validMatches: Record<string, string[]>;
+  learningPoint: string;
+  status: ScenarioStatus;
+  managerNote?: string;
+  followUpFor?: string;
+  provenance: {
+    kind: "practice_role_matching";
+    generatorVersion: 1 | 2;
+    level: "learn";
+    managerModified?: boolean;
+    source: "practice_setup";
+    paths: string[];
+    snapshot: import("./role-requests").PracticeRoleRequests[];
+  };
+}
+
+export type Scenario = MCQScenario | OrderScenario | MatchingScenario;
 
 export type Difficulty = "easy" | "intermediate" | "advanced";
 export type ModuleLength = "short" | "medium" | "long";

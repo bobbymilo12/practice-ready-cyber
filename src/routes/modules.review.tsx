@@ -1,5 +1,6 @@
+import { inspectRoleMatching, uniqueMatching } from "@/lib/role-matching";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp, type Scenario } from "@/lib/store";
 
@@ -14,6 +15,7 @@ function Review() {
   const nav = useNavigate();
   const module = useApp((s) => s.modules.find((m) => m.id === id));
   const {
+    practiceData,
     approveScenario,
     deleteScenario,
     regenerateScenario,
@@ -21,6 +23,16 @@ function Review() {
     publishModule,
     removeDraftModule,
   } = useApp();
+
+  const matchingDiagnostic = useMemo(
+    () =>
+      module?.topicKey === "appointment-booking" &&
+      module.settings?.trainingLevel === "learn" &&
+      !module.scenarios.some((s) => s.kind === "matching")
+        ? inspectRoleMatching(practiceData).diagnostic
+        : undefined,
+    [module, practiceData],
+  );
 
   if (!module) {
     return (
@@ -97,6 +109,14 @@ function Review() {
         </Card>
       )}
 
+      {matchingDiagnostic && (
+        <p className="mt-4 text-sm text-muted-foreground">
+          <strong>Matching:</strong> This module contains no matching board. Current role
+          configuration: {matchingDiagnostic.message}
+          {matchingDiagnostic.code === "ready" &&
+            " Regenerate the Learn module to include one when there is room alongside other local questions."}
+        </p>
+      )}
       <div className="mt-8 space-y-5">
         {module.scenarios.map((s) => (
           <ScenarioCard
@@ -149,6 +169,14 @@ function ScenarioCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Scenario>(scenario);
+  const solution =
+    scenario.kind === "matching" && scenario.pairingMode === "one_to_one"
+      ? uniqueMatching(
+          scenario.items.map((i) => i.id),
+          scenario.targets.map((t) => t.id),
+          scenario.validMatches,
+        )
+      : undefined;
 
   return (
     <Card>
@@ -159,7 +187,9 @@ function ScenarioCard({
               ? "Follow-up practice · shown after a missed answer"
               : scenario.kind === "mcq"
                 ? "Multiple choice"
-                : "Put steps in order"}
+                : scenario.kind === "matching"
+                  ? "Matching"
+                  : "Put steps in order"}
           </div>
           {editing ? (
             <input
@@ -176,18 +206,20 @@ function ScenarioCard({
         </Badge>
       </div>
 
-      <blockquote className="mt-3 rounded-lg border-l-4 border-accent bg-surface p-3 text-sm italic">
-        {editing ? (
-          <textarea
-            value={draft.patientQuote}
-            onChange={(e) => setDraft({ ...draft, patientQuote: e.target.value })}
-            className="w-full resize-none bg-transparent outline-none"
-            rows={2}
-          />
-        ) : (
-          <>&ldquo;{scenario.patientQuote}&rdquo;</>
-        )}
-      </blockquote>
+      {scenario.kind !== "matching" && draft.kind !== "matching" && (
+        <blockquote className="mt-3 rounded-lg border-l-4 border-accent bg-surface p-3 text-sm italic">
+          {editing ? (
+            <textarea
+              value={draft.patientQuote}
+              onChange={(e) => setDraft({ ...draft, patientQuote: e.target.value })}
+              className="w-full resize-none bg-transparent outline-none"
+              rows={2}
+            />
+          ) : (
+            <>&ldquo;{scenario.patientQuote}&rdquo;</>
+          )}
+        </blockquote>
+      )}
 
       <p className="mt-4 text-sm font-medium">
         {editing ? (
@@ -250,6 +282,42 @@ function ScenarioCard({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {scenario.kind === "matching" && (
+        <div className="mt-3 space-y-2">
+          <p className="text-sm text-muted-foreground">
+            These mappings come from confirmed Practice Setup role responsibilities.
+            {scenario.pairingMode === "one_to_one"
+              ? " Each role card is used once in this board."
+              : " Roles can be used more than once."}{" "}
+            Other roles not shown may also handle a request.
+          </p>
+          {scenario.items.map((item) => (
+            <div
+              key={item.id}
+              className="grid gap-2 rounded-lg border border-border p-3 text-sm sm:grid-cols-2"
+            >
+              <span>{item.label}</span>
+              <span>
+                {solution && (
+                  <strong className="block">
+                    Board pair: {scenario.targets.find((t) => t.id === solution[item.id])?.label}
+                  </strong>
+                )}
+                {solution ? "All valid shown roles: " : ""}
+                {scenario.targets
+                  .filter((t) => scenario.validMatches[item.id]?.includes(t.id))
+                  .map((t) => t.label)
+                  .join(" or ")}
+              </span>
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            Mappings are retained from generation. To use changed role responsibilities, generate a
+            new module.
+          </p>
         </div>
       )}
 

@@ -1518,6 +1518,7 @@ const replaceInText = (text: string, from: string, to: string) => {
 };
 
 const replaceInScenario = (s: Scenario, from: string, to: string): Scenario => {
+  if (s.kind === "matching") return s; // Preserve structured labels and source snapshot.
   const base = {
     ...s,
     title: replaceInText(s.title, from, to),

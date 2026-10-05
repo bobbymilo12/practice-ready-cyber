@@ -1,3 +1,4 @@
+import { roleMatchingScenario } from "./role-matching.ts";
 import {
   structuredBookingExercises,
   exerciseSignature,
@@ -1021,6 +1022,8 @@ export function configuredScenarios(
     (scenario, index) =>
       pool.findIndex(
         (other) =>
+          other.kind !== "matching" &&
+          scenario.kind !== "matching" &&
           other.patientQuote === scenario.patientQuote &&
           other.kind === "mcq" &&
           scenario.kind === "mcq" &&
@@ -1068,6 +1071,11 @@ export function selectedModuleScenarios(
   const core = appointmentCorePool({ topicKey: topic, practice: p, settings });
   const selectedCore = core.slice(0, Math.round(count * 0.3));
   const selectedLocal = local.slice(0, count - selectedCore.length);
+  // Keep other local questions; matching replaces one local slot, never adds to the total.
+  if (settings.trainingLevel === "learn" && selectedLocal.length >= 2) {
+    const matching = roleMatchingScenario(p);
+    if (matching) selectedLocal.splice(Math.min(1, selectedLocal.length - 1), 1, matching);
+  }
   // If local data is sparse, return a shorter module; do not turn it into a Core-only filler bank.
   const result: Scenario[] = [];
   let c = 0,
@@ -1110,18 +1118,29 @@ export function reviseConfiguredScenario(module: Module, scenario: Scenario): Mo
     // regenerating from configuration can safely produce a new pair.
     scenarios: module.scenarios
       .filter((current) => current.followUpFor !== scenario.id)
-      .map((current) =>
-        current.id === scenario.id
-          ? {
-              ...scenario,
-              ...(current.provenance
-                ? { provenance: { ...structuredClone(current.provenance), managerModified: true } }
-                : {}),
-              status: "draft",
-              ...(scenario.kind === "mcq" ? { followUpSituation: undefined } : {}),
-            }
-          : current,
-      ),
+      .map((current): Scenario => {
+        if (current.id !== scenario.id || current.kind !== scenario.kind) return current;
+        if (current.kind === "matching") {
+          return {
+            ...structuredClone(current),
+            title: scenario.title,
+            question: scenario.question,
+            learningPoint: scenario.learningPoint,
+            managerNote: scenario.managerNote,
+            status: "draft",
+            provenance: { ...structuredClone(current.provenance), managerModified: true },
+          };
+        }
+        if (scenario.kind === "matching") return current;
+        return {
+          ...scenario,
+          status: "draft",
+          ...(current.provenance
+            ? { provenance: { ...structuredClone(current.provenance), managerModified: true } }
+            : {}),
+          ...(scenario.kind === "mcq" ? { followUpSituation: undefined } : {}),
+        };
+      }),
   };
 }
 
@@ -1133,13 +1152,33 @@ export function regenerateConfiguredScenario(
   if (!module.settings) return module;
   const current = module.scenarios.find((s) => s.id === scenarioId);
   if (!current) return module;
+  if (current.kind === "matching") {
+    // Re-presentation uses the original evidence; live setup cannot rewrite this question.
+    return {
+      ...module,
+      needsReview: module.published || module.needsReview,
+      scenarios: module.scenarios.map((s) =>
+        s.id === scenarioId
+          ? {
+              ...structuredClone(current),
+              items: [...current.items.slice(1), current.items[0]],
+              status: "draft" as const,
+            }
+          : s,
+      ),
+    };
+  }
   if (current.provenance) {
     if (current.kind !== "mcq") return module;
-    const replacement = regenerateAppointmentCore(current, module.scenarios, {
-      topicKey: module.topicKey,
-      practice,
-      settings: module.settings,
-    });
+    const replacement = regenerateAppointmentCore(
+      current,
+      module.scenarios.filter((s) => s.kind !== "matching"),
+      {
+        topicKey: module.topicKey,
+        practice,
+        settings: module.settings,
+      },
+    );
     if (!replacement) return module;
     return {
       ...module,

@@ -1,8 +1,42 @@
-import type { Assignment, Module, Scenario, TrainingResult } from "./training-types.ts";
+import type {
+  Assignment,
+  Module,
+  Scenario,
+  TrainingResult,
+  MatchingScenario,
+} from "./training-types.ts";
 
+export type MatchingAnswer = Record<string, string>;
+export type AnswerValue = number | string[] | MatchingAnswer;
+export function isMatchingAnswer(value: unknown): value is MatchingAnswer {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.values(value).every((v) => typeof v === "string")
+  );
+}
+export function matchingFeedback(scenario: MatchingScenario, value: unknown) {
+  const answers = isMatchingAnswer(value) ? value : {};
+  return scenario.items.map((item) => ({
+    id: item.id,
+    label: item.label,
+    selected: answers[item.id],
+    validTargets: scenario.validMatches[item.id] ?? [],
+    correct: (scenario.validMatches[item.id] ?? []).includes(answers[item.id]),
+  }));
+}
+export function matchingComplete(scenario: MatchingScenario, value: unknown): boolean {
+  return (
+    isMatchingAnswer(value) &&
+    scenario.items.every((i) => scenario.targets.some((t) => t.id === value[i.id])) &&
+    (scenario.pairingMode !== "one_to_one" ||
+      new Set(Object.values(value)).size === scenario.items.length)
+  );
+}
 export interface SavedAnswer {
   scenarioId: string;
-  value: number | string[];
+  value: AnswerValue;
   correct?: boolean;
   title: string;
   followUpFor?: string;
@@ -33,7 +67,7 @@ export function startSession(module: Module, assignment: Assignment, id: string)
     moduleId: module.id,
     assignmentId: assignment.id,
     traineeId: assignment.traineeId,
-    scenarios: module.scenarios.filter((s) => s.status === "approved"),
+    scenarios: structuredClone(module.scenarios.filter((s) => s.status === "approved")),
     queue: primaryScenarios(module).map((s) => s.id),
     index: 0,
     answers: [],
@@ -57,7 +91,19 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
     )
       throw new Error("Choose one answer.");
     correct = value === scenario.correctIndex;
-  } else {
+  } else if (scenario.kind === "matching") {
+    if (
+      !isMatchingAnswer(value) ||
+      Object.keys(value).some((key) => !scenario.items.some((i) => i.id === key)) ||
+      Object.values(value).some((id) => !scenario.targets.some((t) => t.id === id)) ||
+      (scenario.pairingMode === "one_to_one" &&
+        new Set(Object.values(value)).size !== Object.keys(value).length)
+    )
+      throw new Error("Choose one of the shown roles for each request.");
+    correct =
+      matchingComplete(scenario, value) &&
+      matchingFeedback(scenario, value).every((i) => i.correct);
+  } else if (scenario.kind === "order") {
     if (
       !Array.isArray(value) ||
       value.length !== scenario.steps.length ||
@@ -65,7 +111,7 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
     )
       throw new Error("Arrange all the steps before checking.");
     correct = value.every((step, i) => step === scenario.steps[i]);
-  }
+  } else throw new Error("Unsupported interaction.");
   const queue = [...session.queue];
   if (!correct && !scenario.followUpFor) {
     const followUp = session.scenarios.find((s) => s.followUpFor === scenario.id);
@@ -79,7 +125,7 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
       ...session.answers.filter((a) => a.scenarioId !== scenarioId),
       {
         scenarioId,
-        value: value as number | string[],
+        value: structuredClone(value) as AnswerValue,
         correct,
         title: scenario.title,
         followUpFor: scenario.followUpFor,
@@ -103,6 +149,12 @@ export function advanceSession(session: TrainingSession, moduleTitle: string): T
   if (session.review) return session;
   if (!session.answers.some((a) => a.scenarioId === session.queue[session.index]))
     throw new Error("Answer this scenario first.");
+  const current = session.scenarios.find((s) => s.id === session.queue[session.index]);
+  if (
+    current?.kind === "matching" &&
+    !matchingComplete(current, session.answers.find((a) => a.scenarioId === current.id)?.value)
+  )
+    throw new Error("Match every request before continuing.");
   if (session.index + 1 < session.queue.length)
     return { ...session, index: session.index + 1, updatedAt: Date.now() };
   return { ...session, review: true, updatedAt: Date.now() };
@@ -111,6 +163,16 @@ export function advanceSession(session: TrainingSession, moduleTitle: string): T
 export function submitSession(session: TrainingSession, moduleTitle: string): TrainingSession {
   if (session.result) return session;
   if (!session.review) throw new Error("Review every answer before submitting the module.");
+  if (
+    session.queue.some((id) => {
+      const scenario = session.scenarios.find((s) => s.id === id);
+      const answer = session.answers.find((a) => a.scenarioId === id);
+      return (
+        !answer || (scenario?.kind === "matching" && !matchingComplete(scenario, answer.value))
+      );
+    })
+  )
+    throw new Error("Answer every request before submitting.");
   const initial = session.answers.filter((a) => !a.followUpFor);
   const recovered = session.answers
     .filter((a) => a.followUpFor && a.correct)

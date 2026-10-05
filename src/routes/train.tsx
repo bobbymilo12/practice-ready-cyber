@@ -1,9 +1,17 @@
+import { MatchingBoard } from "@/components/MatchingBoard";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { useApp, type Scenario } from "@/lib/store";
 import { trainingAction, useConnection } from "@/lib/backend";
-import { type SavedAnswer, type TrainingSession, primaryScenarios } from "@/lib/training";
+import {
+  type SavedAnswer,
+  type TrainingSession,
+  type AnswerValue,
+  isMatchingAnswer,
+  matchingComplete,
+  primaryScenarios,
+} from "@/lib/training";
 
 export const Route = createFileRoute("/train")({
   head: () => ({ meta: [{ title: "Training module — PracticeReady" }] }),
@@ -37,7 +45,7 @@ function Training({ id }: { id: string }) {
     : session?.scenarios.find((s) => s.id === session.queue[session.index]);
   const answer = session?.answers.find((a) => a.scenarioId === scenario?.id);
 
-  async function act(action: string, value?: number | string[]) {
+  async function act(action: string, value?: AnswerValue) {
     if (busy || !assignment) return;
     setBusy(true);
     setError("");
@@ -132,9 +140,16 @@ function Training({ id }: { id: string }) {
                       Selected answer:{" "}
                       {Array.isArray(selected.value)
                         ? selected.value.join(" → ")
-                        : reviewScenario.kind === "mcq"
+                        : reviewScenario.kind === "mcq" && typeof selected.value === "number"
                           ? reviewScenario.options[selected.value]
-                          : "Selected order"}
+                          : reviewScenario.kind === "matching" && isMatchingAnswer(selected.value)
+                            ? reviewScenario.items
+                                .map(
+                                  (item) =>
+                                    `${item.label} → ${reviewScenario.targets.find((t) => t.id === (selected.value as Record<string, string>)[item.id])?.label ?? "Not selected"}`,
+                                )
+                                .join("; ")
+                            : "Selected order"}
                     </p>
                   </li>
                 );
@@ -240,7 +255,7 @@ function ScenarioBlock({
   answer?: SavedAnswer;
   busy: boolean;
   preview: boolean;
-  onAnswer: (value: number | string[]) => void;
+  onAnswer: (value: AnswerValue) => void;
   onContinue: () => void;
   onPrevious: () => void;
   isFirst: boolean;
@@ -253,17 +268,13 @@ function ScenarioBlock({
     if (scenario.kind !== "order") return [];
     return [...scenario.steps.slice(1), scenario.steps[0]];
   });
-  const check = (value: number | string[]) => {
+  const check = (value: AnswerValue) => {
     if (busy) return;
     if (preview)
       setLocalAnswer({
         scenarioId: scenario.id,
         title: scenario.title,
         value,
-        correct:
-          scenario.kind === "mcq"
-            ? value === scenario.correctIndex
-            : Array.isArray(value) && value.every((s, i) => s === scenario.steps[i]),
       });
     else onAnswer(value);
   };
@@ -275,9 +286,11 @@ function ScenarioBlock({
   return (
     <Card className="mt-6">
       <h2 className="font-display text-xl font-bold">{scenario.title}</h2>
-      <blockquote className="mt-4 rounded-lg border-l-4 border-accent bg-surface p-4 italic">
-        “{scenario.patientQuote}”
-      </blockquote>
+      {scenario.kind !== "matching" && (
+        <blockquote className="mt-4 rounded-lg border-l-4 border-accent bg-surface p-4 italic">
+          “{scenario.patientQuote}”
+        </blockquote>
+      )}
       <p className="mt-5 font-medium">{scenario.question}</p>
       {scenario.kind === "mcq" ? (
         <div className="mt-4 space-y-3">
@@ -297,7 +310,16 @@ function ScenarioBlock({
             </button>
           ))}
         </div>
-      ) : (
+      ) : scenario.kind === "matching" ? (
+        <MatchingBoard
+          items={scenario.items}
+          targets={scenario.targets}
+          value={isMatchingAnswer(selected?.value) ? selected.value : {}}
+          oneToOne={scenario.pairingMode === "one_to_one"}
+          disabled={busy}
+          onChange={check}
+        />
+      ) : scenario.kind === "order" ? (
         <>
           <p className="mt-2 text-xs text-muted-foreground">
             Use the arrows to arrange the steps, then select this order.
@@ -343,7 +365,7 @@ function ScenarioBlock({
             </button>
           )}
         </>
-      )}
+      ) : null}
       {selected && (
         <p className="mt-6 text-sm">
           Answer selected. You can review all answers before submitting.
@@ -361,6 +383,7 @@ function ScenarioBlock({
           disabled={
             busy ||
             !selected ||
+            (scenario.kind === "matching" && !matchingComplete(scenario, selected.value)) ||
             (scenario.kind === "order" && JSON.stringify(items) !== JSON.stringify(selected.value))
           }
           onClick={onContinue}
