@@ -39,19 +39,33 @@ export interface MCQScenario {
   followUpFor?: string;
 }
 
-export interface OrderScenario {
-  provenance?: CoreScenarioProvenance;
+interface OrderScenarioBase {
   kind: "order";
   id: string;
   title: string;
   patientQuote: string;
   question: string;
-  steps: string[];
   learningPoint: string;
   status: ScenarioStatus;
   managerNote?: string;
   followUpFor?: string;
 }
+
+export interface LegacyOrderScenario extends OrderScenarioBase {
+  steps: string[];
+  sequence?: never;
+  provenance?: CoreScenarioProvenance;
+}
+export interface StructuredOrderScenario extends OrderScenarioBase {
+  steps?: never;
+  sequence: {
+    steps: { id: string; label: string }[];
+    correctOrder: string[];
+    presentationOrder: string[];
+  };
+  provenance: import("./sequence").SequenceProvenance;
+}
+export type OrderScenario = LegacyOrderScenario | StructuredOrderScenario;
 
 export interface MatchingScenario {
   kind: "matching";

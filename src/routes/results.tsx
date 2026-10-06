@@ -1,3 +1,4 @@
+import { orderKey, orderLabels } from "@/lib/sequence";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
@@ -147,14 +148,17 @@ function Results() {
                   );
                 }
                 const selected = Array.isArray(answer.value)
-                  ? answer.value.join(" → ")
+                  ? (scenario.kind === "order"
+                      ? orderLabels(scenario, answer.value)
+                      : answer.value
+                    ).join(" → ")
                   : scenario.kind === "mcq" && typeof answer.value === "number"
                     ? scenario.options[answer.value]
                     : "Selected order";
                 const correct =
                   scenario.kind === "mcq"
                     ? scenario.options[scenario.correctIndex]
-                    : scenario.steps.join(" → ");
+                    : orderLabels(scenario, orderKey(scenario)).join(" → ");
                 return (
                   <li key={answer.scenarioId} className="rounded-xl border border-border p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">

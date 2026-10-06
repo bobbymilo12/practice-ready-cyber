@@ -1,3 +1,4 @@
+import { orderKey, orderLabels } from "@/lib/sequence";
 import { inspectRoleMatching, uniqueMatching } from "@/lib/role-matching";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -323,7 +324,7 @@ function ScenarioCard({
 
       {scenario.kind === "order" && draft.kind === "order" && (
         <ol className="mt-3 space-y-2">
-          {scenario.steps.map((s, i) => (
+          {orderLabels(scenario, orderKey(scenario)).map((s, i) => (
             <li
               key={i}
               className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm"
@@ -331,7 +332,7 @@ function ScenarioCard({
               <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
                 {i + 1}
               </span>
-              {editing ? (
+              {editing && !draft.sequence ? (
                 <input
                   value={draft.steps[i]}
                   onChange={(e) => {

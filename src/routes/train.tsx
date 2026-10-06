@@ -1,3 +1,5 @@
+import { SequenceBoard } from "@/components/SequenceBoard";
+import { orderLabels } from "@/lib/sequence";
 import { MatchingBoard } from "@/components/MatchingBoard";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -15,7 +17,10 @@ import {
 
 export const Route = createFileRoute("/train")({
   head: () => ({ meta: [{ title: "Training module — PracticeReady" }] }),
-  validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : "" }),
+  validateSearch: (s: Record<string, unknown>): { id: string; sequencePreview?: string } => ({
+    id: typeof s.id === "string" ? s.id : "",
+    sequencePreview: import.meta.env.DEV && s.sequencePreview === "1" ? "1" : undefined,
+  }),
   component: Train,
 });
 
@@ -139,7 +144,10 @@ function Training({ id }: { id: string }) {
                     <p className="mt-2 text-sm">
                       Selected answer:{" "}
                       {Array.isArray(selected.value)
-                        ? selected.value.join(" → ")
+                        ? (reviewScenario.kind === "order"
+                            ? orderLabels(reviewScenario, selected.value)
+                            : selected.value
+                          ).join(" → ")
                         : reviewScenario.kind === "mcq" && typeof selected.value === "number"
                           ? reviewScenario.options[selected.value]
                           : reviewScenario.kind === "matching" && isMatchingAnswer(selected.value)
@@ -265,7 +273,7 @@ function ScenarioBlock({
   const selected = preview ? localAnswer : answer;
   const [items, setItems] = useState<string[]>(() => {
     if (Array.isArray(answer?.value)) return answer.value;
-    if (scenario.kind !== "order") return [];
+    if (scenario.kind !== "order" || scenario.sequence) return [];
     return [...scenario.steps.slice(1), scenario.steps[0]];
   });
   const check = (value: AnswerValue) => {
@@ -286,7 +294,7 @@ function ScenarioBlock({
   return (
     <Card className="mt-6">
       <h2 className="font-display text-xl font-bold">{scenario.title}</h2>
-      {scenario.kind !== "matching" && (
+      {scenario.kind !== "matching" && scenario.patientQuote && (
         <blockquote className="mt-4 rounded-lg border-l-4 border-accent bg-surface p-4 italic">
           “{scenario.patientQuote}”
         </blockquote>
@@ -317,6 +325,15 @@ function ScenarioBlock({
           targets={scenario.targets}
           value={isMatchingAnswer(selected?.value) ? selected.value : {}}
           oneToOne={scenario.pairingMode === "one_to_one"}
+          disabled={busy}
+          onChange={check}
+        />
+      ) : scenario.kind === "order" && scenario.sequence ? (
+        <SequenceBoard
+          steps={scenario.sequence.steps}
+          value={
+            Array.isArray(selected?.value) ? selected.value : scenario.sequence.presentationOrder
+          }
           disabled={busy}
           onChange={check}
         />
@@ -387,7 +404,9 @@ function ScenarioBlock({
             busy ||
             !selected ||
             (scenario.kind === "matching" && !matchingComplete(scenario, selected.value)) ||
-            (scenario.kind === "order" && JSON.stringify(items) !== JSON.stringify(selected.value))
+            (scenario.kind === "order" &&
+              !scenario.sequence &&
+              JSON.stringify(items) !== JSON.stringify(selected.value))
           }
           onClick={onContinue}
           className="ml-auto rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"

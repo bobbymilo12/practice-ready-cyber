@@ -122,6 +122,25 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
     mustResetPassword: false,
   };
   if (action === "load") {
+    // Explicit opt-in only, inside the existing localhost development mock boundary.
+    if (
+      import.meta.env.DEV &&
+      new URLSearchParams(window.location.search).get("sequencePreview") === "1" &&
+      !state.modules.some((m) => m.id === "dev-sequence-preview")
+    ) {
+      const { sequencePreviewModule } = await import("../../tests/fixtures/sequence.ts");
+      const module = sequencePreviewModule();
+      state.modules.push(module);
+      state.assignments.push({
+        id: "dev-sequence-assignment",
+        moduleId: module.id,
+        traineeId,
+        assignedAt: Date.now(),
+        status: "assigned",
+      });
+      workspace.version++;
+      sessionStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
     const assignments = state.assignments.filter((a) => a.traineeId === account.id);
     return {
       account,

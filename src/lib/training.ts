@@ -1,3 +1,4 @@
+import { isStepPermutation, orderKey } from "./sequence.ts";
 import type {
   Assignment,
   Module,
@@ -104,13 +105,16 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
       matchingComplete(scenario, value) &&
       matchingFeedback(scenario, value).every((i) => i.correct);
   } else if (scenario.kind === "order") {
+    const key = orderKey(scenario);
     if (
-      !Array.isArray(value) ||
-      value.length !== scenario.steps.length ||
-      JSON.stringify([...value].sort()) !== JSON.stringify([...scenario.steps].sort())
+      scenario.sequence
+        ? !isStepPermutation(value, key)
+        : !Array.isArray(value) ||
+          value.length !== key.length ||
+          JSON.stringify([...value].sort()) !== JSON.stringify([...key].sort())
     )
       throw new Error("Arrange all the steps before checking.");
-    correct = value.every((step, i) => step === scenario.steps[i]);
+    correct = (value as string[]).every((step, i) => step === key[i]);
   } else throw new Error("Unsupported interaction.");
   const queue = [...session.queue];
   if (!correct && !scenario.followUpFor) {

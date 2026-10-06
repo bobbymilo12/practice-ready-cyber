@@ -1132,6 +1132,18 @@ export function reviseConfiguredScenario(module: Module, scenario: Scenario): Mo
       .filter((current) => current.followUpFor !== scenario.id)
       .map((current): Scenario => {
         if (current.id !== scenario.id || current.kind !== scenario.kind) return current;
+        if (current.kind === "order" && current.sequence) {
+          return {
+            ...structuredClone(current),
+            title: scenario.title,
+            question: scenario.question,
+            learningPoint: scenario.learningPoint,
+            managerNote: scenario.managerNote,
+            status: "draft",
+            provenance: { ...structuredClone(current.provenance), managerModified: true },
+          };
+        }
+        if (scenario.kind === "order" && scenario.sequence) return current;
         if (current.kind === "matching") {
           return {
             ...structuredClone(current),
@@ -1161,8 +1173,10 @@ export function regenerateConfiguredScenario(
   scenarioId: string,
   practice: PracticeData,
 ): Module {
-  if (!module.settings) return module;
   const current = module.scenarios.find((s) => s.id === scenarioId);
+  // No production sequence generation/replacement path in Stage 1.
+  if (current?.kind === "order" && current.sequence) return module;
+  if (!module.settings) return module;
   if (!current) return module;
   if (current.kind === "matching") {
     // Re-presentation uses the original evidence; live setup cannot rewrite this question.

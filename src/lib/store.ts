@@ -1437,24 +1437,7 @@ export function draftsForTopic(
     .filter((s) => mainIds.has(s.followUpFor ?? s.id))
     .map((s, index): Scenario => {
       if (s.kind !== "mcq") return s;
-      if (format === "order" || (format === "mixed" && Math.floor(index / 2) % 2 === 1)) {
-        return {
-          kind: "order",
-          id: s.id,
-          title: s.title,
-          patientQuote: s.patientQuote,
-          question: "Put these steps for applying the recorded practice guidance in order.",
-          steps: [
-            "Identify which recorded local procedure applies to this request.",
-            `Check the local instructions: ${s.options[s.correctIndex]}`,
-            "Follow those instructions, seeking the named team's help if anything is unclear.",
-            "Document the action taken and the outcome according to the practice process.",
-          ],
-          learningPoint: s.learningPoint,
-          status: "draft",
-          followUpFor: s.followUpFor,
-        };
-      }
+      // Format preferences cannot supply an ordered source. Preserve eligible MCQs.
       const offset =
         difficulty === "easy" && !s.followUpFor ? 0 : Math.floor(Math.random() * s.options.length);
       return {
@@ -1518,7 +1501,7 @@ const replaceInText = (text: string, from: string, to: string) => {
 };
 
 const replaceInScenario = (s: Scenario, from: string, to: string): Scenario => {
-  if (s.kind === "matching") return s; // Preserve structured labels and source snapshot.
+  if (s.kind === "matching" || (s.kind === "order" && s.sequence)) return s; // Preserve structured labels and source snapshot.
   const base = {
     ...s,
     title: replaceInText(s.title, from, to),
@@ -1529,7 +1512,10 @@ const replaceInScenario = (s: Scenario, from: string, to: string): Scenario => {
   if (s.kind === "mcq") {
     return { ...(base as MCQScenario), options: s.options.map((o) => replaceInText(o, from, to)) };
   }
-  return { ...(base as OrderScenario), steps: s.steps.map((o) => replaceInText(o, from, to)) };
+  return {
+    ...(base as import("./training-types").LegacyOrderScenario),
+    steps: s.steps.map((o) => replaceInText(o, from, to)),
+  };
 };
 
 export const useApp = create<AppState>()((set, get) => ({
@@ -1584,7 +1570,7 @@ export const useApp = create<AppState>()((set, get) => ({
       modules: state.modules.map((module) =>
         module.id !== moduleId
           ? module
-          : module.settings
+          : module.settings || (scenario.kind === "order" && scenario.sequence)
             ? reviseConfiguredScenario(module, scenario)
             : {
                 ...module,
@@ -1636,7 +1622,7 @@ export const useApp = create<AppState>()((set, get) => ({
           ),
         };
       const current = mod.scenarios.find((x) => x.id === scenarioId);
-      if (!current) return state;
+      if (!current || (current.kind === "order" && current.sequence)) return state;
       const pool = practiceScenarios(
         mod.topicKey,
         mod.title,
