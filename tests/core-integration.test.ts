@@ -240,7 +240,8 @@ test("Apply is contextual rather than a re-labelled Learn recipe and avoids ambi
   });
   assert.ok(JSON.stringify(baseline).includes(settings.extra));
   assert.ok(!JSON.stringify(applied).includes(settings.extra));
-  assert.ok(applied[0].title.startsWith("Routing:"));
+  assert.ok(applied[0].kind === "mcq" && applied[0].localRoleRequestId);
+  assert.ok(!applied[0].title.startsWith("Routing:"));
 });
 test("legacy settings remain mixed; other topics ignore an Appointment Booking level", () => {
   const legacy = moduleWithCount();

@@ -1,10 +1,11 @@
+import { empty, practice } from "./fixtures/role-matching.ts";
 import { readFileSync } from "node:fs";
 import { pairCards } from "../src/lib/matching-interaction.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PracticeData } from "../src/lib/store.ts";
 import type { Module, Assignment } from "../src/lib/training-types.ts";
-import { suggestedRole, requestCategories } from "../src/lib/role-requests.ts";
+import { requestCategories } from "../src/lib/role-requests.ts";
 import {
   roleMatchingScenario,
   inspectRoleMatching,
@@ -25,59 +26,7 @@ import {
   matchingFeedback,
 } from "../src/lib/training.ts";
 
-const empty = (): PracticeData => ({
-  practiceName: "Test Practice",
-  hours: "",
-  address: "",
-  outOfHoursTimes: "",
-  sameDayReasons: [],
-  prescriptionOrdering: "",
-  dutyContact: "",
-  nominatedPharmacy: "",
-  urgentNumbers: "",
-  extras: "",
-  repeatOrderMethods: "",
-  repeatTurnaround: "",
-  repeatControlled: "",
-  repeatHighRisk: "",
-  repeatEmergency: "",
-  localSafeguarding: "",
-  localComplaints: "",
-  localDNA: "",
-  localInterpreter: "",
-  localConfidentiality: "",
-  staff: [],
-  rolePolicies: {
-    gpsSameDay: "",
-    gpsRoutine: "",
-    npsSameDay: "",
-    npsRoutine: "",
-    nursesSameDay: "",
-    nursesRoutine: "",
-    hcasSameDay: "",
-    hcasRoutine: "",
-    pharmacistsSameDay: "",
-    pharmacistsRoutine: "",
-    neverPromise: "",
-    phrasesUse: "",
-    phrasesAvoid: "",
-  },
-});
-
 const ids = requestCategories.flatMap((c) => c.requests).map((r) => r.id);
-function practice(groups: number[][] = [[0, 4, 8], [1, 5, 9], [2, 6, 10], [3, 7, 11], [0]]) {
-  const roles = groups.map((indices, i) => ({
-    ...suggestedRole(`Test role ${i + 1}`),
-    confirmed: true,
-    selectedRequestIds: indices.map((index) => ids[index]),
-  }));
-  return {
-    ...empty(),
-    practiceName: "Test practice",
-    staff: [],
-    roleRequests: Object.fromEntries(roles.map((r) => [r.roleId, r])),
-  } as PracticeData;
-}
 function moduleFor(p = practice()): Module {
   const settings = { ...defaultModuleSettings(), count: 10, trainingLevel: "learn" as const };
   return {
@@ -307,4 +256,59 @@ test("card UI uses keyboard buttons, has no correctness data/selectors, and revi
   const review = readFileSync(new URL("../src/routes/modules.review.tsx", import.meta.url), "utf8");
   assert.match(review, /scenario.kind === "matching"\s*\? "Matching"/);
   assert.ok(review.includes("Board pair:"));
+});
+
+test("documented four-role visual fixture generates ten mixed questions without employees or module answers", () => {
+  const fixture = practice([
+    [0, 4, 8],
+    [1, 5, 9],
+    [2, 6, 10],
+    [3, 7, 11],
+  ]);
+  const m = moduleFor(fixture);
+  assert.equal(fixture.staff.length, 0);
+  assert.equal(m.scenarios.length, 10);
+  assert.equal(m.scenarios.filter((s) => s.provenance?.kind === "core").length, 3);
+  assert.equal(m.scenarios.filter((s) => s.kind === "matching").length, 1);
+  assert.equal(m.scenarios.filter((s) => s.kind === "mcq" && !s.provenance).length, 6);
+});
+
+test("pairings survive navigating between different scenarios and editing after reload", () => {
+  const m = moduleFor();
+  let session = startSession(m, assignment, "navigation");
+  const boardIndex = session.queue.findIndex(
+    (id) => session.scenarios.find((s) => s.id === id)?.kind === "matching",
+  );
+  for (let i = 0; i < boardIndex; i++) {
+    const s = session.scenarios.find((s) => s.id === session.queue[session.index])!;
+    assert.equal(s.kind, "mcq");
+    session = advanceSession(answerSession(session, 0), m.title);
+  }
+  const board = session.scenarios.find((s) => s.id === session.queue[session.index])!;
+  assert.equal(board.kind, "matching");
+  if (board.kind !== "matching") return;
+  const solution = uniqueMatching(
+    board.items.map((i) => i.id),
+    board.targets.map((t) => t.id),
+    board.validMatches,
+  )!;
+  session = answerSession(session, solution);
+  session = advanceSession(session, m.title);
+  session = JSON.parse(JSON.stringify(session));
+  session = previousSession(session);
+  assert.equal(session.queue[session.index], board.id);
+  assert.deepEqual(session.answers.find((a) => a.scenarioId === board.id)!.value, solution);
+  const changed = pairCards(solution, board.items[0].id, solution[board.items[1].id], true);
+  session = answerSession(session, changed);
+  assert.throws(() => advanceSession(session, m.title), /Match every/);
+  session = answerSession(session, solution);
+  assert.equal(advanceSession(session, m.title).index, boardIndex + 1);
+});
+
+test("saved status uses matching wording only for matching interactions", () => {
+  const source = readFileSync(new URL("../src/routes/train.tsx", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /scenario\.kind === "matching"\s*\? "Matches saved\. You can change them before submitting\."\s*: "Answer selected\. You can review all answers before submitting\."/,
+  );
 });

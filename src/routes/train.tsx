@@ -291,7 +291,7 @@ function ScenarioBlock({
           “{scenario.patientQuote}”
         </blockquote>
       )}
-      <p className="mt-5 font-medium">{scenario.question}</p>
+      {scenario.kind !== "matching" && <p className="mt-5 font-medium">{scenario.question}</p>}
       {scenario.kind === "mcq" ? (
         <div className="mt-4 space-y-3">
           {scenario.options.map((option, i) => (
@@ -312,6 +312,7 @@ function ScenarioBlock({
         </div>
       ) : scenario.kind === "matching" ? (
         <MatchingBoard
+          instructions={scenario.provenance.managerModified ? scenario.question : undefined}
           items={scenario.items}
           targets={scenario.targets}
           value={isMatchingAnswer(selected?.value) ? selected.value : {}}
@@ -368,7 +369,9 @@ function ScenarioBlock({
       ) : null}
       {selected && (
         <p className="mt-6 text-sm">
-          Answer selected. You can review all answers before submitting.
+          {scenario.kind === "matching"
+            ? "Matches saved. You can change them before submitting."
+            : "Answer selected. You can review all answers before submitting."}
         </p>
       )}
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">

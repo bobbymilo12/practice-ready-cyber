@@ -1,3 +1,4 @@
+import { roleRequestSituation, roleAnswerChoices, roleList } from "./role-question-presentation.ts";
 import { roleMatchingScenario } from "./role-matching.ts";
 import {
   structuredBookingExercises,
@@ -958,38 +959,49 @@ export function configuredScenarios(
     if (!eligible.length && !roles.length) continue;
     const names =
       topic === "appointment-booking" && settings.trainingLevel && roles.length
-        ? roles.map((role) => role.label).join("; ")
+        ? roleList(roles.map((role) => role.label))
         : eligible.length
           ? eligible.map((s) => `${s.employee.name} (${s.role})`).join("; ")
           : roles.map((role) => role.label).join("; ");
-    routing.push(
-      make(
-        `Routing: ${label}`,
-        topic === "appointment-booking" && settings.trainingLevel === "apply"
-          ? `A patient asks about ${label.toLowerCase()} and wants to see whoever has the first free appointment. Before considering availability, you need to establish which configured role handles this request.`
-          : `A patient needs help with ${label.toLowerCase()}. Who can handle this request?`,
-        `Approach ${names}`,
-        [
-          ...(topic === "appointment-booking" && settings.trainingLevel === "apply"
-            ? staff
-                .filter((s) => !s.canHandle && s.individualException)
-                .map((s) => `Approach ${s.employee.name} (${s.role})`)
-            : []),
-          ...(topic === "appointment-booking" && settings.trainingLevel === "apply"
-            ? [
-                "Start with the patient’s preferred role and check its responsibilities afterwards.",
-                "Use the role that handled their last request before checking this request’s requirements.",
-                "Find the first available appointment before checking which role handles this request.",
-              ]
-            : [
-                "Use the clinician the patient saw last time, assuming they cover this request too.",
-                "Treat the patient’s preferred clinician as confirmation they can handle the request.",
-                "Choose by earliest availability before matching the request to a clinician’s responsibilities.",
-              ]),
-        ],
-        `${names} can handle ${label.toLowerCase()} at this practice. Responsibility alone does not authorise a booking.`,
-      ),
+    const roleQuestion = make(
+      `Routing: ${label}`,
+      topic === "appointment-booking" && settings.trainingLevel === "apply"
+        ? `A patient asks about ${label.toLowerCase()} and wants to see whoever has the first free appointment. Before considering availability, you need to establish which configured role handles this request.`
+        : `A patient needs help with ${label.toLowerCase()}. Who can handle this request?`,
+      `Approach ${names}`,
+      [
+        ...(topic === "appointment-booking" && settings.trainingLevel === "apply"
+          ? staff
+              .filter((s) => !s.canHandle && s.individualException)
+              .map((s) => `Approach ${s.employee.name} (${s.role})`)
+          : []),
+        ...(topic === "appointment-booking" && settings.trainingLevel === "apply"
+          ? [
+              "Start with the patient’s preferred role and check its responsibilities afterwards.",
+              "Use the role that handled their last request before checking this request’s requirements.",
+              "Find the first available appointment before checking which role handles this request.",
+            ]
+          : [
+              "Use the clinician the patient saw last time, assuming they cover this request too.",
+              "Treat the patient’s preferred clinician as confirmation they can handle the request.",
+              "Choose by earliest availability before matching the request to a clinician’s responsibilities.",
+            ]),
+      ],
+      `${names} can handle ${label.toLowerCase()} at this practice. Responsibility alone does not authorise a booking.`,
     );
+    if (topic === "appointment-booking" && roleQuestion.kind === "mcq") {
+      roleQuestion.localRoleRequestId = id;
+      roleQuestion.title = roleRequestSituation(label).replace(/\.$/, "");
+      if (settings.trainingLevel === "learn") {
+        roleQuestion.patientQuote = roleRequestSituation(label);
+        roleQuestion.question = "Which role(s) at this practice can handle this request?";
+        if (roles.length) {
+          roleQuestion.options = roleAnswerChoices(p, id, label, roles);
+          roleQuestion.learningPoint = `At this practice, ${roleList(roles.map((r) => r.label))} can handle requests about ${label.toLowerCase() === "utis" ? "UTIs" : label.toLowerCase()}. Check individual exceptions and booking arrangements before booking.`;
+        }
+      }
+    }
+    routing.push(roleQuestion);
     for (const exception of staff.filter((s) => s.individualException))
       routing.push(
         make(

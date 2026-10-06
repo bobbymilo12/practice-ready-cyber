@@ -11,10 +11,11 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p supabase/tsconfig.json",
-    "test": "node --experimental-strip-types tests/appointment-capabilities.test.ts && node --experimental-strip-types tests/module-config.test.ts && node --experimental-strip-types tests/training.test.ts && node --experimental-strip-types tests/api.test.mjs && node --test tests/dev-mode.test.mjs && node --experimental-strip-types tests/contact.test.ts && npm run test:core-library",
+    "test": "node --experimental-strip-types tests/appointment-capabilities.test.ts && node --experimental-strip-types tests/module-config.test.ts && node --experimental-strip-types tests/training.test.ts && node --experimental-strip-types tests/api.test.mjs && node --test tests/dev-mode.test.mjs && node --experimental-strip-types tests/contact.test.ts && npm run test:core-library && npm run test:matching",
     "test:e2e": "playwright test",
     "backend:check": "node scripts/check-backend.mjs",
-    "test:core-library": "node --experimental-strip-types tests/core-training.test.ts && node --experimental-strip-types tests/core-generation.test.ts && node --experimental-strip-types tests/core-integration.test.ts"
+    "test:core-library": "node --experimental-strip-types tests/core-training.test.ts && node --experimental-strip-types tests/core-generation.test.ts && node --experimental-strip-types tests/core-integration.test.ts",
+    "test:matching": "node --experimental-strip-types tests/role-matching.test.ts && node --experimental-strip-types tests/matching-board.test.ts && node --experimental-strip-types tests/role-question-presentation.test.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

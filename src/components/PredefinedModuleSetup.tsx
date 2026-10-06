@@ -54,7 +54,10 @@ export function PredefinedModuleSetup({
       ? selectedModuleScenarios(topic, title, practiceData, settings)
       : configuredScenarios(topic, title, practiceData, settings);
   const savedResponsibilities = configuredScenarios(topic, title, practiceData, settings).filter(
-    (s) => s.title.startsWith("Routing:") || s.title.startsWith("Individual exception:"),
+    (s) =>
+      (s.kind === "mcq" && !!s.localRoleRequestId) ||
+      s.title.startsWith("Routing:") ||
+      s.title.startsWith("Individual exception:"),
   );
   const validCount =
     Number.isInteger(settings.count) && settings.count >= 1 && settings.count <= 100;

@@ -10,7 +10,9 @@ export function MatchingBoard({
   oneToOne,
   disabled,
   onChange,
+  instructions,
 }: {
+  instructions?: string;
   items: Card[];
   targets: Card[];
   value: Record<string, string>;
@@ -23,12 +25,11 @@ export function MatchingBoard({
   return (
     <div className="mt-4">
       <p className="mb-3 text-sm text-muted-foreground">
-        Choose a request, then a role. To change a pair, select its request again. Select the same
-        role again to remove a pair.
-        {oneToOne && " Choosing a role already paired moves it to the selected request."}
+        {instructions ??
+          "Select a patient request, then select the matching practice role. You can change your matches before continuing."}
       </p>
       <div className="grid grid-cols-2 gap-3 sm:gap-6">
-        <div className="space-y-3">
+        <div className="space-y-2">
           <h3 className="text-sm font-semibold">Patient requests</h3>
           {items.map((item, i) => (
             <button
@@ -37,20 +38,21 @@ export function MatchingBoard({
               disabled={disabled}
               aria-pressed={active === item.id}
               onClick={() => setActive(item.id)}
-              className={`min-h-24 w-full break-words rounded-xl border p-3 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 ${active === item.id ? "border-primary bg-primary/10" : value[item.id] ? "border-primary/50 bg-surface" : "border-border"}`}
+              className={`min-h-12 w-full break-words flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50 ${active === item.id ? "border-primary bg-primary/10" : value[item.id] ? "border-primary/50 bg-surface" : "border-border"}`}
             >
-              <span className="font-semibold">
-                {i + 1}. {item.label}
-              </span>
               {value[item.id] && (
-                <span className="mt-2 block text-xs">
-                  Paired with {targets.find((t) => t.id === value[item.id])?.label}
+                <span
+                  aria-label={`Pair ${i + 1}`}
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-primary/40 text-xs font-semibold"
+                >
+                  {i + 1}
                 </span>
               )}
+              <span>{item.label}</span>
             </button>
           ))}
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2">
           <h3 className="text-sm font-semibold">Practice roles</h3>
           {targets.map((target) => {
             const paired = items.filter((item) => value[item.id] === target.id);
@@ -71,21 +73,38 @@ export function MatchingBoard({
                   );
                   setActive(undefined);
                 }}
-                className={`min-h-24 w-full break-words rounded-xl border p-3 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-60 ${paired.length ? "border-primary/50 bg-surface" : "border-border"}`}
+                className={`min-h-12 w-full break-words flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-60 ${paired.length ? "border-primary/50 bg-surface" : "border-border"}`}
               >
-                <span className="font-semibold">{target.label}</span>
-                {paired.length > 0 && (
-                  <span className="mt-2 block text-xs">
-                    Paired with{" "}
-                    {paired.map((item) => `${items.indexOf(item) + 1}. ${item.label}`).join("; ")}
+                {paired.map((item) => (
+                  <span
+                    key={item.id}
+                    aria-label={`Pair ${items.indexOf(item) + 1}`}
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-primary/40 text-xs font-semibold"
+                  >
+                    {items.indexOf(item) + 1}
                   </span>
-                )}
+                ))}
+                <span>{target.label}</span>
               </button>
             );
           })}
         </div>
       </div>
-      <p role="status" aria-live="polite" className="mt-3 text-sm">
+      {active && value[active] && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            onChange(pairCards(value, active, value[active], oneToOne));
+            setAnnouncement("Pair removed.");
+            setActive(undefined);
+          }}
+          className="mt-2 rounded border border-border px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          Remove selected pair
+        </button>
+      )}
+      <p role="status" aria-live="polite" className="sr-only">
         {announcement || `${Object.keys(value).length} of ${items.length} pairs selected`}
       </p>
     </div>
