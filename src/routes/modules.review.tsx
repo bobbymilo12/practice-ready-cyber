@@ -207,20 +207,22 @@ function ScenarioCard({
         </Badge>
       </div>
 
-      {scenario.kind !== "matching" && draft.kind !== "matching" && (
-        <blockquote className="mt-3 rounded-lg border-l-4 border-accent bg-surface p-3 text-sm italic">
-          {editing ? (
-            <textarea
-              value={draft.patientQuote}
-              onChange={(e) => setDraft({ ...draft, patientQuote: e.target.value })}
-              className="w-full resize-none bg-transparent outline-none"
-              rows={2}
-            />
-          ) : (
-            <>&ldquo;{scenario.patientQuote}&rdquo;</>
-          )}
-        </blockquote>
-      )}
+      {scenario.kind !== "matching" &&
+        draft.kind !== "matching" &&
+        !(scenario.kind === "order" && scenario.sequence) && (
+          <blockquote className="mt-3 rounded-lg border-l-4 border-accent bg-surface p-3 text-sm italic">
+            {editing ? (
+              <textarea
+                value={draft.patientQuote}
+                onChange={(e) => setDraft({ ...draft, patientQuote: e.target.value })}
+                className="w-full resize-none bg-transparent outline-none"
+                rows={2}
+              />
+            ) : (
+              <>&ldquo;{scenario.patientQuote}&rdquo;</>
+            )}
+          </blockquote>
+        )}
 
       <p className="mt-4 text-sm font-medium">
         {editing ? (
@@ -322,6 +324,27 @@ function ScenarioCard({
         </div>
       )}
 
+      {scenario.kind === "order" &&
+        scenario.sequence &&
+        scenario.provenance.snapshot.localProcedure && (
+          <div className="mt-3 space-y-2 text-sm">
+            <p className="font-medium">
+              Local Procedure ·{" "}
+              {scenario.provenance.snapshot.localProcedure.requestLabelAtConfirmation} · Version{" "}
+              {scenario.provenance.sourceVersion}
+            </p>
+            <p>Manager-confirmed practice procedure</p>
+            {scenario.provenance.snapshot.localProcedure.appliesWhen && (
+              <p className="whitespace-pre-wrap">
+                {scenario.provenance.snapshot.localProcedure.appliesWhen}
+              </p>
+            )}
+            <p className="text-muted-foreground">
+              Updated procedure information is used when a new module is generated. This exercise
+              retains its saved procedure.
+            </p>
+          </div>
+        )}
       {scenario.kind === "order" && draft.kind === "order" && (
         <ol className="mt-3 space-y-2">
           {orderLabels(scenario, orderKey(scenario)).map((s, i) => (
@@ -343,7 +366,7 @@ function ScenarioCard({
                   className="w-full bg-transparent outline-none"
                 />
               ) : (
-                <span>{s}</span>
+                <span className="whitespace-pre-wrap">{s}</span>
               )}
             </li>
           ))}
@@ -431,6 +454,12 @@ function ScenarioCard({
               Edit
             </button>
             <button
+              disabled={scenario.kind === "order" && !!scenario.sequence}
+              title={
+                scenario.kind === "order" && scenario.sequence
+                  ? "Generate a new module to use updated procedure information."
+                  : undefined
+              }
               onClick={onRegenerate}
               className="rounded-lg border border-border px-3 py-2 text-sm"
             >

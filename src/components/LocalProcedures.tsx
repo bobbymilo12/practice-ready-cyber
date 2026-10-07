@@ -14,7 +14,7 @@ import {
   type OrderRequirement,
 } from "@/lib/local-procedures";
 
-const input = "mt-2 block w-full rounded-xl border border-input bg-background p-3 text-sm";
+const input = "mt-2 block w-full rounded-xl border border-input bg-background p-2 text-sm";
 const secondary = "rounded-xl border border-border px-3 py-2 text-sm disabled:opacity-50";
 const primary =
   "rounded-xl bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50";
@@ -58,14 +58,16 @@ function ProcedureEditor({
       <legend className="text-sm font-medium">
         Add the steps reception staff should follow, in order.
       </legend>
-      <ol className="space-y-3">
+      <ol className="space-y-2">
         {draft.stepOrder.map((id, index) => (
-          <li key={id}>
-            <label className="block text-sm">
-              Step {index + 1}
+          <li key={id} className="flex items-start gap-2">
+            <span aria-hidden="true" className="pt-2 text-sm text-muted-foreground">{index + 1}</span>
+            <label className="min-w-0 flex-1 text-sm">
+              <span className="sr-only">Step {index + 1}</span>
               <textarea
-                className={input}
-                rows={2}
+                className="block w-full resize-y rounded-lg border border-input bg-background px-2 py-2 text-sm"
+                rows={1}
+                placeholder={index === 0 ? `e.g. What should reception do first for this request: ${target.label}?` : index === 1 ? "e.g. What happens next?" : "e.g. What should reception do after that?"}
                 value={draft.steps.find((s) => s.id === id)!.text}
                 onChange={(e) =>
                   setDraft((d) => ({
@@ -75,32 +77,32 @@ function ProcedureEditor({
                 }
               />
             </label>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="flex shrink-0 gap-1">
               <button
                 type="button"
-                className={secondary}
+                className="rounded-lg border border-border px-2 py-2 text-sm disabled:opacity-40"
                 disabled={index === 0}
-                aria-label={`Move step ${index + 1} up`}
+                aria-label={`Move step ${index + 1} up`} title="Move step up"
                 onClick={() => setDraft((d) => moveProcedureStep(d, id, -1))}
               >
-                ↑ Up
+                ↑
               </button>
               <button
                 type="button"
-                className={secondary}
+                className="rounded-lg border border-border px-2 py-2 text-sm disabled:opacity-40"
                 disabled={index === draft.stepOrder.length - 1}
-                aria-label={`Move step ${index + 1} down`}
+                aria-label={`Move step ${index + 1} down`} title="Move step down"
                 onClick={() => setDraft((d) => moveProcedureStep(d, id, 1))}
               >
-                ↓ Down
+                ↓
               </button>
               <button
                 type="button"
-                className={secondary}
-                aria-label={`Remove step ${index + 1}`}
+                className="rounded-lg border border-border px-2 py-2 text-sm disabled:opacity-40"
+                aria-label={`Remove step ${index + 1}`} title="Remove step"
                 onClick={() => setDraft((d) => removeProcedureStep(d, id))}
               >
-                Remove
+                ×
               </button>
             </div>
           </li>
@@ -127,7 +129,7 @@ function ProcedureEditor({
           />
         </label>
         <label className="mt-3 block text-sm">
-          Must all these steps always happen in this order?
+          Do these steps need to be followed in this order?
           <select
             className={input}
             value={draft.orderRequirement}
@@ -135,10 +137,10 @@ function ProcedureEditor({
               setDraft((d) => ({ ...d, orderRequirement: e.target.value as OrderRequirement }))
             }
           >
-            <option value="unassessed">Not assessed</option>
-            <option value="required_linear">Yes — all steps are required in this order</option>
+            <option value="unassessed">Not sure / not specified</option>
+            <option value="required_linear">Yes — follow in this order</option>
             <option value="conditional_or_flexible">
-              No — some steps are conditional, optional or flexible
+              No — it can depend on the situation
             </option>
           </select>
         </label>
@@ -223,8 +225,7 @@ export function LocalProcedures() {
         Which of these have a specific procedure reception staff should follow?
       </p>
       <p className="text-sm text-muted-foreground">
-        Saved for your practice and reused here next time. These procedures do not generate training
-        questions yet.
+        Add any practice-specific steps reception staff should follow for these requests. These are saved for your practice and can be reused in training. You do not need a procedure for every request.
       </p>
       {!targets.length && (
         <p className="text-sm">
@@ -250,7 +251,7 @@ export function LocalProcedures() {
             <div
               key={target.id}
               hidden={!visible.some((t) => t.id === target.id)}
-              className="rounded-xl border border-border p-4"
+              className="rounded-xl border border-border p-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>

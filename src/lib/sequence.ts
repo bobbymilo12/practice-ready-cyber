@@ -10,6 +10,10 @@ export interface SequenceContent {
   learningPoint: string;
   evidence: { reference: string; version?: string }[];
   scope: "production" | "test_only";
+  localProcedure?: Extract<
+    import("./local-procedures").ProcedureRevision,
+    { status: "configured" }
+  >;
 }
 export type SequenceSource = SequenceContent &
   (
@@ -98,7 +102,7 @@ function build(source: SequenceSource, seed: number): StructuredOrderScenario {
     },
   };
 }
-/** Foundation only: deliberately not connected to any production generation pool. */
+/** Build only from approved Core or explicitly confirmed local sequence sources. */
 export function createSequenceScenario(
   source: SequenceSource,
   seed: number,

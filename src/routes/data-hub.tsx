@@ -208,6 +208,7 @@ function DataHub() {
         <Card>
           <details id="local-procedures">
             <summary className="cursor-pointer font-semibold">Local procedures</summary>
+            <p className="mt-3 text-sm text-muted-foreground">Manage the practice-specific steps reception staff follow for common requests. These can be reused in training.</p>
             <div className="mt-4">
               <LocalProcedures />
             </div>
@@ -257,7 +258,7 @@ function DataHub() {
           <Link
             className="mt-3 inline-block text-primary"
             to="/practice/setup"
-            search={{ step: 4 }}
+            search={{ step: 5, flow: 2 }}
           >
             Edit prescription configuration →
           </Link>

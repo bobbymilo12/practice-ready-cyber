@@ -1,4 +1,3 @@
-import { LocalProcedures } from "./LocalProcedures";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Shell, Card } from "./Shell";
@@ -184,7 +183,15 @@ export function PredefinedModuleSetup({
                   )}
                   {topic === "appointment-booking" && (
                     <Card className="mt-6">
-                      <LocalProcedures />
+                      <h2 className="font-display text-xl font-semibold">Local procedures</h2>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {Object.values(practiceData.localProcedures ?? {}).some((r) => r.status === "configured")
+                          ? `${Object.values(practiceData.localProcedures ?? {}).filter((r) => r.status === "configured").length} procedures configured for Appointment Booking`
+                          : "No local procedures configured"}
+                      </p>
+                      <Link to="/practice/setup" search={{ step: 4, flow: 2 }} className="mt-3 inline-block text-sm text-primary underline">
+                        {Object.values(practiceData.localProcedures ?? {}).some((r) => r.status === "configured") ? "View / edit procedures" : "Configure procedures"}
+                      </Link>
                     </Card>
                   )}
                   <Card className="mt-6 space-y-6">

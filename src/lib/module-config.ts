@@ -1,3 +1,4 @@
+import { localProcedureSequence } from "./local-procedure-sequences.ts";
 import { roleRequestSituation, roleAnswerChoices, roleList } from "./role-question-presentation.ts";
 import { roleMatchingScenario } from "./role-matching.ts";
 import {
@@ -1087,6 +1088,13 @@ export function selectedModuleScenarios(
   if (settings.trainingLevel === "learn" && selectedLocal.length >= 2) {
     const matching = roleMatchingScenario(p);
     if (matching) selectedLocal.splice(Math.min(1, selectedLocal.length - 1), 1, matching);
+    // Matching retains priority. Two special interactions require four local slots.
+    if (!matching || selectedLocal.length >= 4) {
+      const sequence = localProcedureSequence(p);
+      const index = matching ? 2 : 1;
+      if (sequence && selectedLocal[index]?.kind === "mcq")
+        selectedLocal.splice(index, 1, sequence);
+    }
   }
   // If local data is sparse, return a shorter module; do not turn it into a Core-only filler bank.
   const result: Scenario[] = [];

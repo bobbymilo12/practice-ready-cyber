@@ -7,10 +7,17 @@ export const setupSteps = [
   "Roles",
   "Team",
   "Bookings",
+  "Procedures",
   "Prescriptions",
   "Safety",
   "Review",
 ];
+/** Old numeric URLs retain their destinations after inserting Procedures. */
+export function setupSearch(s: Record<string, unknown>): { step?: number; flow?: 2; role?: string } {
+  const old = Math.max(0, Math.floor(Number(s.step) || 0));
+  const step = Number(s.flow) === 2 ? old : old >= 4 ? Math.min(old, 6) + 1 : old;
+  return { step: Math.min(setupSteps.length - 1, step), flow: 2, role: typeof s.role === "string" ? s.role : undefined };
+}
 export function setupMissing(p: PracticeData): string[][] {
   const required = (items: [string, string][]) =>
     items.filter(([, value]) => !value.trim()).map(([label]) => label);
@@ -34,6 +41,7 @@ export function setupMissing(p: PracticeData): string[][] {
             : [],
         ),
     config.booking,
+    [], // Procedures are optional; opening setup never confirms unchecked requests.
     config.prescription,
     safeguardingMissing(p),
     [],
