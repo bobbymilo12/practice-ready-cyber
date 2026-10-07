@@ -1,3 +1,4 @@
+import { validateLocalProcedures } from "../../../src/lib/local-procedures.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
   advanceSession,
@@ -174,6 +175,7 @@ Deno.serve(async (request) => {
         !next.practiceData
       )
         fail("Invalid practice data.");
+      validateLocalProcedures(next.practiceData.localProcedures);
       if (JSON.stringify(next).length > 2000000) fail("Practice data is too large.");
       const { data: people, error: peopleError } = await admin
         .from("profiles")

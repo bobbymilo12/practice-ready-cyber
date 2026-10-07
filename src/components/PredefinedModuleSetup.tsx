@@ -1,3 +1,4 @@
+import { LocalProcedures } from "./LocalProcedures";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Shell, Card } from "./Shell";
@@ -116,7 +117,7 @@ export function PredefinedModuleSetup({
               </p>
               <details className="mt-3">
                 <summary className="cursor-pointer text-primary">
-                  View saved procedures ({facts.length})
+                  View saved practice information ({facts.length})
                 </summary>
                 <dl className="mt-3 space-y-3">
                   {facts.map((f) => (
@@ -179,6 +180,11 @@ export function PredefinedModuleSetup({
                         </p>
                         <PrescriptionFields />
                       </details>
+                    </Card>
+                  )}
+                  {topic === "appointment-booking" && (
+                    <Card className="mt-6">
+                      <LocalProcedures />
                     </Card>
                   )}
                   <Card className="mt-6 space-y-6">

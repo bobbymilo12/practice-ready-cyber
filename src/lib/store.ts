@@ -147,6 +147,8 @@ export interface RolePolicies {
 }
 
 export interface PracticeData {
+  practiceRequests?: Record<string, import("./practice-requests").PracticeRequest>;
+  localProcedures?: import("./local-procedures").LocalProcedures;
   roleRequests?: Record<string, PracticeRoleRequests>;
   safeguardingRoute?: SafeguardingRoute;
   bookingConfig?: BookingConfig;
@@ -359,6 +361,8 @@ export interface AppState {
       | "sameDayReasons"
       | "bookingConfig"
       | "prescriptionConfig"
+      | "practiceRequests"
+      | "localProcedures"
       | "roleRequests"
       | "safeguardingRoute"
     >,

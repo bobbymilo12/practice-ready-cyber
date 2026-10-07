@@ -2,7 +2,7 @@ import type { PracticeData, StaffMember } from "./store";
 export type Option = { id: string; label: string };
 const options = (values: [string, string][]): Option[] =>
   values.map(([id, label]) => ({ id, label }));
-// Provisional review catalogue, not clinical guidance. Stable IDs permit future defaults layers.
+// Retained only for reading existing same-day selections. Not offered for new configuration.
 export const sameDayGroups = [
   {
     label: "Acute illness",
@@ -92,11 +92,22 @@ export interface Choice {
   id: string;
   other: string;
 }
-export type Contact =
-  | { kind: "role"; role: string }
+export type SingleContact =
+  | { kind: "role"; role: string; roleId?: string }
   | { kind: "staff"; staffId: string }
   | { kind: "other"; text: string }
   | { kind: "unconfirmed" };
+export type Contact =
+  SingleContact | { kind: "multiple"; contacts: Exclude<SingleContact, { kind: "unconfirmed" }>[] };
+export function routeContacts(
+  route: ContactRoute,
+): Exclude<SingleContact, { kind: "unconfirmed" }>[] {
+  return route.contact.kind === "multiple"
+    ? route.contact.contacts
+    : route.contact.kind === "unconfirmed"
+      ? []
+      : [route.contact];
+}
 export interface ContactRoute {
   contact: Contact;
   method: Choice;
@@ -110,7 +121,12 @@ export interface BookingConfig {
   requestMethods?: string[];
   otherRequestMethod?: string;
   // Separate domain: these selections do not classify emergency or clinical triage criteria.
-  sameDayPathway: { selected: string[]; custom: string[]; instruction: string };
+  sameDayPathway: {
+    selected: string[];
+    custom: string[];
+    instruction: string;
+    requestSelections?: { requestId: string; labelSnapshot: string }[];
+  };
   sameDayProcess: Choice;
   sameDayInstruction: string;
   sendUncertainToDutyClinician: boolean;
@@ -179,7 +195,22 @@ export function prescriptionsFor(p: PracticeData): PrescriptionConfig {
     urgentInstruction: p.repeatEmergency,
   };
 }
-export function contactText(c: Contact, staff: StaffMember[]): string {
+export function contactText(
+  c: Contact,
+  staff: StaffMember[],
+  roles?: PracticeData["roleRequests"],
+): string {
+  if (c.kind === "multiple")
+    return c.contacts
+      .map((contact) => contactText(contact, staff, roles))
+      .filter(Boolean)
+      .join("; ");
+  if (c.kind === "role" && c.roleId) {
+    const role = roles?.[c.roleId];
+    return role && !role.archived
+      ? role.label
+      : "Previously selected role is no longer available — choose a contact";
+  }
   if (c.kind === "staff") {
     const s = staff.find((s) => s.id === c.staffId);
     return s
@@ -192,7 +223,7 @@ export const choiceText = (c: Choice, list: Option[]) =>
   c.id === "other" ? c.other : (list.find((o) => o.id === c.id)?.label ?? "");
 export function routeText(r: ContactRoute, p: PracticeData): string {
   return join(
-    contactText(r.contact, p.staff),
+    contactText(r.contact, p.staff, p.roleRequests),
     choiceText(r.method, contactMethods),
     r.method.id === "phone" ? r.method.other : "",
     r.instruction,
@@ -312,10 +343,18 @@ export function practiceSummary(p: PracticeData): PracticeData {
   return result;
 }
 export function contactMissing(r: ContactRoute, p: PracticeData): boolean {
+  if (r.contact.kind === "multiple")
+    return (
+      !r.contact.contacts.length ||
+      r.contact.contacts.some((contact) => contactMissing({ ...r, contact }, p))
+    );
   if (r.contact.kind === "unconfirmed") return !r.instruction.trim();
   const c = r.contact;
   return (
-    !contactText(c, p.staff).trim() ||
+    !contactText(c, p.staff, p.roleRequests).trim() ||
+    (c.kind === "role" &&
+      !!c.roleId &&
+      (!p.roleRequests?.[c.roleId] || !!p.roleRequests[c.roleId].archived)) ||
     (c.kind === "staff" && !p.staff.some((s) => s.id === c.staffId)) ||
     !r.method.id ||
     (["other", "phone"].includes(r.method.id) && !r.method.other.trim())
@@ -331,6 +370,7 @@ export function configMissing(p: PracticeData): { booking: string[]; prescriptio
       b.requestMethods?.includes("other") && !b.otherRequestMethod?.trim()
         ? "Other appointment request method"
         : "",
+      !b.sameDayPathway.requestSelections?.length &&
       !b.sameDayPathway.selected.length &&
       !b.sameDayPathway.custom.some((s) => s.trim()) &&
       !b.sameDayPathway.instruction.trim()
@@ -410,7 +450,9 @@ export function configReview(p: PracticeData): {
   inspect(
     booking,
     "Same-day pathway criteria",
-    !!b.sameDayPathway.selected.length || b.sameDayPathway.custom.some((s) => !!s.trim()),
+    !!b.sameDayPathway.requestSelections?.length ||
+      !!b.sameDayPathway.selected.length ||
+      b.sameDayPathway.custom.some((s) => !!s.trim()),
     b.sameDayPathway.instruction,
   );
   inspect(booking, "Same-day booking process", chosen(b.sameDayProcess), b.sameDayInstruction);

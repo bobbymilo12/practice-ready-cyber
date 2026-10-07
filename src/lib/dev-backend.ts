@@ -1,3 +1,4 @@
+import { validateLocalProcedures } from "./local-procedures.ts";
 // Loaded dynamically only for a local development mock session. No network operations belong here.
 import {
   defaultPracticeData,
@@ -163,6 +164,7 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
   if (["save-practice", "invite", "remove-trainee"].includes(action)) {
     if (role !== "manager") throw new Error("Manager access required.");
     if (action === "save-practice") {
+      validateLocalProcedures((body.state as PracticeState)?.practiceData?.localProcedures);
       if (body.version !== workspace.version)
         throw new Error("Mock practice changed. Reload and try again.");
       workspace.state = body.state as PracticeState;

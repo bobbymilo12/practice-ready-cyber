@@ -1,10 +1,11 @@
+import { SameDayRequests } from "./SameDayRequests";
+import { EscalationContacts } from "./EscalationContacts";
 import { useId } from "react";
 import { Link } from "@tanstack/react-router";
 import { useApp, type PracticeData } from "@/lib/store";
 import {
   bookingFor,
   prescriptionsFor,
-  sameDayGroups,
   sameDayProcesses,
   routineProcesses,
   prescriptionMethods,
@@ -179,11 +180,13 @@ export function ContactFields({
   value,
   onChange,
   practice,
+  multiple = false,
 }: {
   label: string;
   value: ContactRoute;
   onChange: (v: ContactRoute) => void;
   practice: PracticeData;
+  multiple?: boolean;
 }) {
   const c = value.contact;
   const selected =
@@ -197,51 +200,57 @@ export function ContactFields({
   ];
   return (
     <div className="space-y-4">
-      <label className="block font-medium text-sm">
-        {label}
-        <select
-          aria-label={label}
-          className={field}
-          value={selected}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange({
-              ...value,
-              contact: v.startsWith("staff:")
-                ? { kind: "staff", staffId: v.slice(6) }
-                : v.startsWith("role:")
-                  ? { kind: "role", role: v.slice(5) }
-                  : v === "other"
-                    ? { kind: "other", text: "" }
-                    : { kind: "unconfirmed" },
-            });
-          }}
-        >
-          <option value="unconfirmed">Choose a contact</option>
-          {roles.map((role) => (
-            <option key={role} value={`role:${role}`}>
-              {role}
-            </option>
-          ))}
-          {practice.staff
-            .filter((s) => s.name.trim())
-            .map((s) => (
-              <option key={s.id} value={`staff:${s.id}`}>
-                {s.name} — {s.role}
-              </option>
-            ))}
-          {c.kind === "staff" && !practice.staff.some((s) => s.id === c.staffId) && (
-            <option value={selected}>Team member removed — choose another contact</option>
+      {multiple || c.kind === "multiple" ? (
+        <EscalationContacts label={label} value={value} practice={practice} onChange={onChange} />
+      ) : (
+        <>
+          <label className="block font-medium text-sm">
+            {label}
+            <select
+              aria-label={label}
+              className={field}
+              value={selected}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange({
+                  ...value,
+                  contact: v.startsWith("staff:")
+                    ? { kind: "staff", staffId: v.slice(6) }
+                    : v.startsWith("role:")
+                      ? { kind: "role", role: v.slice(5) }
+                      : v === "other"
+                        ? { kind: "other", text: "" }
+                        : { kind: "unconfirmed" },
+                });
+              }}
+            >
+              <option value="unconfirmed">Choose a contact</option>
+              {roles.map((role) => (
+                <option key={role} value={`role:${role}`}>
+                  {role}
+                </option>
+              ))}
+              {practice.staff
+                .filter((s) => s.name.trim())
+                .map((s) => (
+                  <option key={s.id} value={`staff:${s.id}`}>
+                    {s.name} — {s.role}
+                  </option>
+                ))}
+              {c.kind === "staff" && !practice.staff.some((s) => s.id === c.staffId) && (
+                <option value={selected}>Team member removed — choose another contact</option>
+              )}
+              <option value="other">Other</option>
+            </select>
+          </label>
+          {c.kind === "other" && (
+            <Text
+              label="Other contact"
+              value={c.text}
+              onChange={(text) => onChange({ ...value, contact: { kind: "other", text } })}
+            />
           )}
-          <option value="other">Other</option>
-        </select>
-      </label>
-      {c.kind === "other" && (
-        <Text
-          label="Other contact"
-          value={c.text}
-          onChange={(text) => onChange({ ...value, contact: { kind: "other", text } })}
-        />
+        </>
       )}
       <SelectChoice
         label="How should reception contact them?"
@@ -291,79 +300,12 @@ export function BookingFields() {
       )}
       <section className="space-y-4">
         <h2 className="font-semibold">
-          Which requests should reception consider for the same-day pathway?
+          Which requests may be eligible for a same-day appointment?
         </h2>
         <p className="text-sm text-muted-foreground">
-          Select only requests covered by your local same-day process. These selections do not
-          replace clinical triage.
+          Select the requests your practice considers for same-day appointments.
         </p>
-        <div className="grid gap-5 sm:grid-cols-2">
-          {sameDayGroups.map((g) => (
-            <details key={g.label} className="rounded-xl border border-border p-4">
-              <summary className="cursor-pointer text-sm">
-                {g.label} ·{" "}
-                {g.options.filter((o) => b.sameDayPathway.selected.includes(o.id)).length} selected
-              </summary>
-              <div className="mt-3">
-                <Multi
-                  label={g.label}
-                  options={g.options}
-                  value={b.sameDayPathway.selected}
-                  onChange={(selected) =>
-                    set({ ...b, sameDayPathway: { ...b.sameDayPathway, selected } })
-                  }
-                />
-              </div>
-            </details>
-          ))}
-        </div>
-        {b.sameDayPathway.custom.map((v, i) => (
-          <div key={i} className="flex items-end gap-2">
-            <div className="flex-1">
-              <Text
-                label={`Local criterion ${i + 1}`}
-                value={v}
-                onChange={(text) =>
-                  set({
-                    ...b,
-                    sameDayPathway: {
-                      ...b.sameDayPathway,
-                      custom: b.sameDayPathway.custom.map((s, n) => (n === i ? text : s)),
-                    },
-                  })
-                }
-              />
-            </div>
-            <button
-              type="button"
-              className="pb-3 text-sm text-destructive"
-              aria-label={`Remove local criterion ${i + 1}`}
-              onClick={() =>
-                set({
-                  ...b,
-                  sameDayPathway: {
-                    ...b.sameDayPathway,
-                    custom: b.sameDayPathway.custom.filter((_, n) => n !== i),
-                  },
-                })
-              }
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="text-sm text-primary"
-          onClick={() =>
-            set({
-              ...b,
-              sameDayPathway: { ...b.sameDayPathway, custom: [...b.sameDayPathway.custom, ""] },
-            })
-          }
-        >
-          + Add another criterion
-        </button>
+        <SameDayRequests />
         <Instruction
           label="Same-day criteria instructions (including existing guidance)"
           value={b.sameDayPathway.instruction}
@@ -390,6 +332,7 @@ export function BookingFields() {
         onChange={(sameDayInstruction) => set({ ...b, sameDayInstruction })}
       />
       <ContactFields
+        multiple
         label="Who should reception contact when they are unsure?"
         value={b.escalation}
         practice={p}

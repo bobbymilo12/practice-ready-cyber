@@ -1,3 +1,4 @@
+import { validateLocalProcedures, procedureTargets, type LocalProcedure } from "./local-procedures";
 import { devRole, leaveDevSession } from "./dev-mode";
 import { createClient } from "@supabase/supabase-js";
 import { create } from "zustand";
@@ -197,6 +198,64 @@ export async function flushPractice() {
     } finally {
       saving = null;
       useConnection.setState({ saving: false });
+    }
+  })();
+  return saving;
+}
+
+/** Persist first: failed saves never replace confirmed procedure records in the store. */
+export async function saveLocalProcedures(
+  updates: LocalProcedure[],
+  expectedVersions: Record<string, number>,
+) {
+  while (saving || dirty) await flushPractice();
+  const current = useApp.getState();
+  if (!useConnection.getState().ready || current.account?.role !== "manager")
+    throw new Error("Please log in as a manager before saving.");
+  const targets = procedureTargets(current.practiceData);
+  const records = { ...current.practiceData.localProcedures };
+  for (const record of updates) {
+    if ((records[record.requestId]?.version ?? 0) !== expectedVersions[record.requestId])
+      throw new Error("This procedure has changed. Cancel and reopen it before saving.");
+    if (
+      !targets.some(
+        (t) =>
+          t.id === record.requestId && !t.conflict && t.label === record.requestLabelAtConfirmation,
+      )
+    )
+      throw new Error("This request has changed. Review the practice roles before saving.");
+    records[record.requestId] = record;
+  }
+  validateLocalProcedures(records);
+  if (!updates.length) return;
+  const ticket = generation;
+  const state = practiceState(current);
+  state.practiceData = { ...state.practiceData, localProcedures: records };
+  saving = (async () => {
+    useConnection.setState({ saving: true, error: "" });
+    try {
+      const result = await api<{ version: number }>("save-practice", { state, version });
+      if (ticket !== generation)
+        throw new Error("Your session changed. Reopen the practice to check the saved procedure.");
+      version = result.version;
+      applying = true;
+      try {
+        useApp.setState((s) => ({ practiceData: { ...s.practiceData, localProcedures: records } }));
+      } finally {
+        applying = false;
+      }
+    } catch (error) {
+      if (ticket === generation)
+        useConnection.setState({
+          error: error instanceof Error ? error.message : "Could not save procedures.",
+        });
+      throw error;
+    } finally {
+      saving = null;
+      if (ticket === generation) {
+        useConnection.setState({ saving: false });
+        if (dirty) void flushPractice().catch(() => {});
+      }
     }
   })();
   return saving;

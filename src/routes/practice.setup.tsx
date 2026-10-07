@@ -32,6 +32,8 @@ type TextField = keyof Omit<
   | "sameDayReasons"
   | "bookingConfig"
   | "prescriptionConfig"
+  | "practiceRequests"
+  | "localProcedures"
   | "roleRequests"
   | "safeguardingRoute"
 >;
@@ -234,7 +236,7 @@ function PracticeSetup() {
                                 return `${s.name} — ${s.role}${count ? ` · ${count} individual ${count === 1 ? "exception" : "exceptions"}` : ""}`;
                               })
                               .join("\n") || "No team members added",
-                            `${bookingFor(p).sameDayPathway.selected.length} same-day request types selected`,
+                            `${bookingFor(p).sameDayPathway.selected.length + (bookingFor(p).sameDayPathway.requestSelections?.length ?? 0)} same-day request types selected`,
                             `${prescriptionsFor(p).methods.length} repeat request methods · ${prescriptionsFor(p).turnaround.id ? (prescriptionsFor(p).turnaround.id === "other" ? "Custom turnaround" : prescriptionsFor(p).turnaround.id + " working hours") : "Turnaround needs review"}`,
                             `Safeguarding leads: ${safeguardingNames(p).join("; ") || "Needs review"}`,
                           ][i]

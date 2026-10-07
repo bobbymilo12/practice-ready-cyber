@@ -1,5 +1,6 @@
+import { LocalProcedures } from "@/components/LocalProcedures";
 import { TeamFields } from "@/components/TeamFields";
-import { practiceSummary } from "@/lib/practice-config";
+import { bookingFor, practiceSummary } from "@/lib/practice-config";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
@@ -96,6 +97,8 @@ type PracticeTextKey = keyof Omit<
   | "sameDayReasons"
   | "bookingConfig"
   | "prescriptionConfig"
+  | "practiceRequests"
+  | "localProcedures"
   | "roleRequests"
   | "safeguardingRoute"
 >;
@@ -203,9 +206,23 @@ function DataHub() {
 
       <section className="mt-8 space-y-4">
         <Card>
+          <details id="local-procedures">
+            <summary className="cursor-pointer font-semibold">Local procedures</summary>
+            <div className="mt-4">
+              <LocalProcedures />
+            </div>
+          </details>
+        </Card>
+        <Card>
           <h2 className="font-semibold">Appointment pathways</h2>
           <p className="mt-3 whitespace-pre-line text-sm">
             {[
+              bookingFor(practiceData).sameDayPathway.requestSelections?.length
+                ? "Requests potentially eligible for same-day appointments: " +
+                  bookingFor(practiceData)
+                    .sameDayPathway.requestSelections!.map((r) => r.labelSnapshot)
+                    .join("; ")
+                : "",
               summary.sameDayReasons.join("\n"),
               summary.rolePolicies.gpsSameDay,
               summary.rolePolicies.gpsRoutine,
