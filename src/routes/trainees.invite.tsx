@@ -29,7 +29,6 @@ export const Route = createFileRoute("/trainees/invite")({
 function InvitePage() {
   const trainees = useApp((s) => s.trainees);
   const [busy, setBusy] = useState(false);
-  const removeTrainee = useApp((s) => s.removeTrainee);
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -77,8 +76,7 @@ function InvitePage() {
     try {
       await flushPractice();
       await api("remove-trainee", { id });
-      removeTrainee(id);
-      await flushPractice();
+      await loadWorkspace();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not remove trainee.");
     } finally {

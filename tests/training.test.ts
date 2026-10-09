@@ -532,6 +532,7 @@ test("seven steps retain legacy roles, exceptions and safeguarding contacts with
     "Roles",
     "Team",
     "Bookings",
+    "Procedures",
     "Prescriptions",
     "Safety",
     "Review",
@@ -544,7 +545,7 @@ test("seven steps retain legacy roles, exceptions and safeguarding contacts with
   const old = JSON.stringify(p);
   assert.deepEqual(safeguardingFor(p).leadIds, []);
   assert.ok(safeguardingMissing(p).some((m) => m.includes("named")));
-  assert.equal(setupMissing(p).length, 7);
+  assert.equal(setupMissing(p).length, 8);
   assert.ok(practiceRoles(p).some((r) => r.roleId === requestRoleId(p.staff[0].role)));
   assert.equal(JSON.stringify(p), old);
   p.safeguardingRoute.contact = { kind: "staff", staffId: p.staff[0].id };

@@ -18,8 +18,9 @@ const admin = createClient(url, serviceKey, {
 });
 const appUrl = Deno.env.get("APP_URL") ?? "";
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") || appUrl).split(",").map((s) => s.trim());
+class UserError extends Error {}
 function fail(message: string): never {
-  throw new Error(message);
+  throw new UserError(message);
 }
 const check = (error: { message: string } | null) => {
   if (error)
@@ -62,7 +63,8 @@ Deno.serve(async (request) => {
       .single();
     check(profileError);
     if (!profile) return reply({ error: "Your account is not linked to a practice." }, 403);
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") fail("Invalid request.");
     const action = body.action;
     const manager = profile.role === "manager";
     const { data: practice, error: practiceError } = await admin
@@ -392,9 +394,28 @@ Deno.serve(async (request) => {
         .eq("role", "trainee")
         .maybeSingle();
       if (!trainee) fail("Trainee not found.");
+      // Strip their assignments first (version-guarded): a failure here deletes nothing, and a
+      // failure after deletion cannot leave orphan assignments that block every later save.
+      const nextState = {
+        ...state,
+        assignments: assignments.filter((a) => a.traineeId !== trainee.id),
+        emojiMarks: Object.fromEntries(
+          Object.entries(state.emojiMarks ?? {}).filter(
+            ([key]) => !key.startsWith(`${trainee.id}:`),
+          ),
+        ),
+      };
+      const { data: cleaned, error: cleanError } = await admin
+        .from("practices")
+        .update({ state: nextState, version: practice.version + 1 })
+        .eq("id", practice.id)
+        .eq("version", practice.version)
+        .select("version")
+        .maybeSingle();
+      check(cleanError);
+      if (!cleaned) fail("The practice changed while removing this trainee. Reload and try again.");
       const { error } = await admin.auth.admin.deleteUser(trainee.id);
       check(error);
-      // The next manager save removes assignments; deleted users immediately lose access.
       return reply({ ok: true });
     }
 
@@ -468,7 +489,7 @@ Deno.serve(async (request) => {
   } catch (error) {
     // Credentials and provider payloads must never be logged.
     return reply(
-      { error: error instanceof Error ? error.message : "The request failed. Please try again." },
+      { error: error instanceof UserError ? error.message : "The request failed. Please try again." },
       400,
     );
   }

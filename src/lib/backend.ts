@@ -50,6 +50,7 @@ let dirty = false;
 let saving: Promise<void> | null = null;
 let generation = 0;
 let started = false;
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
 const practiceState = (s: AppState): PracticeState => ({
   modules: s.modules,
   packages: s.packages,
@@ -92,7 +93,7 @@ export async function api<T>(action: string, body: Record<string, unknown> = {})
     body: JSON.stringify({ ...body, action }),
     signal: AbortSignal.timeout(25000),
   });
-  const payload = await response.json();
+  const payload = await response.json().catch(() => ({ error: "The service is unavailable. Please try again." }));
   if (!response.ok || payload.error)
     throw new Error(payload.error || "Could not save. Please try again.");
   return payload;
@@ -278,7 +279,8 @@ export function initializeBackend() {
       state.emojiMarks !== previous.emojiMarks
     ) {
       dirty = true;
-      void flushPractice().catch(() => {});
+      clearTimeout(flushTimer);
+      flushTimer = setTimeout(() => void flushPractice().catch(() => {}), 800);
     }
   });
   if (import.meta.env.DEV && devRole()) {
