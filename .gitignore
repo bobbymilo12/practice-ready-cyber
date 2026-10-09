@@ -38,3 +38,7 @@ dist-ssr
 playwright-report/
 test-results/
 supabase/.temp/
+
+# Claude Code local settings and graphify cache
+.claude/
+graphify-out/cache/

@@ -3,7 +3,7 @@
 Scenario-based onboarding for GP reception and admin teams. Managers turn local processes into short
 interactive training modules; trainees practise them and managers review results.
 
-Built with [Lovable](https://lovable.dev) (TanStack Start + Supabase + Resend).
+Built with TanStack Start, Supabase and Resend.
 
 ```sh
 npm i
