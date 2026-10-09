@@ -1,4 +1,5 @@
 import { validateLocalProcedures, procedureTargets, type LocalProcedure } from "./local-procedures";
+import { setRoleTemplates, type RoleTemplate } from "./role-templates";
 import { devRole, leaveDevSession } from "./dev-mode";
 import { createClient } from "@supabase/supabase-js";
 import { create } from "zustand";
@@ -30,6 +31,7 @@ export type Snapshot = {
   version: number;
   trainees: Trainee[];
   sessions: TrainingSession[];
+  roleTemplates?: RoleTemplate[];
 };
 export const useConnection = create<{
   ready: boolean;
@@ -138,6 +140,7 @@ async function fetchWorkspace() {
     const snapshot = await api<Snapshot>("load");
     if (ticket !== generation) return;
     applying = true;
+    if (snapshot.roleTemplates) setRoleTemplates(snapshot.roleTemplates);
     version = snapshot.version;
     const marks = snapshot.state.emojiMarks ?? {};
     const results = snapshot.sessions

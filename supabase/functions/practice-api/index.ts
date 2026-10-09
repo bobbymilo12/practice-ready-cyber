@@ -74,6 +74,25 @@ Deno.serve(async (request) => {
       .single();
     check(practiceError);
     const state = practice.state;
+    // Practice setup lives in tables (see 202610090001_practice_tables.sql), not in state.
+    const loadPracticeData = async () => {
+      const { data, error } = await admin.rpc("load_practice_data", {
+        p_practice: profile.practice_id,
+      });
+      check(error);
+      return data ?? undefined;
+    };
+    const loadRoleTemplates = async () => {
+      const { data, error } = await admin.from("role_templates").select("*").order("position");
+      check(error);
+      return (data ?? []).map((t) => ({
+        id: t.id,
+        version: t.version,
+        label: t.label,
+        aliases: t.aliases,
+        suggestions: { status: t.suggestions_status, selectedRequestIds: t.selected_request_ids },
+      }));
+    };
     const modules: Module[] = state.modules ?? [];
     const assignments: Assignment[] = state.assignments ?? [];
     const account = {
@@ -137,10 +156,13 @@ Deno.serve(async (request) => {
       return reply({
         account,
         version: practice.version,
+        roleTemplates: manager ? await loadRoleTemplates() : undefined,
         state: manager
-          ? state
+          ? { ...state, practiceData: await loadPracticeData() }
           : {
-              practiceData: { practiceName: state.practiceData?.practiceName ?? "Your practice" },
+              practiceData: {
+                practiceName: (await loadPracticeData())?.practiceName || "Your practice",
+              },
               modules: modules.filter((m) => m.published && mine.some((a) => a.moduleId === m.id)),
               packages: (state.packages ?? []).filter((p: { moduleIds?: string[] }) =>
                 (p.moduleIds ?? []).some((moduleId) => mine.some((a) => a.moduleId === moduleId)),
@@ -207,28 +229,26 @@ Deno.serve(async (request) => {
         modules: next.modules,
         packages: Array.isArray(next.packages) ? next.packages : [],
         assignments: next.assignments,
-        practiceData: next.practiceData,
         setupComplete: Boolean(next.setupComplete),
         emojiMarks: next.emojiMarks ?? {},
         answers: next.answers ?? {},
         currentDraftId: next.currentDraftId ?? null,
       };
-      const { data, error } = await admin
-        .from("practices")
-        .update({ state: clean, version: practice.version + 1 })
-        .eq("id", practice.id)
-        .eq("version", body.version)
-        .select("version")
-        .maybeSingle();
+      const { data, error } = await admin.rpc("save_practice_data", {
+        p_practice: practice.id,
+        p_version: body.version,
+        p_state: clean,
+        p_data: next.practiceData,
+      });
       check(error);
-      if (!data)
+      if (data === null)
         return reply(
           {
             error: "The practice was edited on another device. Reload before making more changes.",
           },
           409,
         );
-      return reply(data);
+      return reply({ version: data });
     }
 
     if (action === "invite") {
@@ -346,7 +366,7 @@ Deno.serve(async (request) => {
       const loginUrl = new URL("/auth", appUrl);
       loginUrl.searchParams.set("practice", practice.id);
       loginUrl.searchParams.set("email", email);
-      const practiceName = String(state.practiceData?.practiceName || "your GP practice");
+      const practiceName = String((await loadPracticeData())?.practiceName || "your GP practice");
       let sent = false;
       let deliveryMessage = "The invitation email could not be sent.";
       try {

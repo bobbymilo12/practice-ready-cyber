@@ -204,6 +204,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
     "./store": store,
     "./dev-mode": { devRole: () => "manager" },
     "./local-procedures": procedures,
+    "./role-templates": { setRoleTemplates() {} },
     "./dev-backend": dev,
   });
   backend.initializeBackend();

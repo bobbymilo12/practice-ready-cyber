@@ -19,6 +19,9 @@ function query(table) {
     select() {
       return q;
     },
+    order() {
+      return q;
+    },
     eq(key, val) {
       filters.push([key, val]);
       return q;
@@ -64,6 +67,16 @@ function query(table) {
 }
 const mockClient = {
   from: query,
+  // Mirrors the SQL functions in 202610090001_practice_tables.sql.
+  rpc: async (name, args) => {
+    const practice = tables.practices.find((p) => p.id === args.p_practice);
+    if (name === "load_practice_data") return { data: tables.practice_data[args.p_practice] ?? null, error: null };
+    if (practice.version !== args.p_version) return { data: null, error: null };
+    Object.assign(practice, { state: args.p_state, version: practice.version + 1 });
+    tables.practice_data[args.p_practice] = args.p_data;
+    writes.push({ table: "practice_data", operation: "rpc", value: args.p_data, filters: [] });
+    return { data: practice.version, error: null };
+  },
   auth: {
     getUser: async () => ({ data: { user }, error: user ? null : new Error("invalid") }),
     signInWithPassword: async ({ password }) => ({
@@ -135,7 +148,6 @@ function reset(role = "trainee", mustReset = false) {
       id: "oak",
       version: 1,
       state: {
-        practiceData: { practiceName: "Oak", privateManagerField: "internal" },
         modules: [
           {
             id: "m1",
@@ -162,6 +174,8 @@ function reset(role = "trainee", mustReset = false) {
       },
     },
   ];
+  tables.practice_data = { oak: { practiceName: "Oak", privateManagerField: "internal" } };
+  tables.role_templates = [];
   tables.training_sessions = [
     {
       id: "b-session",
@@ -257,7 +271,7 @@ test("API calculates scores itself and retrying finish does not create a second 
 test("stale manager saves are rejected without overwriting the practice", async () => {
   reset("manager");
   tables.practices[0].state.assignments = [];
-  const state = structuredClone(tables.practices[0].state);
+  const state = ({ ...structuredClone(tables.practices[0].state), practiceData: tables.practice_data.oak });
   state.modules = [];
   const r = await call({ action: "save-practice", version: 0, state });
   assert.equal(r.status, 409);
@@ -279,7 +293,7 @@ test("failed invitation email reports failure and preserves an account for resen
 
 test("packages and module settings survive manager save and filtered trainee load", async () => {
   reset("manager");
-  const state = structuredClone(tables.practices[0].state);
+  const state = ({ ...structuredClone(tables.practices[0].state), practiceData: tables.practice_data.oak });
   state.modules = [state.modules[0]];
   state.assignments = [
     { id: "bob-configured", moduleId: "m1", traineeId: "bob", packageId: "induction" },
