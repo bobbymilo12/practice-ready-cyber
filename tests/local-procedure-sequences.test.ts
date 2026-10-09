@@ -254,6 +254,6 @@ test("manager review shows source/version/context, suppresses empty quotes and d
     new URL("../src/components/LocalProcedures.tsx", import.meta.url),
     "utf8",
   );
-  assert.ok(editor.includes('<option value="unassessed">Not assessed</option>'));
+  assert.ok(editor.includes('<option value="unassessed">Not sure / not specified</option>'));
   assert.ok(editor.includes('<option value="required_linear">'));
 });

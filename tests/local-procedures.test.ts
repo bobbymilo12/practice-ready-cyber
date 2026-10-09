@@ -259,7 +259,7 @@ test("module setup and Data Hub reuse one central editor; rendering later setup 
   assert.ok(html.includes("Not reviewed"));
   assert.equal(saves, 0);
   for (const path of [
-    "../src/components/PredefinedModuleSetup.tsx",
+    "../src/routes/practice.setup.tsx",
     "../src/routes/data-hub.tsx",
   ]) {
     const source = readFileSync(new URL(path, import.meta.url), "utf8");

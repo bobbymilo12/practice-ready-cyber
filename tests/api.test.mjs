@@ -100,6 +100,7 @@ const source = await readFile(
   new URL("../supabase/functions/practice-api/index.ts", import.meta.url),
   "utf8",
 );
+const proceduresUrl = new URL("../src/lib/local-procedures.ts", import.meta.url).href;
 const trainingUrl = new URL("../src/lib/training.ts", import.meta.url).href;
 const sdk =
   "data:text/javascript," +
@@ -109,6 +110,7 @@ const js = ts
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   })
   .outputText.replace('"npm:@supabase/supabase-js@2.57.4"', JSON.stringify(sdk))
+  .replace('"../../../src/lib/local-procedures.ts"', JSON.stringify(proceduresUrl))
   .replace('"../../../src/lib/training.ts"', JSON.stringify(trainingUrl));
 await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
 
@@ -334,4 +336,16 @@ test("invitation assigns only ready induction modules and resend does not duplic
   const assigned = tables.practices[0].state.assignments.filter((a) => a.packageId === "induction");
   assert.equal(assigned.length, 1);
   assert.equal(assigned[0].moduleId, "m1");
+});
+test("removing a trainee also removes their assignments and marks in the same versioned save", async () => {
+  reset("manager");
+  const r = await call({ action: "remove-trainee", id: "bob" });
+  assert.equal(r.status, 200);
+  const state = tables.practices[0].state;
+  assert.deepEqual(
+    state.assignments.map((a) => a.id),
+    ["a1"],
+  );
+  assert.deepEqual(Object.keys(state.emojiMarks), ["alice:m1:1"]);
+  assert.equal(tables.practices[0].version, 2);
 });
