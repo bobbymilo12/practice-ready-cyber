@@ -1,3 +1,4 @@
+import { captureProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Shell, Card } from "./Shell";
@@ -84,6 +85,14 @@ export function PredefinedModuleSetup({
             undefined,
             settings,
           );
+        if (topic === "appointment-booking")
+          captureProcedureDiagnostics(
+            nextId,
+            practiceData,
+            settings.trainingLevel,
+            settings.count,
+            scenarios,
+          );
         setSavedId(nextId);
       }
       await flushPractice();
@@ -107,67 +116,82 @@ export function PredefinedModuleSetup({
           <p role="alert">Module not found.</p>
         ) : (
           <>
-            <Card className="mt-6">
-              <h2 className="font-semibold">Using information from {practiceData.practiceName}</h2>
-              <p className="mt-2 text-sm">
-                Confirmed roles, request types and individual exceptions are read directly from
-                Practice Setup where relevant. Changes to shared information belong in Practice
-                Setup.
-              </p>
-              <details className="mt-3">
-                <summary className="cursor-pointer text-primary">
-                  View saved practice information ({facts.length})
-                </summary>
-                <dl className="mt-3 space-y-3">
-                  {facts.map((f) => (
-                    <div key={f.label}>
-                      <dt className="font-medium text-sm">{f.label}</dt>
-                      <dd className="whitespace-pre-line text-sm text-muted-foreground">
-                        {f.rule}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
-              {savedResponsibilities.length > 0 && (
+            {topic === "appointment-booking" ? (
+              <Card className="mt-6">
+                <h2 className="font-semibold">Built from your practice setup</h2>
+                <p className="mt-2 text-sm">
+                  PracticeReady uses your saved booking rules, staff responsibilities, individual
+                  exceptions and local procedures to create training that reflects how your practice
+                  works.
+                </p>
+                <Link to="/data-hub" className="mt-3 inline-block text-sm text-primary underline">
+                  Review practice setup
+                </Link>
+              </Card>
+            ) : (
+              <Card className="mt-6">
+                <h2 className="font-semibold">
+                  Using information from {practiceData.practiceName}
+                </h2>
+                <p className="mt-2 text-sm">
+                  Confirmed roles, request types and individual exceptions are read directly from
+                  Practice Setup where relevant. Changes to shared information belong in Practice
+                  Setup.
+                </p>
                 <details className="mt-3">
                   <summary className="cursor-pointer text-primary">
-                    View relevant responsibilities and individual exceptions
+                    View saved practice information ({facts.length})
                   </summary>
                   <dl className="mt-3 space-y-3">
-                    {savedResponsibilities.map((s) => (
-                      <div key={s.title}>
-                        <dt className="text-sm font-medium">{s.title}</dt>
-                        <dd className="text-sm text-muted-foreground">
-                          {s.kind === "mcq" ? s.options[s.correctIndex] : ""}
+                    {facts.map((f) => (
+                      <div key={f.label}>
+                        <dt className="font-medium text-sm">{f.label}</dt>
+                        <dd className="whitespace-pre-line text-sm text-muted-foreground">
+                          {f.rule}
                         </dd>
                       </div>
                     ))}
                   </dl>
                 </details>
-              )}
-              <Link to="/data-hub" className="mt-3 inline-block text-sm text-primary underline">
-                Edit practice information
-              </Link>
-            </Card>
+                {savedResponsibilities.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-primary">
+                      View relevant responsibilities and individual exceptions
+                    </summary>
+                    <dl className="mt-3 space-y-3">
+                      {savedResponsibilities.map((s) => (
+                        <div key={s.title}>
+                          <dt className="text-sm font-medium">{s.title}</dt>
+                          <dd className="text-sm text-muted-foreground">
+                            {s.kind === "mcq" ? s.options[s.correctIndex] : ""}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                )}
+                <Link to="/data-hub" className="mt-3 inline-block text-sm text-primary underline">
+                  Edit practice information
+                </Link>
+              </Card>
+            )}
             <fieldset disabled={saving || !!savedId}>
               {phase === "questions" ? (
                 <>
-                  {["appointment-booking", "urgent"].includes(topic) &&
-                    missing.booking.length > 0 && (
-                      <Card className="mt-6">
-                        <details>
-                          <summary className="cursor-pointer text-primary">
-                            Complete missing booking information in Practice Setup
-                          </summary>
-                          <p className="my-3 text-sm">
-                            These changes update the shared practice information. Unconfirmed
-                            procedures are excluded from training.
-                          </p>
-                          <BookingFields />
-                        </details>
-                      </Card>
-                    )}
+                  {topic === "urgent" && missing.booking.length > 0 && (
+                    <Card className="mt-6">
+                      <details>
+                        <summary className="cursor-pointer text-primary">
+                          Complete missing booking information in Practice Setup
+                        </summary>
+                        <p className="my-3 text-sm">
+                          These changes update the shared practice information. Unconfirmed
+                          procedures are excluded from training.
+                        </p>
+                        <BookingFields />
+                      </details>
+                    </Card>
+                  )}
                   {topic === "prescriptions" && missing.prescription.length > 0 && (
                     <Card className="mt-6">
                       <details>
@@ -179,19 +203,6 @@ export function PredefinedModuleSetup({
                         </p>
                         <PrescriptionFields />
                       </details>
-                    </Card>
-                  )}
-                  {topic === "appointment-booking" && (
-                    <Card className="mt-6">
-                      <h2 className="font-display text-xl font-semibold">Local procedures</h2>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {Object.values(practiceData.localProcedures ?? {}).some((r) => r.status === "configured")
-                          ? `${Object.values(practiceData.localProcedures ?? {}).filter((r) => r.status === "configured").length} procedures configured for Appointment Booking`
-                          : "No local procedures configured"}
-                      </p>
-                      <Link to="/practice/setup" search={{ step: 4, flow: 2 }} className="mt-3 inline-block text-sm text-primary underline">
-                        {Object.values(practiceData.localProcedures ?? {}).some((r) => r.status === "configured") ? "View / edit procedures" : "Configure procedures"}
-                      </Link>
                     </Card>
                   )}
                   <Card className="mt-6 space-y-6">

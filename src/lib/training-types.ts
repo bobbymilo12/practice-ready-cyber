@@ -23,7 +23,7 @@ export type ScenarioStatus = "draft" | "approved";
 export interface MCQScenario {
   // Structured classification; trainee-facing titles are not internal identifiers.
   localRoleRequestId?: string;
-  provenance?: CoreScenarioProvenance;
+  provenance?: CoreScenarioProvenance | import("./sequence").SequenceProvenance;
   // Optional generation metadata; old saved scenarios remain valid.
   followUpSituation?: string;
   kind: "mcq";

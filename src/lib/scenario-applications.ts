@@ -198,7 +198,7 @@ function conditionFrame(condition: string): ConditionFrame | undefined {
     };
   if (/^(?:when |if )?unsure$/.test(key))
     return {
-      title: "An unclear appointment request",
+      title: "Unsure how to help",
       situation: "You cannot work out which route fits a patient's request.",
       alternatives: [
         "Use the route for the closest matching appointment type.",

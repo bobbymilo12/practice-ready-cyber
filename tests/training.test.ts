@@ -525,7 +525,7 @@ import {
 } from "../src/lib/practice-config.ts";
 import { setupSteps, setupMissing } from "../src/lib/practice-setup.ts";
 import { practiceRoles } from "../src/lib/role-requests.ts";
-test("seven steps retain legacy roles, exceptions and safeguarding contacts without guessing names", () => {
+test("eight steps retain legacy roles, exceptions and safeguarding contacts without guessing names", () => {
   const p = blankPractice();
   assert.deepEqual(setupSteps, [
     "Practice",

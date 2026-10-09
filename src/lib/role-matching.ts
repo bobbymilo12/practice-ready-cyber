@@ -1,3 +1,4 @@
+import { broadRequestLabel } from "./role-question-presentation.ts";
 import type { PracticeData } from "./store";
 import type { MatchingScenario } from "./training-types";
 import { requestCategories, selectedRequests } from "./role-requests.ts";
@@ -90,6 +91,7 @@ export function inspectRoleMatching(p: PracticeData): {
   const candidates = requestCategories
     .flatMap((c) => c.requests)
     .filter((request) => {
+      if (broadRequestLabel(request.label)) return false;
       const label = request.label.trim().toLowerCase();
       return !roles.some((r) =>
         r.categories

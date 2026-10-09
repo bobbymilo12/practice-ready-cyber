@@ -117,12 +117,8 @@ export function configuredBookingActions(p: PracticeData, settings: ModuleSettin
 }
 
 const genericMistakes = [
-  "Use the outcome of the previous request to decide what to do with this one.",
-  "Choose the next step from the patient’s appointment preference alone.",
-  "Continue with the booking before checking the requirement that applies to this request.",
-  "Treat the request being submitted as confirmation that the next step is agreed.",
-  "Use only the first part of the request when deciding the next step.",
-  "Complete the booking first and check the relevant procedure afterwards.",
+  "Ask which appointment the patient would prefer before clarifying the request.",
+  "Handle this in the same way as the patient’s previous request.",
 ];
 
 /** Stable source key drives diversity, not random IDs or mutable answer order. */
@@ -145,7 +141,7 @@ export function localAnswerOptions(
         .map((v) => [bookingActionKey(v), v]),
     ).values(),
   ];
-  const routes = rotate(unique(configured), hash).slice(0, level === "apply" ? 2 : 1);
+  const routes = rotate(unique(configured), hash).slice(0, level === "apply" ? 3 : 2);
   const mistakes = rotate(
     unique([...generic, ...genericMistakes]).filter(
       (v) => !routes.some((r) => bookingActionKey(r) === bookingActionKey(v)),
@@ -186,7 +182,7 @@ export function neutralLearnSituation(condition: string): string {
   if (key === "urinary symptoms / suspected uti")
     return "A patient contacts the practice about urinary symptoms (suspected UTI).";
   if (/^(?:when |if )?unsure$/.test(key))
-    return "Reception is unsure which procedure applies to a request.";
+    return "A patient asks for help, but you are unsure how to arrange it.";
   return `The practice is contacted about ${label}.`;
 }
 

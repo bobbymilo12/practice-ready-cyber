@@ -179,12 +179,11 @@ test("sequence can use a two-slot local budget without matching; does not fill a
     before.length,
   );
 });
-test("Apply, implicit legacy levels, other modules and ineligible Learn remain unchanged", () => {
+test("Implicit legacy levels, other modules and ineligible Learn remain unchanged", () => {
   const { p, record } = fixture();
   const normalise = (v: unknown) =>
     JSON.stringify(v, (key, value) => (["id", "generatedAt"].includes(key) ? undefined : value));
   for (const [topic, level] of [
-    ["appointment-booking", "apply"],
     ["appointment-booking", undefined],
     ["prescriptions", "learn"],
   ] as const) {
@@ -249,7 +248,7 @@ test("manager review shows source/version/context, suppresses empty quotes and d
   const source = readFileSync(new URL("../src/routes/modules.review.tsx", import.meta.url), "utf8");
   assert.ok(source.includes("Manager-confirmed practice procedure"));
   assert.ok(source.includes("scenario.provenance.snapshot.localProcedure.appliesWhen"));
-  assert.ok(source.includes('disabled={scenario.kind === "order" && !!scenario.sequence}'));
+  assert.ok(source.includes('disabled={scenario.provenance?.kind === "sequence"}'));
   const editor = readFileSync(
     new URL("../src/components/LocalProcedures.tsx", import.meta.url),
     "utf8",

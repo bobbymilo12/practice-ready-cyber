@@ -1,3 +1,4 @@
+import { normaliseRoleRequestCategories } from "./role-requests";
 import { validateLocalProcedures, procedureTargets, type LocalProcedure } from "./local-procedures";
 import { setRoleTemplates, type RoleTemplate } from "./role-templates";
 import { devRole, leaveDevSession } from "./dev-mode";
@@ -158,7 +159,20 @@ async function fetchWorkspace() {
     useApp.setState({
       ...snapshot.state,
       packages: snapshot.state.packages ?? [],
-      practiceData: { ...emptyPractice(), ...snapshot.state.practiceData },
+      practiceData: {
+        ...emptyPractice(),
+        ...snapshot.state.practiceData,
+        ...(snapshot.state.practiceData?.roleRequests
+          ? {
+              roleRequests: Object.fromEntries(
+                Object.entries(snapshot.state.practiceData.roleRequests).map(([id, role]) => [
+                  id,
+                  normaliseRoleRequestCategories(role),
+                ]),
+              ),
+            }
+          : {}),
+      },
       account: snapshot.account,
       trainees: snapshot.trainees,
       results,

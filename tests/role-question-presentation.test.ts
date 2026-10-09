@@ -22,8 +22,8 @@ test("neutral request phrasing singularises familiar labels without extra facts"
     roleRequestSituation("Custom procedure X"),
     "A patient contacts the practice about Custom procedure X.",
   );
-  assert.equal(roleList(["Doctor", "Practice Nurse"]), "Doctor and Practice Nurse");
-  assert.equal(roleList(["A", "B", "C"]), "A, B and C");
+  assert.equal(roleList(["Doctor", "Practice Nurse"]), "Doctor or Practice Nurse");
+  assert.equal(roleList(["A", "B", "C"]), "A, B or C");
 });
 
 test("role choices exclude every valid role and unconfirmed, archived or identity-conflicting alternatives", () => {
@@ -34,7 +34,7 @@ test("role choices exclude every valid role and unconfirmed, archived or identit
   roles[5].categories[0].requests.push({ id: "custom:uti", label: "UTIs", custom: true });
   roles[5].selectedRequestIds.push("custom:uti");
   const options = roleAnswerChoices(p, "utis", "UTIs", roles.slice(0, 2));
-  assert.deepEqual(options, ["Test role 1 and Test role 2", "Test role 3"]);
+  assert.deepEqual(options, ["Test role 1 or Test role 2", "Test role 3"]);
   assert.ok(!options.slice(1).includes("Test role 1"));
   assert.ok(!options.slice(1).includes("Test role 2"));
 });
@@ -42,8 +42,8 @@ test("role choices exclude every valid role and unconfirmed, archived or identit
 test("all roles valid uses a conservative binary fallback, never fabricated roles", () => {
   const p = practice([[1], [1]]);
   assert.deepEqual(roleAnswerChoices(p, "utis", "UTIs", Object.values(p.roleRequests!)), [
-    "Test role 1 and Test role 2",
-    "No role is configured to handle this request.",
+    "Test role 1 or Test role 2",
+    "None of these practice roles handles this request.",
   ]);
 });
 
@@ -56,12 +56,10 @@ test("new Learn role questions use request wording, role choices and structured 
   if (uti.kind !== "mcq") return;
   assert.equal(uti.title, "A patient contacts the practice about a UTI");
   assert.equal(uti.patientQuote, "A patient contacts the practice about a UTI.");
-  assert.equal(uti.question, "Which role(s) at this practice can handle this request?");
-  assert.equal(uti.options[uti.correctIndex], "Test role 1 and Test role 2");
+  assert.equal(uti.question, "Who at your practice can help with this?");
+  assert.equal(uti.options[uti.correctIndex], "Test role 1 or Test role 2");
   assert.deepEqual(uti.options.slice(1), ["Test role 3", "Test role 4"]);
-  assert.ok(
-    uti.learningPoint.includes("Test role 1 and Test role 2 can handle requests about UTIs"),
-  );
+  assert.ok(uti.learningPoint.includes("Test role 1 or Test role 2 can handle this request"));
   assert.ok(!JSON.stringify(uti).includes("Routing:"));
   const apply = configuredScenarios("appointment-booking", "Booking", p, {
     ...settings,
@@ -70,6 +68,6 @@ test("new Learn role questions use request wording, role choices and structured 
   const same = apply.find((s) => s.kind === "mcq" && s.localRoleRequestId === "utis")!;
   if (same.kind !== "mcq") return;
   assert.notEqual(same.patientQuote, uti.patientQuote);
-  assert.ok(same.patientQuote.includes("first free appointment"));
+  assert.ok(same.patientQuote.includes("only one type of clinician"));
   assert.ok(!same.title.includes("Routing:"));
 });

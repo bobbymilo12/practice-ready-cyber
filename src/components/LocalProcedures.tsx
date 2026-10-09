@@ -54,20 +54,28 @@ function ProcedureEditor({
     }
   }
   return (
-    <fieldset disabled={busy} className="mt-4 space-y-4">
+    <fieldset disabled={busy} className="mt-2 space-y-2">
       <legend className="text-sm font-medium">
         Add the steps reception staff should follow, in order.
       </legend>
-      <ol className="space-y-2">
+      <ol className="space-y-1.5">
         {draft.stepOrder.map((id, index) => (
           <li key={id} className="flex items-start gap-2">
-            <span aria-hidden="true" className="pt-2 text-sm text-muted-foreground">{index + 1}</span>
+            <span aria-hidden="true" className="pt-2 text-sm text-muted-foreground">
+              {index + 1}
+            </span>
             <label className="min-w-0 flex-1 text-sm">
               <span className="sr-only">Step {index + 1}</span>
               <textarea
                 className="block w-full resize-y rounded-lg border border-input bg-background px-2 py-2 text-sm"
                 rows={1}
-                placeholder={index === 0 ? `e.g. What should reception do first for this request: ${target.label}?` : index === 1 ? "e.g. What happens next?" : "e.g. What should reception do after that?"}
+                placeholder={
+                  index === 0
+                    ? `e.g. What should reception do first for this request: ${target.label}?`
+                    : index === 1
+                      ? "e.g. What happens next?"
+                      : "e.g. What should reception do after that?"
+                }
                 value={draft.steps.find((s) => s.id === id)!.text}
                 onChange={(e) =>
                   setDraft((d) => ({
@@ -82,7 +90,8 @@ function ProcedureEditor({
                 type="button"
                 className="rounded-lg border border-border px-2 py-2 text-sm disabled:opacity-40"
                 disabled={index === 0}
-                aria-label={`Move step ${index + 1} up`} title="Move step up"
+                aria-label={`Move step ${index + 1} up`}
+                title="Move step up"
                 onClick={() => setDraft((d) => moveProcedureStep(d, id, -1))}
               >
                 ↑
@@ -91,7 +100,8 @@ function ProcedureEditor({
                 type="button"
                 className="rounded-lg border border-border px-2 py-2 text-sm disabled:opacity-40"
                 disabled={index === draft.stepOrder.length - 1}
-                aria-label={`Move step ${index + 1} down`} title="Move step down"
+                aria-label={`Move step ${index + 1} down`}
+                title="Move step down"
                 onClick={() => setDraft((d) => moveProcedureStep(d, id, 1))}
               >
                 ↓
@@ -99,7 +109,8 @@ function ProcedureEditor({
               <button
                 type="button"
                 className="rounded-lg border border-border px-2 py-2 text-sm disabled:opacity-40"
-                aria-label={`Remove step ${index + 1}`} title="Remove step"
+                aria-label={`Remove step ${index + 1}`}
+                title="Remove step"
                 onClick={() => setDraft((d) => removeProcedureStep(d, id))}
               >
                 ×
@@ -110,7 +121,7 @@ function ProcedureEditor({
       </ol>
       <button
         type="button"
-        className={secondary}
+        className="rounded-lg border border-border px-3 py-1.5 text-sm"
         onClick={() => setDraft((d) => addProcedureStep(d))}
       >
         + Add step
@@ -139,9 +150,7 @@ function ProcedureEditor({
           >
             <option value="unassessed">Not sure / not specified</option>
             <option value="required_linear">Yes — follow in this order</option>
-            <option value="conditional_or_flexible">
-              No — it can depend on the situation
-            </option>
+            <option value="conditional_or_flexible">No — it can depend on the situation</option>
           </select>
         </label>
       </details>
@@ -225,14 +234,16 @@ export function LocalProcedures() {
         Which of these have a specific procedure reception staff should follow?
       </p>
       <p className="text-sm text-muted-foreground">
-        Add any practice-specific steps reception staff should follow for these requests. These are saved for your practice and can be reused in training. You do not need a procedure for every request.
+        Add any practice-specific steps reception staff should follow for these requests. These are
+        saved for your practice and can be reused in training. You do not need a procedure for every
+        request.
       </p>
       {!targets.length && (
         <p className="text-sm">
           Confirm the requests your practice roles handle in Practice Setup to add local procedures.
         </p>
       )}
-      <fieldset disabled={busy} className="space-y-3">
+      <fieldset disabled={busy} className="space-y-1">
         {!!targets.length && (
           <label className="block text-sm">
             Find a request
@@ -251,12 +262,12 @@ export function LocalProcedures() {
             <div
               key={target.id}
               hidden={!visible.some((t) => t.id === target.id)}
-              className="rounded-xl border border-border p-3"
+              className="border-b border-border px-2 py-2"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
                   {!record && !target.conflict ? (
-                    <label className="flex items-center gap-2 font-medium">
+                    <label className="flex min-h-10 sm:min-h-8 cursor-pointer items-center gap-2 font-medium">
                       <input
                         type="checkbox"
                         checked={isOpen}
@@ -271,8 +282,8 @@ export function LocalProcedures() {
                   ) : (
                     <p className="font-medium">{target.label}</p>
                   )}
-                  <p className="mt-1 text-xs text-muted-foreground">{target.roles.join(", ")}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">{target.roles.join(", ")}</p>
+                  <p className="text-xs text-muted-foreground">
                     {target.conflict
                       ? "Request labels conflict across roles. Review in Practice Setup."
                       : record?.status === "configured"

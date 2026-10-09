@@ -208,7 +208,10 @@ function DataHub() {
         <Card>
           <details id="local-procedures">
             <summary className="cursor-pointer font-semibold">Local procedures</summary>
-            <p className="mt-3 text-sm text-muted-foreground">Manage the practice-specific steps reception staff follow for common requests. These can be reused in training.</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Manage the practice-specific steps reception staff follow for common requests. These
+              can be reused in training.
+            </p>
             <div className="mt-4">
               <LocalProcedures />
             </div>

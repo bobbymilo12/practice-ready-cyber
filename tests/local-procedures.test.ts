@@ -1,3 +1,4 @@
+import { normaliseRoleRequestCategories } from "../src/lib/role-requests.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -201,6 +202,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
     "./training": {},
   });
   const backend = compile("../src/lib/backend.ts", {
+    "./role-requests": { normaliseRoleRequestCategories },
     "./store": store,
     "./dev-mode": { devRole: () => "manager" },
     "./local-procedures": procedures,
@@ -237,7 +239,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
   assert.deepEqual(useApp.getState().practiceData.localProcedures[target.id], revised);
   assert.deepEqual(JSON.parse(stored).sessions, data.sessions);
 });
-test("module setup and Data Hub reuse one central editor; rendering later setup restores compact records without writes", () => {
+test("Practice Setup and Data Hub reuse one central editor; reopening restores compact records without writes", () => {
   const data = {
     practiceData: { ...p, localProcedures: { [target.id]: saved() } },
     account: { id: "manager" },
@@ -259,10 +261,7 @@ test("module setup and Data Hub reuse one central editor; rendering later setup 
   assert.ok(html.includes("View/Edit"));
   assert.ok(html.includes("Not reviewed"));
   assert.equal(saves, 0);
-  for (const path of [
-    "../src/routes/practice.setup.tsx",
-    "../src/routes/data-hub.tsx",
-  ]) {
+  for (const path of ["../src/routes/practice.setup.tsx", "../src/routes/data-hub.tsx"]) {
     const source = readFileSync(new URL(path, import.meta.url), "utf8");
     assert.ok(source.includes("<LocalProcedures />"));
   }
@@ -335,6 +334,33 @@ test("editor selection/cancellation is draft-only and save feedback waits for pe
   let editor = tree.find((n) => typeof n.type === "function");
   let child: Bag = [];
   let form = render(editor.type, editor.props, child);
+  assert.equal(form.find((n) => n.type === "textarea").props.rows, 1);
+  assert.ok(form.find((n) => n.type === "textarea").props.placeholder.includes(target.label));
+  assert.equal(form.find((n) => n.type === "textarea").props.value, "");
+  button(form, "+ Add step").props.onClick();
+  form = render(editor.type, editor.props, child);
+  button(form, "+ Add step").props.onClick();
+  form = render(editor.type, editor.props, child);
+  assert.deepEqual(
+    form
+      .filter((n) => n.type === "textarea")
+      .slice(0, 3)
+      .map((n) => n.props.placeholder),
+    [
+      `e.g. What should reception do first for this request: ${target.label}?`,
+      "e.g. What happens next?",
+      "e.g. What should reception do after that?",
+    ],
+  );
+  form.find((n) => n.props?.["aria-label"] === "Remove step 3").props.onClick();
+  form = render(editor.type, editor.props, child);
+  form.find((n) => n.props?.["aria-label"] === "Remove step 2").props.onClick();
+  form = render(editor.type, editor.props, child);
+  button(form, "Save procedure").props.onClick();
+  await new Promise(setImmediate);
+  assert.equal(writes, 0, "placeholders do not turn blank drafts into saved content");
+  form = render(editor.type, editor.props, child);
+
   form
     .find((n) => n.type === "textarea")
     .props.onChange({ target: { value: "Exact manager wording" } });
@@ -372,4 +398,53 @@ test("editor selection/cancellation is draft-only and save feedback waits for pe
     ),
   );
   assert.equal(data.practiceData.localProcedures![target.id].status, "configured");
+  assert.ok(!JSON.stringify(data.practiceData.localProcedures).includes("e.g."));
+  const savedRecord = data.practiceData.localProcedures![target.id];
+  assert.ok(savedRecord.status === "configured");
+  assert.equal(savedRecord.steps[0].text, "Exact manager wording");
+});
+
+test("eight-step navigation preserves legacy URL destinations and keeps Procedures optional", async () => {
+  const { setupSteps, setupSearch, setupMissing } = await import("../src/lib/practice-setup.ts");
+  assert.deepEqual(setupSteps, [
+    "Practice",
+    "Roles",
+    "Team",
+    "Bookings",
+    "Procedures",
+    "Prescriptions",
+    "Safety",
+    "Review",
+  ]);
+  for (let old = 0; old <= 6; old++) {
+    const result = setupSearch({ step: old });
+    assert.equal(result.step, old < 4 ? old : old + 1);
+    assert.deepEqual(setupSearch(result), result, "normalised URLs are idempotent");
+  }
+  for (let step = 0; step < 8; step++) assert.equal(setupSearch({ step, flow: 2 }).step, step);
+  assert.equal(setupSearch({ step: -1 }).step, 0);
+  assert.equal(setupSearch({ step: 99, flow: 2 }).step, 7);
+  const before = JSON.stringify(p);
+  assert.deepEqual(setupMissing(p)[4], []);
+  assert.equal(JSON.stringify(p), before);
+  const route = readFileSync(new URL("../src/routes/practice.setup.tsx", import.meta.url), "utf8");
+  assert.ok(route.includes("validateSearch: setupSearch"));
+  assert.ok(route.includes("{step === 4 && <LocalProcedures />}"));
+  assert.ok(route.includes("search: { step: next, flow: 2 }"));
+  assert.ok(route.includes("step === 7) store.completeSetup(true)"));
+});
+
+test("Appointment Booking has a compact central summary, with no editor or duplicated procedure storage", () => {
+  const source = readFileSync(
+    new URL("../src/components/PredefinedModuleSetup.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.ok(!source.includes("<LocalProcedures"));
+  assert.ok(source.includes("Built from your practice setup"));
+  assert.ok(!source.includes("View / edit procedures"));
+  assert.ok(source.includes("generateConfiguredModule"));
+  assert.ok(source.includes("practiceData"));
+  const hub = readFileSync(new URL("../src/routes/data-hub.tsx", import.meta.url), "utf8");
+  assert.ok(hub.includes("<LocalProcedures />"));
+  assert.ok(hub.replace(/\s+/g, " ").includes("These can be reused in training."));
 });

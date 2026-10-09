@@ -1,5 +1,13 @@
-import { localProcedureSequence } from "./local-procedure-sequences.ts";
-import { roleRequestSituation, roleAnswerChoices, roleList } from "./role-question-presentation.ts";
+import {
+  inspectLocalProcedureSequences,
+  localProcedureApplication,
+} from "./local-procedure-sequences.ts";
+import {
+  roleRequestSituation,
+  roleAnswerChoices,
+  roleList,
+  broadRequestLabel,
+} from "./role-question-presentation.ts";
 import { roleMatchingScenario } from "./role-matching.ts";
 import {
   structuredBookingExercises,
@@ -885,7 +893,7 @@ export function configuredScenarios(
         : naturalSituation(situation),
     question:
       topic === "appointment-booking" && settings.trainingLevel === "learn"
-        ? "Which action matches this practice’s procedure for this request?"
+        ? "What should you do?"
         : scenarioQuestion(situation),
     options:
       topic === "appointment-booking" && settings.trainingLevel
@@ -952,6 +960,7 @@ export function configuredScenarios(
       if (relevantRequest(topic, r.label)) requests.set(r.id, r.label);
   const routing: Scenario[] = [];
   for (const [id, label] of requests) {
+    if (topic === "appointment-booking" && broadRequestLabel(label)) continue;
     const staff = staffForRequest(p, id),
       eligible = staff.filter((s) => s.canHandle);
     const roles = Object.values(p.roleRequests ?? {}).filter((role) =>
@@ -993,14 +1002,17 @@ export function configuredScenarios(
     if (topic === "appointment-booking" && roleQuestion.kind === "mcq") {
       roleQuestion.localRoleRequestId = id;
       roleQuestion.title = roleRequestSituation(label).replace(/\.$/, "");
-      if (settings.trainingLevel === "learn") {
-        roleQuestion.patientQuote = roleRequestSituation(label);
-        roleQuestion.question = "Which role(s) at this practice can handle this request?";
-        if (roles.length) {
-          roleQuestion.options = roleAnswerChoices(p, id, label, roles);
-          roleQuestion.learningPoint = `At this practice, ${roleList(roles.map((r) => r.label))} can handle requests about ${label.toLowerCase() === "utis" ? "UTIs" : label.toLowerCase()}. Check individual exceptions and booking arrangements before booking.`;
-        }
-      }
+      if (!roles.length) continue; // A role-recognition exercise cannot invent a workflow for employee-only data.
+      const apply = settings.trainingLevel === "apply";
+      roleQuestion.patientQuote = apply
+        ? `${roleRequestSituation(label)} The patient asks whether only one type of clinician can help with this request.`
+        : roleRequestSituation(label);
+      roleQuestion.question = apply
+        ? "Which role or roles could you explain can help? Check the booking process before arranging an appointment."
+        : "Who at your practice can help with this?";
+      roleQuestion.options = roleAnswerChoices(p, id, label, roles);
+      roleQuestion.correctIndex = 0;
+      roleQuestion.learningPoint = `${roleList(roles.map((r) => r.label))} can handle this request. This identifies eligible roles; follow the practice’s booking process and any individual exceptions before arranging an appointment.`;
     }
     routing.push(roleQuestion);
     for (const exception of staff.filter((s) => s.individualException))
@@ -1084,17 +1096,34 @@ export function selectedModuleScenarios(
   const core = appointmentCorePool({ topicKey: topic, practice: p, settings });
   const selectedCore = core.slice(0, Math.round(count * 0.3));
   const selectedLocal = local.slice(0, count - selectedCore.length);
-  // Keep other local questions; matching replaces one local slot, never adds to the total.
+  // Prefer a procedure for a request already selected for a weaker role-only question.
+  // Never add capacity; matching retains priority at smaller module lengths.
+  const candidates = inspectLocalProcedureSequences(p).candidates;
+  const sequence =
+    candidates.find((candidate) =>
+      selectedLocal.some(
+        (s) =>
+          s.kind === "mcq" &&
+          s.localRoleRequestId === candidate.provenance.snapshot.localProcedure?.requestId,
+      ),
+    ) ?? candidates[0];
+  const replaceWithProcedure = (scenario: Scenario) => {
+    const requestId = sequence?.provenance.snapshot.localProcedure?.requestId;
+    const sameRequest = selectedLocal.findIndex(
+      (s) => s.kind === "mcq" && s.localRoleRequestId === requestId,
+    );
+    const index =
+      sameRequest >= 0 ? sameRequest : selectedLocal.findIndex((s, i) => i > 0 && s.kind === "mcq");
+    if (index >= 0) selectedLocal.splice(index, 1, scenario);
+  };
   if (settings.trainingLevel === "learn" && selectedLocal.length >= 2) {
     const matching = roleMatchingScenario(p);
-    if (matching) selectedLocal.splice(Math.min(1, selectedLocal.length - 1), 1, matching);
-    // Matching retains priority. Two special interactions require four local slots.
-    if (!matching || selectedLocal.length >= 4) {
-      const sequence = localProcedureSequence(p);
-      const index = matching ? 2 : 1;
-      if (sequence && selectedLocal[index]?.kind === "mcq")
-        selectedLocal.splice(index, 1, sequence);
-    }
+    if (matching) selectedLocal.splice(1, 1, matching);
+    if (sequence && (!matching || selectedLocal.length >= 4)) replaceWithProcedure(sequence);
+  }
+  if (settings.trainingLevel === "apply" && selectedLocal.length >= 2 && sequence) {
+    const application = localProcedureApplication(p, sequence);
+    if (application) replaceWithProcedure(application);
   }
   // If local data is sparse, return a shorter module; do not turn it into a Core-only filler bank.
   const result: Scenario[] = [];
@@ -1140,6 +1169,17 @@ export function reviseConfiguredScenario(module: Module, scenario: Scenario): Mo
       .filter((current) => current.followUpFor !== scenario.id)
       .map((current): Scenario => {
         if (current.id !== scenario.id || current.kind !== scenario.kind) return current;
+        if (current.kind === "mcq" && current.provenance?.kind === "sequence") {
+          return {
+            ...structuredClone(current),
+            title: scenario.title,
+            question: scenario.question,
+            learningPoint: scenario.learningPoint,
+            managerNote: scenario.managerNote,
+            status: "draft",
+            provenance: { ...structuredClone(current.provenance), managerModified: true },
+          };
+        }
         if (current.kind === "order" && current.sequence) {
           return {
             ...structuredClone(current),
@@ -1167,7 +1207,7 @@ export function reviseConfiguredScenario(module: Module, scenario: Scenario): Mo
         return {
           ...scenario,
           status: "draft",
-          ...(current.provenance
+          ...(current.provenance?.kind === "core"
             ? { provenance: { ...structuredClone(current.provenance), managerModified: true } }
             : {}),
           ...(scenario.kind === "mcq" ? { followUpSituation: undefined } : {}),
@@ -1182,8 +1222,8 @@ export function regenerateConfiguredScenario(
   practice: PracticeData,
 ): Module {
   const current = module.scenarios.find((s) => s.id === scenarioId);
-  // No production sequence generation/replacement path in Stage 1.
-  if (current?.kind === "order" && current.sequence) return module;
+  // Procedure-based exercises keep their immutable source; new modules use updated knowledge.
+  if (current?.provenance?.kind === "sequence") return module;
   if (!module.settings) return module;
   if (!current) return module;
   if (current.kind === "matching") {

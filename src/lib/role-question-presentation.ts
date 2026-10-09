@@ -3,7 +3,7 @@ import type { PracticeRoleRequests } from "./role-requests";
 import { selectedRequests } from "./role-requests.ts";
 
 export const roleList = (names: string[]) =>
-  new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" }).format(names);
+  new Intl.ListFormat("en-GB", { style: "long", type: "disjunction" }).format(names);
 
 /** Linguistic forms only; this table supplies no responsibilities or clinical facts. */
 const singular: Record<string, string> = {
@@ -67,6 +67,20 @@ export function roleAnswerChoices(
   // A binary recognition question is safer than fabricated destinations or filler.
   return [
     correct,
-    ...(distinct.length ? distinct.slice(0, 3) : ["No role is configured to handle this request."]),
+    ...(distinct.length
+      ? distinct.slice(0, 3)
+      : ["None of these practice roles handles this request."]),
   ];
+}
+
+/** Umbrella request names do not specify a unique operational task. No clinical inference. */
+export function broadRequestLabel(label: string): boolean {
+  return (
+    /^(prescription|medication|test result|referral|contraception) quer(?:y|ies)$/i.test(
+      label.trim(),
+    ) ||
+    /^(other|general|administrative|admin)( requests?| queries| enquiries| issues)?$/i.test(
+      label.trim(),
+    )
+  );
 }

@@ -390,7 +390,7 @@ test("local Learn states the request directly, keeping natural titles and distin
       l.patientQuote,
       /Request:|phone|calls|in.person|today|yesterday|distressed|cope|urgent|emergency/i,
     );
-    assert.match(l.question, /practice’s procedure/);
+    assert.equal(l.question, "What should you do?");
     assert.doesNotMatch(l.patientQuote, /new receptionist|handles a|asks how/);
     assert.match(a.patientQuote, /^A patient calls/);
     assert.equal(l.options[l.correctIndex], a.options[a.correctIndex]);

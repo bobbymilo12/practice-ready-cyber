@@ -53,7 +53,8 @@ export function regenerateAppointmentCore(
   context: CoreGenerationContext,
 ): MCQScenario | undefined {
   const origin = current.provenance;
-  if (!origin || origin.recipe !== "controlled_single_choice") return undefined;
+  if (!origin || origin.kind !== "core" || origin.recipe !== "controlled_single_choice")
+    return undefined;
   if (context.settings.trainingLevel && context.settings.trainingLevel !== origin.level)
     return undefined;
   const concept = coreTrainingLibrary.find((c) => c.id === origin.conceptId);

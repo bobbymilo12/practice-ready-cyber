@@ -1,3 +1,4 @@
+import { readProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { orderKey, orderLabels } from "@/lib/sequence";
 import { inspectRoleMatching, uniqueMatching } from "@/lib/role-matching";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -110,6 +111,18 @@ function Review() {
         </Card>
       )}
 
+      {module.topicKey === "appointment-booking" && readProcedureDiagnostics(module.id) && (
+        <details className="mt-3 rounded-xl border p-3 text-sm">
+          <summary>Development only: procedure generation diagnostics</summary>
+          <p>
+            Captured from saved workspace data when this draft was generated. Not a live eligibility
+            check.
+          </p>
+          <pre className="mt-2 whitespace-pre-wrap break-words">
+            {JSON.stringify(JSON.parse(readProcedureDiagnostics(module.id)!), null, 2)}
+          </pre>
+        </details>
+      )}
       {matchingDiagnostic && (
         <p className="mt-4 text-sm text-muted-foreground">
           <strong>Matching:</strong> This module contains no matching board. Current role
@@ -211,7 +224,7 @@ function ScenarioCard({
         draft.kind !== "matching" &&
         !(scenario.kind === "order" && scenario.sequence) && (
           <blockquote className="mt-3 rounded-lg border-l-4 border-accent bg-surface p-3 text-sm italic">
-            {editing ? (
+            {editing && draft.provenance?.kind !== "sequence" ? (
               <textarea
                 value={draft.patientQuote}
                 onChange={(e) => setDraft({ ...draft, patientQuote: e.target.value })}
@@ -236,7 +249,7 @@ function ScenarioCard({
         )}
       </p>
 
-      {editing && draft.kind === "mcq" && (
+      {editing && draft.kind === "mcq" && draft.provenance?.kind !== "sequence" && (
         <label className="mt-3 block text-sm">
           Best answer
           <select
@@ -268,7 +281,7 @@ function ScenarioCard({
                   <span>Option {String.fromCharCode(65 + i)}</span>
                   {isBest && <span className="text-[color:var(--success)]">Best answer</span>}
                 </div>
-                {editing ? (
+                {editing && draft.provenance?.kind !== "sequence" ? (
                   <textarea
                     value={draft.options[i]}
                     onChange={(e) => {
@@ -324,27 +337,25 @@ function ScenarioCard({
         </div>
       )}
 
-      {scenario.kind === "order" &&
-        scenario.sequence &&
-        scenario.provenance.snapshot.localProcedure && (
-          <div className="mt-3 space-y-2 text-sm">
-            <p className="font-medium">
-              Local Procedure ·{" "}
-              {scenario.provenance.snapshot.localProcedure.requestLabelAtConfirmation} · Version{" "}
-              {scenario.provenance.sourceVersion}
+      {scenario.provenance?.kind === "sequence" && scenario.provenance.snapshot.localProcedure && (
+        <div className="mt-3 space-y-2 text-sm">
+          <p className="font-medium">
+            Local Procedure ·{" "}
+            {scenario.provenance.snapshot.localProcedure.requestLabelAtConfirmation} · Version{" "}
+            {scenario.provenance.sourceVersion}
+          </p>
+          <p>Manager-confirmed practice procedure</p>
+          {scenario.provenance.snapshot.localProcedure.appliesWhen && (
+            <p className="whitespace-pre-wrap">
+              {scenario.provenance.snapshot.localProcedure.appliesWhen}
             </p>
-            <p>Manager-confirmed practice procedure</p>
-            {scenario.provenance.snapshot.localProcedure.appliesWhen && (
-              <p className="whitespace-pre-wrap">
-                {scenario.provenance.snapshot.localProcedure.appliesWhen}
-              </p>
-            )}
-            <p className="text-muted-foreground">
-              Updated procedure information is used when a new module is generated. This exercise
-              retains its saved procedure.
-            </p>
-          </div>
-        )}
+          )}
+          <p className="text-muted-foreground">
+            Updated procedure information is used when a new module is generated. This exercise
+            retains its saved procedure.
+          </p>
+        </div>
+      )}
       {scenario.kind === "order" && draft.kind === "order" && (
         <ol className="mt-3 space-y-2">
           {orderLabels(scenario, orderKey(scenario)).map((s, i) => (
@@ -454,9 +465,9 @@ function ScenarioCard({
               Edit
             </button>
             <button
-              disabled={scenario.kind === "order" && !!scenario.sequence}
+              disabled={scenario.provenance?.kind === "sequence"}
               title={
-                scenario.kind === "order" && scenario.sequence
+                scenario.provenance?.kind === "sequence"
                   ? "Generate a new module to use updated procedure information."
                   : undefined
               }

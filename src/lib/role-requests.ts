@@ -44,6 +44,7 @@ export const requestCategories = [
     "Minor skin problems",
     "Minor injuries",
     "Eye problems",
+    "Mental health appointments",
   ]),
   category("long-term", "Long-term condition care", [
     "Asthma reviews",
@@ -62,7 +63,6 @@ export const requestCategories = [
     "Fit note requests",
     "Test result queries",
     "Referral queries",
-    "Mental health appointments",
     "Musculoskeletal appointments",
   ]),
 ];
@@ -268,4 +268,23 @@ export function roleRequestErrors(config: PracticeRoleRequests): string[] {
   return new Set(labels).size !== labels.length || new Set(categories).size !== categories.length
     ? ["Use each request and category once. Rename or remove duplicate custom entries."]
     : [];
+}
+
+/** Catalogue correction for saved standard entries; IDs, selections and custom entries stay intact. */
+export function normaliseRoleRequestCategories(role: PracticeRoleRequests): PracticeRoleRequests {
+  const admin = role.categories.find((c) => c.id === "admin");
+  const request = admin?.requests.find((r) => r.id === "mental-health-appointments" && !r.custom);
+  if (!request) return role;
+  const next = structuredClone(role);
+  next.categories.find((c) => c.id === "admin")!.requests = next.categories
+    .find((c) => c.id === "admin")!
+    .requests.filter((r) => r.id !== request.id || r.custom);
+  let destination = next.categories.find((c) => c.id === "minor-illness");
+  if (!destination) {
+    destination = { id: "minor-illness", label: "Minor illness & same-day care", requests: [] };
+    next.categories.unshift(destination);
+  }
+  if (!destination.requests.some((r) => r.id === request.id))
+    destination.requests.push(structuredClone(request));
+  return next;
 }
