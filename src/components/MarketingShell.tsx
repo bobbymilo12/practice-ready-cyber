@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { signOut, useConnection } from "@/lib/backend";
 import { useApp } from "@/lib/store";
+import { OPEN_COOKIE_SETTINGS } from "@/components/CookieBanner";
 import "@/marketing.css";
 
 export function ContactLink({
@@ -96,6 +97,13 @@ export function MarketingShell({
               <ContactLink />
               <Link to="/privacy">Privacy</Link>
               <Link to="/cookies">Cookies</Link>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS))}
+                className="cursor-pointer underline underline-offset-4"
+              >
+                Cookie settings
+              </button>
               <Link to="/terms">Terms</Link>
               <Link to="/accessibility">Accessibility</Link>
             </div>

@@ -10,6 +10,7 @@ import {
 import { type ReactNode } from "react";
 
 import { AccountGate } from "@/components/AccountGate";
+import { CookieBanner } from "@/components/CookieBanner";
 
 import appCss from "../styles.css?url";
 
@@ -127,6 +128,7 @@ function RootComponent() {
       <AccountGate>
         <Outlet />
       </AccountGate>
+      <CookieBanner />
     </QueryClientProvider>
   );
 }

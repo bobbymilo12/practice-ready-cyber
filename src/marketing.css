@@ -202,6 +202,29 @@
   line-height: 1.75;
   color: var(--muted-foreground);
 }
+.legal-content ul {
+  margin-top: 0.75rem;
+  padding-left: 1.25rem;
+  list-style: disc;
+  line-height: 1.75;
+  color: var(--muted-foreground);
+}
+.legal-content table {
+  margin-top: 1rem;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.legal-content th,
+.legal-content td {
+  padding: 0.6rem 0.75rem 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.legal-content td {
+  color: var(--muted-foreground);
+}
 .legal-content a {
   color: var(--primary);
   text-decoration: underline;

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/MarketingShell";
+import { OPEN_COOKIE_SETTINGS } from "@/components/CookieBanner";
 
 export const Route = createFileRoute("/cookies")({
   head: () => ({ meta: [{ title: "Cookie Policy — PracticeReady" }] }),
@@ -16,26 +17,98 @@ function CookiesPage() {
             Cookie Policy
           </h1>
           <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">
-            PracticeReady currently uses cookies and similar storage only where needed to operate
-            accounts, security and core functionality.
+            This policy explains the cookies and similar technologies PracticeReady uses, in line
+            with the Privacy and Electronic Communications Regulations (PECR) and UK GDPR.
           </p>
+          <p className="mt-3 text-sm text-muted-foreground">Last updated: 9 October 2026</p>
         </section>
         <section className="legal-content">
-          <h2>Essential storage</h2>
+          <h2>What cookies and similar storage are</h2>
           <p>
-            Authentication and security storage may be required for sign-in, session management and
-            protecting the service. These technologies are necessary for requested functionality.
+            Cookies are small text files a website saves on your device. Websites can also store
+            information in your browser using &quot;local storage&quot; and &quot;session
+            storage&quot;. This policy covers all of these technologies.
           </p>
-          <h2>Optional technologies</h2>
+
+          <h2>What we use</h2>
           <p>
-            Analytics, advertising pixels, embedded media and other non-essential technologies must
-            not be enabled until you have made an appropriate choice. No optional technology should
-            be added without updating this policy and implementing consent controls.
+            PracticeReady uses only <strong>strictly necessary</strong> storage. It is needed to
+            sign you in, keep your session secure and remember your cookie choice. Under PECR,
+            strictly necessary storage does not require consent, but we still tell you about it.
           </p>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Type</th>
+                <th scope="col">Purpose</th>
+                <th scope="col">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>sb-…-auth-token</td>
+                <td>Local storage (Supabase)</td>
+                <td>Keeps you signed in and securely refreshes your session</td>
+                <td>Until you log out</td>
+              </tr>
+              <tr>
+                <td>cookie-consent</td>
+                <td>Local storage</td>
+                <td>Remembers your choice on the cookie banner so we don&apos;t ask every visit</td>
+                <td>Until you clear it</td>
+              </tr>
+              <tr>
+                <td>practice-ready-store</td>
+                <td>Local storage</td>
+                <td>
+                  Read only, to move practice data saved by an older version of PracticeReady into
+                  your account
+                </td>
+                <td>Until you clear it</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            Our fonts are hosted on our own servers, so loading a page does not send your
+            information to font providers.
+          </p>
+
+          <h2>What we don&apos;t use</h2>
+          <p>
+            We do not use analytics, advertising, social media or tracking cookies, and we do not
+            share cookie data with third parties for marketing. If we ever introduce optional
+            cookies, we will update this policy and will not set them unless you accept them.
+          </p>
+
           <h2>Managing your choice</h2>
           <p>
-            A final version of this page should explain how to change or withdraw consent once
-            optional cookies or similar technologies are introduced.
+            You can review your choice at any time using{" "}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS))}
+              className="cursor-pointer text-primary underline underline-offset-4"
+            >
+              cookie settings
+            </button>
+            , which is also linked in the footer of every page. You can also block or delete cookies
+            and site storage in your browser settings. If you block strictly necessary storage, you
+            will not be able to sign in.
+          </p>
+
+          <h2>More information</h2>
+          <p>
+            See our <a href="/privacy">Privacy Notice</a> for how we handle personal information, or
+            visit{" "}
+            <a
+              href="https://ico.org.uk/for-the-public/online/cookies/"
+              rel="noreferrer"
+              target="_blank"
+            >
+              the ICO&apos;s guidance on cookies
+            </a>
+            . Questions can be sent to{" "}
+            <a href="mailto:practicereadyuk@gmail.com">practicereadyuk@gmail.com</a>.
           </p>
         </section>
       </div>
