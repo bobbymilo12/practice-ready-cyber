@@ -55,6 +55,9 @@ AI-generated content stays draft until a manager approves it.
 
 ## Docs
 
+- [Project overview](docs/PROJECT-OVERVIEW.md) — users, journeys, architecture and code map
 - [Setup and deployment](docs/SETUP.md)
 - [Contact form](docs/CONTACT.md)
+- [Core training library](docs/CORE-TRAINING.md)
+- [Predefined module creation](docs/predefined-module-creation.md)
 - [Product review](docs/PRODUCT-REVIEW.md)

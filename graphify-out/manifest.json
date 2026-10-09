@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "src/components/MarketingShell.tsx": {
-    "mtime": 1791547912.4402022,
-    "seen": 1791571197.9143195,
-    "ast_hash": "a54281981a98c2f289139109dcf59a46",
+    "mtime": 1791572487.277065,
+    "seen": 1791572935.81036,
+    "ast_hash": "5e2e363e9a9b33c815d165179c18591f",
     "semantic_hash": ""
   },
   "src/components/MatchingBoard.tsx": {
@@ -720,9 +720,9 @@
     "semantic_hash": ""
   },
   "src/routes/__root.tsx": {
-    "mtime": 1791570884.4697742,
-    "seen": 1791571197.9143195,
-    "ast_hash": "6cf39cb52f7f886c4098be26ccc0f874",
+    "mtime": 1791572487.3123071,
+    "seen": 1791572935.8547783,
+    "ast_hash": "d28157abf826a083452f59346abdf4dd",
     "semantic_hash": ""
   },
   "src/routes/about.tsx": {
@@ -732,9 +732,9 @@
     "semantic_hash": ""
   },
   "src/routes/accessibility.tsx": {
-    "mtime": 1791547912.584131,
-    "seen": 1791571197.9143195,
-    "ast_hash": "8d49da8dd7af4b2921442c6227a8b7e7",
+    "mtime": 1791572487.2045715,
+    "seen": 1791572935.8547783,
+    "ast_hash": "7013e05282257eb117e20eb914306969",
     "semantic_hash": ""
   },
   "src/routes/api.contact.ts": {
@@ -762,9 +762,9 @@
     "semantic_hash": ""
   },
   "src/routes/cookies.tsx": {
-    "mtime": 1791547912.5897305,
-    "seen": 1791571197.9143195,
-    "ast_hash": "f74921bf2cb72078f24f84a0d52236a1",
+    "mtime": 1791572487.160561,
+    "seen": 1791572935.8547783,
+    "ast_hash": "0ae73cca052bc0efc1495305d13a406d",
     "semantic_hash": ""
   },
   "src/routes/dashboard.tsx": {
@@ -822,9 +822,9 @@
     "semantic_hash": ""
   },
   "src/routes/privacy.tsx": {
-    "mtime": 1791547912.6028779,
-    "seen": 1791571197.9143195,
-    "ast_hash": "48e620bf0ca464eb43c4c114202aea85",
+    "mtime": 1791572487.1205993,
+    "seen": 1791572935.8605964,
+    "ast_hash": "9f51a8451dad71e989fa7857d4b30762",
     "semantic_hash": ""
   },
   "src/routes/results.tsx": {
@@ -1104,9 +1104,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1791553892.0644212,
-    "seen": 1791571197.9143195,
-    "ast_hash": "2f364047735320f7c0e1540c05594ec3",
+    "mtime": 1791571829.9358091,
+    "seen": 1791572935.8773563,
+    "ast_hash": "06c2196ab8a77f96a5e95b8c80351595",
     "semantic_hash": ""
   },
   "docs/CONTACT.md": {
@@ -1197,6 +1197,12 @@
     "mtime": 1791547912.4236765,
     "seen": 1791571197.9143195,
     "ast_hash": "356410f19ab555a74eabe42fa82498d9",
+    "semantic_hash": ""
+  },
+  "src/components/CookieBanner.tsx": {
+    "mtime": 1791572415.216134,
+    "seen": 1791572935.81036,
+    "ast_hash": "2c7a8b6359abe1755d689c4ed986bc2b",
     "semantic_hash": ""
   }
 }
