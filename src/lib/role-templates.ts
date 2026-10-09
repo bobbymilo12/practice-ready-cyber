@@ -94,6 +94,10 @@ export const roleTemplates: RoleTemplate[] = [
     suggestions: { status: "awaiting-review", selectedRequestIds: [] },
   },
 ];
+/** The role_templates table is the source of truth; the literal above is only a dev/test fallback. */
+export function setRoleTemplates(list: RoleTemplate[]) {
+  if (list.length) roleTemplates.splice(0, roleTemplates.length, ...list);
+}
 const normalise = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 export function roleTemplateForName(name: string): RoleTemplate | undefined {
   return roleTemplates.find((t) =>
