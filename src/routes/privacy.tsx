@@ -187,8 +187,8 @@ function PrivacyPage() {
 
           <h2>Cookies</h2>
           <p>
-            We use only essential cookies and similar storage. See our{" "}
-            <a href="/cookies">Cookie Policy</a> for details.
+            We use essential cookies and similar storage, plus first-party analytics only if you
+            accept them. See our <a href="/cookies">Cookie Policy</a> for details.
           </p>
 
           <h2>Children</h2>
