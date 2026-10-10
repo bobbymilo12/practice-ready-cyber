@@ -36,6 +36,10 @@ function query(table) {
       value = data;
       return q;
     },
+    delete() {
+      operation = "delete";
+      return q;
+    },
     upsert(data) {
       operation = "upsert";
       value = data;
@@ -52,6 +56,7 @@ function query(table) {
     then(resolve) {
       const rows = (tables[table] ?? []).filter((r) => filters.every(([k, v]) => r[k] === v));
       if (operation !== "select") writes.push({ table, operation, value, filters });
+      if (operation === "delete") tables[table] = tables[table].filter((r) => !rows.includes(r));
       if (operation === "update") rows.forEach((r) => Object.assign(r, value));
       if (operation === "insert" || operation === "upsert") {
         value = { version: 0, ...value };
@@ -235,7 +240,7 @@ test("trainee load filters other trainees, assignments, modules and manager deta
 });
 test("trainees cannot invite, overwrite practice data, remove people or access others' assignments", async () => {
   reset();
-  for (const action of ["invite", "save-practice", "remove-trainee"])
+  for (const action of ["invite", "save-practice", "remove-trainee", "delete-practice"])
     assert.equal((await call({ action, role: "manager" })).status, 403);
   assert.equal((await call({ action: "start", assignmentId: "a2", traineeId: "bob" })).status, 403);
   assert.equal(writes.length, 0);
@@ -362,4 +367,19 @@ test("removing a trainee also removes their assignments and marks in the same ve
   );
   assert.deepEqual(Object.keys(state.emojiMarks), ["alice:m1:1"]);
   assert.equal(tables.practices[0].version, 2);
+});
+test("delete-practice needs a manager and an explicit confirmation, then removes the practice", async () => {
+  reset("manager");
+  assert.equal((await call({ action: "delete-practice" })).status, 400);
+  assert.equal(tables.practices.length, 1);
+  assert.equal((await call({ action: "delete-practice", confirm: "DELETE" })).status, 200);
+  assert.equal(tables.practices.length, 0);
+});
+test("a manager cannot remove or see trainees from another practice", async () => {
+  reset("manager");
+  tables.profiles.push({ id: "eve", practice_id: "elm", role: "trainee", email: "eve@elm.test" });
+  assert.equal((await call({ action: "remove-trainee", id: "eve" })).status, 400);
+  assert.equal(tables.practices[0].version, 1);
+  const { data } = await call({ action: "load" });
+  assert.ok(!data.trainees.some((t) => t.id === "eve"));
 });
