@@ -22,7 +22,7 @@ function PrivacyPage() {
             visit this website, create or use an account, or contact us. It is written to meet the
             UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.
           </p>
-          <p className="mt-3 text-sm text-muted-foreground">Last updated: 9 October 2026</p>
+          <p className="mt-3 text-sm text-muted-foreground">Last updated: 10 October 2026</p>
         </section>
         <section className="legal-content">
           <h2>Who we are</h2>
@@ -86,6 +86,17 @@ function PrivacyPage() {
                 <td>Legitimate interests</td>
               </tr>
               <tr>
+                <td>
+                  Measuring overall website use with cookieless, aggregated statistics (Vercel Web
+                  Analytics)
+                </td>
+                <td>Legitimate interests</td>
+              </tr>
+              <tr>
+                <td>Counting page visits with a random ID, if you accept optional analytics</td>
+                <td>Consent</td>
+              </tr>
+              <tr>
                 <td>Responding to enquiries sent through the contact form or by email</td>
                 <td>Legitimate interests</td>
               </tr>
@@ -114,7 +125,8 @@ function PrivacyPage() {
               <strong>Supabase</strong> — database, authentication and file hosting.
             </li>
             <li>
-              <strong>Vercel</strong> — website and application hosting.
+              <strong>Vercel</strong> — website and application hosting, and cookieless website
+              statistics (Vercel Web Analytics).
             </li>
             <li>
               <strong>Resend</strong> — sending and receiving service and contact emails.
@@ -188,7 +200,9 @@ function PrivacyPage() {
           <h2>Cookies</h2>
           <p>
             We use essential cookies and similar storage, plus first-party analytics only if you
-            accept them. See our <a href="/cookies">Cookie Policy</a> for details.
+            accept them. Our hosting provider also collects cookieless, aggregated website
+            statistics that do not store anything on your device. See our{" "}
+            <a href="/cookies">Cookie Policy</a> for details.
           </p>
 
           <h2>Children</h2>

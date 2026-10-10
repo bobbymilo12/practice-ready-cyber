@@ -36,7 +36,8 @@ function CookiesPage() {
             session secure and remember your cookie choice. Under PECR, strictly necessary storage
             does not require consent, but we still tell you about it. We also use one{" "}
             <strong>optional analytics</strong> item, which is only set if you choose &quot;Accept
-            all&quot;.
+            all&quot;. Separately, our hosting provider collects cookieless, aggregated website
+            statistics, described below.
           </p>
           <table>
             <thead>
@@ -106,6 +107,17 @@ function CookiesPage() {
           <p>
             Our fonts are hosted on our own servers, so loading a page does not send your
             information to font providers.
+          </p>
+
+          <h2>Cookieless website statistics (Vercel Web Analytics)</h2>
+          <p>
+            Our hosting provider, Vercel, gives us aggregated visitor statistics such as page views,
+            referring websites, country, browser and device type. Vercel Web Analytics does not set
+            cookies or store anything on your device, so it runs whether or not you accept optional
+            analytics. Vercel identifies a visit using a hash of the request (including the IP
+            address and browser details) that is discarded after 24 hours, and we only see totals,
+            never individual visitors. Vercel acts as our processor. See our{" "}
+            <a href="/privacy">Privacy Notice</a> for more detail.
           </p>
 
           <h2>What we don&apos;t use</h2>
