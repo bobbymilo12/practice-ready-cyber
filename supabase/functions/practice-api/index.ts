@@ -439,6 +439,20 @@ Deno.serve(async (request) => {
       return reply({ ok: true });
     }
 
+    if (action === "delete-practice") {
+      if (!manager) return reply({ error: "Manager access required." }, 403);
+      if (body.confirm !== "DELETE") fail("Type DELETE to confirm.");
+      const { data: members, error: membersError } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("practice_id", practice.id);
+      check(membersError);
+      // Deleting auth users cascades to profiles and training_sessions; profiles must go before the practice.
+      for (const m of members ?? []) check((await admin.auth.admin.deleteUser(m.id)).error);
+      check((await admin.from("practices").delete().eq("id", practice.id)).error);
+      return reply({ ok: true });
+    }
+
     if (manager) return reply({ error: "Use a trainee account to record training." }, 403);
     const assignment = assignments.find(
       (a) => a.id === body.assignmentId && a.traineeId === profile.id,

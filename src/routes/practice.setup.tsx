@@ -131,6 +131,9 @@ function PracticeSetup() {
             ][step]
           }
         </h1>
+        <p className="mt-2 text-sm font-medium">
+          Do not enter patient names, NHS numbers or other patient-identifiable information.
+        </p>
         {step !== 1 && (
           <p className="mt-2 text-sm text-muted-foreground">
             Use your agreed local procedures. These details will be used to draft training for your

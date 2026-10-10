@@ -4,6 +4,8 @@ import { bookingFor, practiceSummary } from "@/lib/practice-config";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
+import { api } from "@/lib/backend";
+import { supabase } from "@/integrations/supabase/client";
 import { useApp, type RolePolicies, type PracticeData } from "@/lib/store";
 
 export const Route = createFileRoute("/data-hub")({
@@ -190,6 +192,10 @@ function DataHub() {
           <p className="mt-2 max-w-2xl text-muted-foreground">
             Keep your team and local procedures up to date. Review existing modules separately when
             procedures change.
+          </p>
+          <p className="mt-2 max-w-2xl text-sm font-medium">
+            Do not enter patient names, NHS numbers or other patient-identifiable information
+            anywhere in PracticeReady.
           </p>
         </div>
         <Link
@@ -434,6 +440,36 @@ function DataHub() {
             </button>
           </div>
           {replaceMsg && <p className="mt-3 text-sm text-[color:var(--success)]">{replaceMsg}</p>}
+        </Card>
+      </section>
+
+      <section className="mt-10">
+        <Card>
+          <h2 className="font-semibold">Delete practice account</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Permanently deletes your practice, every staff login and all training results. This
+            cannot be undone.
+          </p>
+          <button
+            onClick={async () => {
+              if (
+                window.prompt(
+                  "Type DELETE to permanently delete this practice and all its data.",
+                ) !== "DELETE"
+              )
+                return;
+              try {
+                await api("delete-practice", { confirm: "DELETE" });
+                await supabase.auth.signOut({ scope: "local" });
+                window.location.assign("/");
+              } catch (err) {
+                window.alert(err instanceof Error ? err.message : "Could not delete the practice.");
+              }
+            }}
+            className="mt-3 rounded-lg border border-destructive px-4 py-2 text-sm font-semibold text-destructive"
+          >
+            Delete practice and all data
+          </button>
         </Card>
       </section>
     </Shell>
