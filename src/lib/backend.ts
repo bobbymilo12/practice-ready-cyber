@@ -1,3 +1,4 @@
+import { flagPracticeChanges } from "./practice-change-tracking";
 import { managerActionKey, managerActionPatch, type ManagerAction } from "./manager-actions";
 import { normaliseRoleRequestCategories } from "./role-requests";
 import { validateLocalProcedures, procedureTargets, type LocalProcedure } from "./local-procedures";
@@ -255,7 +256,10 @@ export function confirmManagerAction(action: ManagerAction): Promise<void> {
       const state = { ...practiceState(current), ...patch };
       const request = (async () => {
         useConnection.setState({ saving: true });
-        const result = await api<{ version: number }>("save-practice", { state, version });
+        const result = await api<{
+          version: number;
+          reviewConfirmations?: Record<string, AppState["modules"][number]["reviewConfirmations"]>;
+        }>("save-practice", { state, version });
         if (ticket !== generation || useApp.getState().account?.id !== accountId)
           throw new Error("Your session changed. Reopen the practice to check the saved action.");
         if (!Number.isInteger(result.version) || result.version <= version)
@@ -265,7 +269,16 @@ export function confirmManagerAction(action: ManagerAction): Promise<void> {
         version = result.version;
         applying = true;
         try {
-          useApp.setState((latest) => managerActionPatch(latest, action, identity, current));
+          useApp.setState((latest) => {
+            const patch = managerActionPatch(latest, action, identity, current);
+            if (patch.modules && result.reviewConfirmations)
+              patch.modules = patch.modules.map((module) =>
+                result.reviewConfirmations?.[module.id]
+                  ? { ...module, reviewConfirmations: result.reviewConfirmations[module.id] }
+                  : module,
+              );
+            return patch;
+          });
         } finally {
           applying = false;
         }
@@ -317,6 +330,7 @@ export async function saveLocalProcedures(
   const ticket = generation;
   const state = practiceState(current);
   state.practiceData = { ...state.practiceData, localProcedures: records };
+  state.modules = flagPracticeChanges(current.practiceData, state.practiceData, state.modules);
   saving = (async () => {
     useConnection.setState({ saving: true, error: "" });
     try {
@@ -326,7 +340,13 @@ export async function saveLocalProcedures(
       version = result.version;
       applying = true;
       try {
-        useApp.setState((s) => ({ practiceData: { ...s.practiceData, localProcedures: records } }));
+        useApp.setState((s) => {
+          const practiceData = { ...s.practiceData, localProcedures: records };
+          return {
+            practiceData,
+            modules: flagPracticeChanges(current.practiceData, practiceData, s.modules),
+          };
+        });
       } finally {
         applying = false;
       }
@@ -353,6 +373,17 @@ export function initializeBackend() {
   clearWorkspace();
   useApp.subscribe((state, previous) => {
     if (applying || !useConnection.getState().ready || state.account?.role !== "manager") return;
+    if (state.practiceData !== previous.practiceData) {
+      const modules = flagPracticeChanges(previous.practiceData, state.practiceData, state.modules);
+      if (modules !== state.modules) {
+        applying = true;
+        try {
+          useApp.setState({ modules });
+        } finally {
+          applying = false;
+        }
+      }
+    }
     if (
       state.modules !== previous.modules ||
       state.packages !== previous.packages ||

@@ -9,7 +9,7 @@ import {
   readLegacyPractice,
   useConnection,
 } from "@/lib/backend";
-import { assignmentProgress } from "@/lib/training";
+import { assignmentProgress, primaryScenarios } from "@/lib/training";
 import { useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/dashboard")({
@@ -162,7 +162,7 @@ function Dashboard() {
               >
                 <div>
                   <div className="font-medium">{m.title}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="whitespace-pre-line text-xs text-muted-foreground">
                     {m.reviewReason ??
                       "Practice data changed — scenarios may contain outdated information."}
                   </div>
@@ -173,17 +173,8 @@ function Dashboard() {
                     search={{ id: m.id }}
                     className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
                   >
-                    Review
+                    Review / confirm
                   </Link>
-                  <button
-                    disabled={action.saving}
-                    onClick={() => void action.run({ kind: "clear-review", moduleId: m.id })}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs"
-                  >
-                    {action.pending?.kind === "clear-review" && action.pending.moduleId === m.id
-                      ? "Saving…"
-                      : "Dismiss"}
-                  </button>
                 </div>
               </div>
             ))}
@@ -256,7 +247,10 @@ function Dashboard() {
         <Card>
           <div className="flex items-center justify-between">
             <h3 className="font-display text-lg font-semibold">Published modules</h3>
-            <Badge tone="approved">Live</Badge>
+            <Badge tone="approved">
+              {published.filter((m) => !m.needsReview && primaryScenarios(m).length > 0).length}{" "}
+              available
+            </Badge>
           </div>
           <div className="mt-4 space-y-3">
             {published.map((m) => (
@@ -275,7 +269,7 @@ function Dashboard() {
                   {m.scenarios.length} approved scenarios
                   {m.needsReview && (
                     <span className="ml-2 text-[color:var(--warning-foreground)]">
-                      · review recommended
+                      · Needs review — training paused
                     </span>
                   )}
                 </div>

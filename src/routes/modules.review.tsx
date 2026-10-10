@@ -1,3 +1,4 @@
+import { reviewKey } from "@/lib/practice-change-tracking";
 import { useManagerAction } from "@/hooks/use-manager-action";
 import { readProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { orderKey, orderLabels } from "@/lib/sequence";
@@ -17,6 +18,9 @@ function Review() {
   const { id } = Route.useSearch();
   const nav = useNavigate();
   const action = useManagerAction();
+  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
+  const [reviewNote, setReviewNote] = useState("");
+  const [acknowledgedKey, setAcknowledgedKey] = useState("");
   const module = useApp((s) => s.modules.find((m) => m.id === id));
   const { practiceData, approveScenario, deleteScenario, regenerateScenario, updateScenario } =
     useApp();
@@ -47,6 +51,21 @@ function Review() {
   const allApproved =
     module.scenarios.length > 0 && module.scenarios.every((s) => s.status === "approved");
 
+  const currentReviewKey = reviewKey(module, practiceData);
+  const decisionReady =
+    reviewAcknowledged &&
+    acknowledgedKey === currentReviewKey &&
+    !!reviewNote.trim() &&
+    reviewNote.length <= 1000;
+  const publish = () =>
+    void action.run(
+      {
+        kind: "publish",
+        moduleId: module.id,
+        ...(module.needsReview ? { note: reviewNote.trim(), reviewKey: currentReviewKey } : {}),
+      },
+      () => nav({ to: "/dashboard" }),
+    );
   return (
     <Shell>
       {action.error && (
@@ -72,15 +91,15 @@ function Review() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() =>
-                void action.run({ kind: "publish", moduleId: module.id }, () =>
-                  nav({ to: "/dashboard" }),
-                )
-              }
-              disabled={!allApproved || action.saving}
+              onClick={publish}
+              disabled={!allApproved || action.saving || (!!module.needsReview && !decisionReady)}
               className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
             >
-              {action.pending?.kind === "publish" ? "Publishing…" : "Publish module"}
+              {action.pending?.kind === "publish"
+                ? "Publishing…"
+                : module.needsReview
+                  ? "Publish reviewed training"
+                  : "Publish module"}
             </button>
             <button
               type="button"
@@ -98,6 +117,94 @@ function Review() {
             </button>
           </div>
         </div>
+
+        {module.needsReview && (
+          <Card className="mt-6 border-warning/40 bg-warning/5">
+            <h2 className="font-semibold">Needs review</h2>
+            <p className="mt-2 whitespace-pre-line text-sm">
+              {module.reviewReason ??
+                "This training changed or may contain outdated practice information."}
+            </p>
+            <p className="mt-3 text-sm">
+              Review the questions below against your current practice information. Update or
+              regenerate them as needed, then approve and publish the reviewed training. You can
+              also explicitly confirm that the existing training remains correct.
+            </p>
+            <p className="mt-3 text-sm">
+              Existing attempts keep their original questions. Reassign corrected training to staff
+              who have already started it.
+            </p>
+            <Link to="/data-hub" className="mt-3 inline-block text-sm text-primary underline">
+              View current practice information
+            </Link>
+            <label className="mt-4 block text-sm">
+              Review decision notes
+              <textarea
+                value={reviewNote}
+                maxLength={1000}
+                onChange={(e) => setReviewNote(e.target.value)}
+                className="mt-2 block w-full rounded-xl border bg-background p-3"
+                placeholder="Explain what you checked, changed, or why the existing training is still correct."
+              />
+            </label>
+            <label className="mt-3 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={reviewAcknowledged && acknowledgedKey === currentReviewKey}
+                onChange={(e) => {
+                  setReviewAcknowledged(e.target.checked);
+                  setAcknowledgedKey(currentReviewKey);
+                }}
+              />
+              I have reviewed these questions against the current practice information.
+            </label>
+            <button
+              disabled={action.saving || !module.published || !allApproved || !decisionReady}
+              onClick={() =>
+                void action.run(
+                  {
+                    kind: "confirm-review",
+                    moduleId: module.id,
+                    note: reviewNote.trim(),
+                    reviewKey: currentReviewKey,
+                  },
+                  () => nav({ to: "/dashboard" }),
+                )
+              }
+              className="mt-4 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-40"
+            >
+              {action.pending?.kind === "confirm-review"
+                ? "Saving confirmation…"
+                : "Confirm existing training is still correct"}
+            </button>
+          </Card>
+        )}
+        {!!module.reviewConfirmations?.length && (
+          <details className="mt-6 rounded-xl border p-4 text-sm">
+            <summary>Recorded review decisions</summary>
+            <ul className="mt-3 space-y-3">
+              {module.reviewConfirmations.map((record) => (
+                <li key={record.id}>
+                  <p className="font-medium">
+                    {record.decision === "unchanged"
+                      ? "Confirmed existing training still correct"
+                      : "Reviewed and republished"}
+                  </p>
+                  <p>
+                    {record.name || record.by} ·{" "}
+                    {new Date(record.at).toLocaleString("en-GB", { timeZone: "Europe/London" })}
+                  </p>
+                  <p className="whitespace-pre-wrap">{record.note}</p>
+                  <ul>
+                    {record.reasons.map((reason, index) => (
+                      <li key={index}>{reason}</li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
 
         {module.settings && (
           <Card className="mt-6">
@@ -156,15 +263,15 @@ function Review() {
               : "Approve every scenario above before publishing."}
           </div>
           <button
-            onClick={() =>
-              void action.run({ kind: "publish", moduleId: module.id }, () =>
-                nav({ to: "/dashboard" }),
-              )
-            }
-            disabled={!allApproved || action.saving}
+            onClick={publish}
+            disabled={!allApproved || action.saving || (!!module.needsReview && !decisionReady)}
             className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
           >
-            {action.pending?.kind === "publish" ? "Publishing…" : "Publish module"}
+            {action.pending?.kind === "publish"
+              ? "Publishing…"
+              : module.needsReview
+                ? "Publish reviewed training"
+                : "Publish module"}
           </button>
         </div>
       </fieldset>

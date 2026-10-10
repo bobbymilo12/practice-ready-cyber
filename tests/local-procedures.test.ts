@@ -1,3 +1,4 @@
+import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import * as managerActions from "../src/lib/manager-actions.ts";
 import { normaliseRoleRequestCategories } from "../src/lib/role-requests.ts";
 import assert from "node:assert/strict";
@@ -167,7 +168,7 @@ function compile(path: string, imports: Record<string, unknown>) {
 test("save/reload uses whole-practice storage; failed/stale saves leave confirmed records and sessions untouched", async () => {
   const state = {
     practiceData: p,
-    modules: [{ id: "existing", scenarios: [] }],
+    modules: [{ id: "existing", published: true, scenarios: [] }],
     packages: [],
     assignments: [],
     setupComplete: true,
@@ -196,6 +197,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
   const useApp = create(() => ({ ...state, account: null }));
   const store = { useApp, defaultPracticeData: empty() };
   const dev = compile("../src/lib/dev-backend.ts", {
+    "./practice-change-tracking.ts": changeTracking,
     "./store": store,
     "./dev-mode": { devRole: () => "manager" },
     "./local-procedures.ts": procedures,
@@ -203,6 +205,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
     "./training": {},
   });
   const backend = compile("../src/lib/backend.ts", {
+    "./practice-change-tracking": changeTracking,
     "./manager-actions": managerActions,
     "./role-requests": { normaliseRoleRequestCategories },
     "./store": store,
@@ -220,13 +223,15 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
     /Storage unavailable/,
   );
   assert.equal(useApp.getState().practiceData.localProcedures, undefined);
+  assert.equal(useApp.getState().modules[0].needsReview, undefined);
   fail = false;
   await backend.saveLocalProcedures([record], { [target.id]: 0 });
   assert.equal(useApp.getState().practiceData.localProcedures[target.id].version, 1);
   await backend.loadWorkspace();
   assert.deepEqual(useApp.getState().practiceData.localProcedures[target.id], record);
   const data = JSON.parse(stored);
-  assert.deepEqual(data.state.modules, state.modules);
+  assert.equal(data.state.modules[0].needsReview, true);
+  assert.deepEqual(data.state.modules[0].scenarios, state.modules[0].scenarios);
   assert.deepEqual(data.sessions, [{ id: "session", traineeId: "other", answers: {} }]);
   await assert.rejects(backend.saveLocalProcedures([record], { [target.id]: 0 }), /has changed/);
   const draft = procedureDraft(record);

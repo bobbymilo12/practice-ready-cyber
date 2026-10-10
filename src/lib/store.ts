@@ -1,3 +1,4 @@
+import { flagPracticeChanges } from "./practice-change-tracking";
 import type { PracticeRoleRequests } from "./role-requests";
 import type { SafeguardingRoute } from "./practice-config";
 import type { BookingConfig, PrescriptionConfig } from "./practice-config";
@@ -378,23 +379,13 @@ export interface AppState {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-function markInductionNeedsReview(state: Pick<AppState, "modules" | "packages">) {
-  const induction = state.packages.find((p) => p.kind === "induction");
-  if (!induction) return {};
-  const moduleIds = new Set(induction.moduleIds);
+export function practiceChangePatch(
+  state: Pick<AppState, "practiceData" | "modules">,
+  next: PracticeData,
+) {
   return {
-    packages: state.packages.map((p) =>
-      p.id === induction.id ? { ...p, version: p.version + 1, updatedAt: Date.now() } : p,
-    ),
-    modules: state.modules.map((m) =>
-      moduleIds.has(m.id)
-        ? {
-            ...m,
-            needsReview: m.published || m.needsReview,
-            reviewReason: "Practice information changed. Re-check this induction module.",
-          }
-        : m,
-    ),
+    practiceData: next,
+    modules: flagPracticeChanges(state.practiceData, next, state.modules),
   };
 }
 
@@ -1574,7 +1565,11 @@ export const useApp = create<AppState>()((set, get) => ({
       modules: state.modules.map((module) =>
         module.id !== moduleId
           ? module
-          : module.settings || (scenario.kind === "order" && scenario.sequence)
+          : module.settings ||
+              module.scenarios.some(
+                (current) => current.id === scenario.id && !!current.provenance,
+              ) ||
+              (scenario.kind === "order" && scenario.sequence)
             ? reviseConfiguredScenario(module, scenario)
             : {
                 ...module,
@@ -1666,6 +1661,7 @@ export const useApp = create<AppState>()((set, get) => ({
     set((state) => ({
       modules: state.modules.map((m) =>
         m.id === moduleId &&
+        !m.needsReview &&
         m.scenarios.length > 0 &&
         m.scenarios.every((s) => s.status === "approved")
           ? { ...m, published: true, needsReview: false }
@@ -1868,76 +1864,59 @@ export const useApp = create<AppState>()((set, get) => ({
   },
 
   setSameDayReasons: (reasons) =>
-    set((state) => ({ practiceData: { ...state.practiceData, sameDayReasons: reasons } })),
+    set((state) => practiceChangePatch(state, { ...state.practiceData, sameDayReasons: reasons })),
 
-  clearReviewFlag: (moduleId) =>
-    set((state) => ({
-      modules: state.modules.map((m) =>
-        m.id === moduleId ? { ...m, needsReview: false, reviewReason: undefined } : m,
-      ),
-    })),
+  clearReviewFlag: () => {
+    throw new Error(
+      "Record a confirmed manager review decision instead of dismissing this warning.",
+    );
+  },
 
   setRoleRequests: (config) =>
-    set((s) => ({
-      practiceData: {
+    set((s) =>
+      practiceChangePatch(s, {
         ...s.practiceData,
         roleRequests: { ...s.practiceData.roleRequests, [config.roleId]: config },
-      },
-    })),
+      }),
+    ),
   setSafeguardingRoute: (safeguardingRoute) =>
-    set((s) => ({
-      ...markInductionNeedsReview(s),
-      practiceData: { ...s.practiceData, safeguardingRoute },
-    })),
+    set((s) => practiceChangePatch(s, { ...s.practiceData, safeguardingRoute })),
   setBookingConfig: (bookingConfig) =>
-    set((s) => ({
-      ...markInductionNeedsReview(s),
-      practiceData: { ...s.practiceData, bookingConfig },
-    })),
+    set((s) => practiceChangePatch(s, { ...s.practiceData, bookingConfig })),
   setPrescriptionConfig: (prescriptionConfig) =>
-    set((s) => ({
-      ...markInductionNeedsReview(s),
-      practiceData: { ...s.practiceData, prescriptionConfig },
-    })),
+    set((s) => practiceChangePatch(s, { ...s.practiceData, prescriptionConfig })),
   setPracticeField: (field, value) =>
-    set((state) => ({
-      ...markInductionNeedsReview(state),
-      practiceData: { ...state.practiceData, [field]: value },
-    })),
-
+    set((s) => practiceChangePatch(s, { ...s.practiceData, [field]: value })),
   setRolePolicy: (field, value) =>
-    set((state) => ({
-      ...markInductionNeedsReview(state),
-      practiceData: {
-        ...state.practiceData,
-        rolePolicies: { ...state.practiceData.rolePolicies, [field]: value },
-      },
-    })),
-
-  addStaff: (s) =>
-    set((state) => ({
-      practiceData: {
-        ...state.practiceData,
-        staff: [...state.practiceData.staff, { ...s, id: uid() }],
-      },
-    })),
-
+    set((s) =>
+      practiceChangePatch(s, {
+        ...s.practiceData,
+        rolePolicies: { ...s.practiceData.rolePolicies, [field]: value },
+      }),
+    ),
+  addStaff: (person) =>
+    set((s) =>
+      practiceChangePatch(s, {
+        ...s.practiceData,
+        staff: [...s.practiceData.staff, { ...person, id: uid() }],
+      }),
+    ),
   updateStaff: (id, patch) =>
-    set((state) => ({
-      practiceData: {
-        ...state.practiceData,
-        // Keep historical individual fields intact; current scope comes from the shared role.
-        staff: state.practiceData.staff.map((s) => (s.id === id ? { ...s, ...patch } : s)),
-      },
-    })),
-
+    set((s) =>
+      practiceChangePatch(s, {
+        ...s.practiceData,
+        staff: s.practiceData.staff.map((person) =>
+          person.id === id ? { ...person, ...patch } : person,
+        ),
+      }),
+    ),
   removeStaff: (id) =>
-    set((state) => ({
-      practiceData: {
-        ...state.practiceData,
-        staff: state.practiceData.staff.filter((s) => s.id !== id),
-      },
-    })),
+    set((s) =>
+      practiceChangePatch(s, {
+        ...s.practiceData,
+        staff: s.practiceData.staff.filter((person) => person.id !== id),
+      }),
+    ),
 
   replaceStaffName: (oldName, newName, propagate) => {
     const trimmedOld = oldName.trim();
@@ -1949,7 +1928,7 @@ export const useApp = create<AppState>()((set, get) => ({
         s.name.trim().toLowerCase() === trimmedOld.toLowerCase() ? { ...s, name: trimmedNew } : s,
       );
       if (!propagate) {
-        return { practiceData: { ...state.practiceData, staff } };
+        return practiceChangePatch(state, { ...state.practiceData, staff });
       }
       const modules = state.modules.map((m) => {
         let moduleTouched = false;
@@ -1970,7 +1949,7 @@ export const useApp = create<AppState>()((set, get) => ({
             }
           : { ...m, scenarios };
       });
-      return { practiceData: { ...state.practiceData, staff }, modules };
+      return practiceChangePatch({ ...state, modules }, { ...state.practiceData, staff });
     });
     return touched;
   },

@@ -1,3 +1,4 @@
+import { flagPracticeChanges, enforceReviewDecisions } from "./practice-change-tracking.ts";
 import { validateLocalProcedures } from "./local-procedures.ts";
 // Loaded dynamically only for a local development mock session. No network operations belong here.
 import {
@@ -151,7 +152,11 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
           ? state
           : {
               practiceData: { ...state.practiceData, staff: [] },
-              modules: state.modules.filter((m) => assignments.some((a) => a.moduleId === m.id)),
+              modules: state.modules
+                .filter((m) => assignments.some((a) => a.moduleId === m.id))
+                .map(
+                  ({ reviewConfirmations: _history, reviewChanges: _changes, ...module }) => module,
+                ),
               packages: state.packages,
               assignments,
               emojiMarks: state.emojiMarks,
@@ -167,8 +172,29 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
       validateLocalProcedures((body.state as PracticeState)?.practiceData?.localProcedures);
       if (body.version !== workspace.version)
         throw new Error("Mock practice changed. Reload and try again.");
-      workspace.state = body.state as PracticeState;
-      result = { version: ++workspace.version };
+      const next = body.state as PracticeState;
+      next.modules = enforceReviewDecisions(
+        workspace.state.modules,
+        next.modules,
+        next.practiceData,
+        { id: account.id ?? "dev-manager", name: account.name },
+        new Date().toISOString(),
+        workspace.state.practiceData,
+      );
+      next.modules = flagPracticeChanges(
+        workspace.state.practiceData,
+        next.practiceData,
+        next.modules,
+      );
+      workspace.state = next;
+      result = {
+        version: ++workspace.version,
+        reviewConfirmations: Object.fromEntries(
+          next.modules
+            .filter((m) => m.reviewConfirmations?.length)
+            .map((m) => [m.id, m.reviewConfirmations]),
+        ),
+      };
     } else if (action === "invite") {
       const email = String(body.email ?? "").trim();
       const existing = workspace.trainees.find((t) => t.email === email);

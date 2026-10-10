@@ -1,3 +1,4 @@
+import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -108,6 +109,7 @@ async function harness(assigned = false, published = assigned) {
     "../src/lib/backend.ts",
     {
       "./manager-actions": managerActions,
+      "./practice-change-tracking": changeTracking,
       "./store": { useApp, defaultPracticeData: empty() },
       "./dev-mode": { devRole: () => null },
       "./role-requests": { normaliseRoleRequestCategories: (v: unknown) => v },
@@ -146,9 +148,32 @@ async function harness(assigned = false, published = assigned) {
   await backend.loadWorkspace();
   const succeed = (index: number) => {
     assert.equal(requests[index].body.version, version);
-    stored = structuredClone(requests[index].body.state);
+    const next = structuredClone(requests[index].body.state);
+    next.modules = changeTracking.enforceReviewDecisions(
+      stored.modules as any,
+      next.modules as any,
+      next.practiceData,
+      { id: "manager", name: "Manager" },
+      new Date().toISOString(),
+      stored.practiceData,
+    );
+    next.modules = changeTracking.flagPracticeChanges(
+      stored.practiceData,
+      next.practiceData,
+      next.modules as any,
+    );
+    stored = next;
     version++;
-    requests[index].resolve(Response.json({ version }));
+    requests[index].resolve(
+      Response.json({
+        version,
+        reviewConfirmations: Object.fromEntries(
+          next.modules
+            .filter((m: any) => m.reviewConfirmations?.length)
+            .map((m: any) => [m.id, m.reviewConfirmations]),
+        ),
+      }),
+    );
   };
   const fail = (index: number) =>
     requests[index].resolve(Response.json({ error: "Save rejected. Try again." }, { status: 503 }));
@@ -200,7 +225,12 @@ async function harness(assigned = false, published = assigned) {
       "@/lib/dev-procedure-diagnostics": { readProcedureDiagnostics: () => null },
       "@/lib/role-matching": {},
       "@/lib/sequence": {},
-      "@/lib/training": { assignmentProgress: () => ({ fraction: 0, status: "Not Started" }) },
+      "@/lib/practice-change-tracking": changeTracking,
+      "@/lib/training": {
+        assignmentProgress: () => ({ fraction: 0, status: "Not Started" }),
+        primaryScenarios: (module: any) =>
+          module.scenarios.filter((s: any) => s.status === "approved" && !s.followUpFor),
+      },
     };
     const hook = compile("../src/hooks/use-manager-action.ts", imports);
     imports["@/hooks/use-manager-action"] = hook;
@@ -419,10 +449,10 @@ test("ordinary debounced saving stays functional during and after a confirmed ac
   assert.equal(h.stored.practiceData.hours, "09:00–17:00");
 });
 
-for (const kind of ["delete-draft", "clear-review"] as const)
+for (const kind of ["delete-draft", "confirm-review"] as const)
   test(`${kind} remains unchanged after failure and applies only after a successful retry`, async () => {
     const h = await harness();
-    if (kind === "clear-review") {
+    if (kind === "confirm-review") {
       h.useApp.setState((s: any) => ({
         modules: s.modules.map((m: any) => ({ ...m, published: true, needsReview: true })),
       }));
@@ -432,7 +462,18 @@ for (const kind of ["delete-draft", "clear-review"] as const)
       await save;
     }
     const offset = h.requests.length;
-    const action = { kind, moduleId: "draft" };
+    const action =
+      kind === "confirm-review"
+        ? {
+            kind,
+            moduleId: "draft",
+            note: "Checked the current practice rules; this module remains correct.",
+            reviewKey: changeTracking.reviewKey(
+              h.useApp.getState().modules[0],
+              h.useApp.getState().practiceData,
+            ),
+          }
+        : { kind, moduleId: "draft" };
     const original = JSON.stringify(h.useApp.getState().modules);
     const failed = h.backend.confirmManagerAction(action);
     await spin(() => h.requests.length === offset + 1);
@@ -565,3 +606,145 @@ for (const succeeds of [true, false])
       assert.equal(h.useApp.getState().modules.length, 3);
     }
   });
+
+test("review UI requires an explicit decision and saves authenticated confirmation before clearing the flag", async () => {
+  const h = await harness(true);
+  h.useApp.setState((s: any) => ({
+    practiceData: { ...s.practiceData, repeatTurnaround: "72 working hours" },
+  }));
+  const save = h.backend.flushPractice();
+  await spin(() => h.requests.length === 1);
+  h.succeed(0);
+  await save;
+  assert.equal(h.useApp.getState().modules[0].needsReview, true);
+  const dashboard = h.ui("dashboard");
+  assert.equal(dashboard.buttons("Dismiss").length, 0);
+  const ui = h.ui("review");
+  const button = "Confirm existing training is still correct";
+  assert.equal(ui.button(button).props.disabled, true);
+  ui.render()
+    .find((node) => node.type === "textarea")
+    .props.onChange({ target: { value: "Checked each question: no old turnaround is promised." } });
+  ui.render()
+    .find((node) => node.type === "input" && node.props.type === "checkbox")
+    .props.onChange({ target: { checked: true } });
+  const confirm = ui.button(button);
+  assert.equal(confirm.props.disabled, false);
+  confirm.props.onClick();
+  confirm.props.onClick();
+  await spin(() => h.requests.length === 2);
+  assert.equal(h.useApp.getState().modules[0].needsReview, true);
+  assert.equal(h.useApp.getState().modules[0].reviewConfirmations, undefined);
+  assert.equal(ui.navigation.length, 0);
+  h.requests[1].body.state.modules[0].reviewConfirmations[0].by = "forged";
+  h.succeed(1);
+  await spin(() => ui.navigation.length === 1);
+  const confirmed = h.useApp.getState().modules[0];
+  assert.equal(confirmed.needsReview, false);
+  assert.equal(confirmed.reviewConfirmations[0].by, "manager");
+  assert.equal(confirmed.reviewConfirmations[0].decision, "unchanged");
+  assert.ok(
+    confirmed.reviewConfirmations[0].reasons.some((reason: string) =>
+      reason.includes("Prescription turnaround"),
+    ),
+  );
+});
+
+test("failed review confirmation retains the warning and never adds a local confirmation record", async () => {
+  const h = await harness(true);
+  h.useApp.setState((s: any) => ({
+    practiceData: { ...s.practiceData, repeatTurnaround: "72 working hours" },
+  }));
+  const save = h.backend.flushPractice();
+  await spin(() => h.requests.length === 1);
+  h.succeed(0);
+  await save;
+  const module = h.useApp.getState().modules[0];
+  const action = {
+    kind: "confirm-review",
+    moduleId: module.id,
+    note: "Checked all questions.",
+    reviewKey: changeTracking.reviewKey(module, h.useApp.getState().practiceData),
+  };
+  const failed = h.backend.confirmManagerAction(action);
+  await spin(() => h.requests.length === 2);
+  h.fail(1);
+  await assert.rejects(failed, /Save rejected/);
+  assert.equal(h.useApp.getState().modules[0].needsReview, true);
+  assert.equal(h.useApp.getState().modules[0].reviewConfirmations, undefined);
+  const retried = h.backend.confirmManagerAction(action);
+  await spin(() => h.requests.length === 3);
+  h.succeed(2);
+  await retried;
+  assert.equal(h.useApp.getState().modules[0].reviewConfirmations.length, 1);
+});
+
+test("a new configuration change during confirmation keeps training blocked and retains the earlier decision", async () => {
+  const h = await harness(true);
+  h.useApp.setState((s: any) => ({
+    practiceData: { ...s.practiceData, repeatTurnaround: "72 working hours" },
+  }));
+  const save = h.backend.flushPractice();
+  await spin(() => h.requests.length === 1);
+  h.succeed(0);
+  await save;
+  const module = h.useApp.getState().modules[0];
+  const action = {
+    kind: "confirm-review",
+    moduleId: module.id,
+    note: "Checked this configuration.",
+    reviewKey: changeTracking.reviewKey(module, h.useApp.getState().practiceData),
+  };
+  const operation = h.backend.confirmManagerAction(action);
+  await spin(() => h.requests.length === 2);
+  h.useApp.setState((s: any) => ({
+    practiceData: { ...s.practiceData, repeatTurnaround: "96 working hours" },
+  }));
+  h.succeed(1);
+  await operation;
+  assert.equal(h.useApp.getState().modules[0].needsReview, true);
+  assert.equal(h.useApp.getState().modules[0].reviewConfirmations.length, 1);
+  await spin(() => h.requests.length === 3);
+  h.succeed(2);
+  await spin(() => !h.backend.useConnection.getState().saving);
+  assert.equal(h.stored.modules[0].needsReview, true);
+});
+
+test("reviewed or updated training records its decision and waits for confirmed publication", async () => {
+  const h = await harness(true);
+  h.useApp.setState((s: any) => ({
+    practiceData: { ...s.practiceData, repeatTurnaround: "72 working hours" },
+  }));
+  let save = h.backend.flushPractice();
+  await spin(() => h.requests.length === 1);
+  h.succeed(0);
+  await save;
+  h.useApp.setState((s: any) => ({
+    modules: s.modules.map((m: any) => ({
+      ...m,
+      scenarios: m.scenarios.map((q: any) => ({
+        ...q,
+        learningPoint: "Use the newly confirmed turnaround.",
+      })),
+    })),
+  }));
+  save = h.backend.flushPractice();
+  await spin(() => h.requests.length === 2);
+  h.succeed(1);
+  await save;
+  const ui = h.ui("review");
+  ui.render()
+    .find((node) => node.type === "textarea")
+    .props.onChange({ target: { value: "Reviewed the updated turnaround question." } });
+  ui.render()
+    .find((node) => node.type === "input" && node.props.type === "checkbox")
+    .props.onChange({ target: { checked: true } });
+  ui.button("Publish reviewed training").props.onClick();
+  await spin(() => h.requests.length === 3);
+  assert.equal(h.useApp.getState().modules[0].needsReview, true);
+  assert.equal(ui.navigation.length, 0);
+  h.succeed(2);
+  await spin(() => ui.navigation.length === 1);
+  assert.equal(h.useApp.getState().modules[0].needsReview, false);
+  assert.equal(h.useApp.getState().modules[0].reviewConfirmations[0].decision, "updated");
+});

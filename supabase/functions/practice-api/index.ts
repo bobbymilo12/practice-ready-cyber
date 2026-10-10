@@ -1,3 +1,7 @@
+import {
+  flagPracticeChanges,
+  enforceReviewDecisions,
+} from "../../../src/lib/practice-change-tracking.ts";
 import { validateLocalProcedures } from "../../../src/lib/local-procedures.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
@@ -163,7 +167,11 @@ Deno.serve(async (request) => {
               practiceData: {
                 practiceName: (await loadPracticeData())?.practiceName || "Your practice",
               },
-              modules: modules.filter((m) => m.published && mine.some((a) => a.moduleId === m.id)),
+              modules: modules
+                .filter((m) => m.published && mine.some((a) => a.moduleId === m.id))
+                .map(
+                  ({ reviewConfirmations: _history, reviewChanges: _changes, ...module }) => module,
+                ),
               packages: (state.packages ?? []).filter((p: { moduleIds?: string[] }) =>
                 (p.moduleIds ?? []).some((moduleId) => mine.some((a) => a.moduleId === moduleId)),
               ),
@@ -224,6 +232,22 @@ Deno.serve(async (request) => {
         )
           fail("Approve every scenario before publishing.");
       }
+      const previousPractice = await loadPracticeData();
+      try {
+        next.modules = enforceReviewDecisions(
+          modules,
+          next.modules,
+          next.practiceData,
+          { id: profile.id, name: profile.name },
+          new Date().toISOString(),
+          previousPractice,
+        );
+        next.modules = flagPracticeChanges(previousPractice, next.practiceData, next.modules);
+      } catch (error) {
+        fail(
+          error instanceof Error ? error.message : "Review the affected training before saving.",
+        );
+      }
       // Explicit allowlist; credentials, profiles, results and sessions cannot be overwritten here.
       const clean = {
         modules: next.modules,
@@ -248,7 +272,14 @@ Deno.serve(async (request) => {
           },
           409,
         );
-      return reply({ version: data });
+      return reply({
+        version: data,
+        reviewConfirmations: Object.fromEntries(
+          next.modules
+            .filter((m: Module) => m.reviewConfirmations?.length)
+            .map((m: Module) => [m.id, m.reviewConfirmations]),
+        ),
+      });
     }
 
     if (action === "invite") {
@@ -523,7 +554,9 @@ Deno.serve(async (request) => {
   } catch (error) {
     // Credentials and provider payloads must never be logged.
     return reply(
-      { error: error instanceof UserError ? error.message : "The request failed. Please try again." },
+      {
+        error: error instanceof UserError ? error.message : "The request failed. Please try again.",
+      },
       400,
     );
   }
