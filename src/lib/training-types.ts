@@ -126,6 +126,7 @@ export interface Module {
 }
 
 export interface TrainingResult {
+  scoreBasis?: "first_committed";
   attemptId?: string;
   strongTitles?: string[];
   recoveredTitles?: string[];

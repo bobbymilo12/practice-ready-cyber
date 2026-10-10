@@ -266,6 +266,9 @@ test("API calculates scores itself and retrying finish does not create a second 
   const sessionId = start.data.session.id;
   const args = { assignmentId: "a1", sessionId, scenarioId: "q1" };
   await call({ ...args, action: "answer", value: 0, correct: true });
+  const retryAnswer = await call({ ...args, action: "answer", value: 1, correct: true });
+  assert.equal(retryAnswer.data.session.answers[0].value, 0);
+  assert.equal(retryAnswer.data.session.answers[0].correct, false);
   await call({ ...args, action: "continue", result: { correct: 99 } });
   const end = await call({ ...args, action: "submit", result: { correct: 99 } });
   assert.equal(end.data.session.result.correct, 0);

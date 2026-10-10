@@ -82,8 +82,9 @@ test("refreshing during feedback retains the submitted answer and prevents dupli
   assert.equal(resumed.index, 0);
   const changed = answerSession(resumed, 1);
   assert.equal(changed.answers.length, 1);
-  assert.equal(changed.answers[0].value, 1);
-  assert.equal(changed.answers[0].correct, true);
+  assert.equal(changed.answers[0].value, 0);
+  assert.equal(changed.answers[0].correct, false);
+  assert.deepEqual(changed, resumed);
   assert.equal(advanceSession(resumed, module.title).index, 1);
 });
 
@@ -653,7 +654,7 @@ test("adding library roles preserves older custom data, aliases and role-scoped 
   assert.equal(custom.template, undefined);
 });
 
-test("previous navigation retains editable MCQ and ordering answers through reload and submission", () => {
+test("previous navigation retains immutable committed MCQ and ordering answers through reload and submission", () => {
   let s = startSession(module, assignment, "navigation");
   assert.equal(previousSession(s).index, 0);
   s = advanceSession(answerSession(s, 1), module.title);
@@ -671,9 +672,8 @@ test("previous navigation retains editable MCQ and ordering answers through relo
     "Check",
   ]);
   s = advanceSession(answerSession(s, order.kind === "order" ? order.steps : []), module.title);
-  s = advanceSession(answerSession(s, 1), module.title);
   s = submitSession(s, module.title);
-  assert.equal(s.result?.correct, 2);
+  assert.equal(s.result?.correct, 1);
   assert.equal(s.result?.total, 2);
   assert.equal(previousSession(s), s);
   assert.throws(() => answerSession(s, 0), /complete/);

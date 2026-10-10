@@ -42,12 +42,13 @@ test("local mock roles save isolated data, resume training and enforce trainee r
       name: "Use the process from a previous workplace without checking local guidance.",
     })
     .click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(
-    page.getByText("Answer selected. You can review all answers before submitting."),
+    page.getByText("Your checked answer is recorded and cannot be changed.", { exact: false }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByText("Answer selected. You can review all answers before submitting."),
+    page.getByText("Your checked answer is recorded and cannot be changed.", { exact: false }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Continue →", exact: true }).click();
   // Complete remaining primary and recovery questions using each recorded rule (second option).
@@ -68,8 +69,9 @@ test("local mock roles save isolated data, resume training and enforce trainee r
       return q.options[q.correctIndex] as string;
     });
     await page.getByRole("button", { name: label }).click();
+    await page.getByRole("button", { name: "Check answer", exact: true }).click();
     await page
-      .getByRole("button", { name: i === 0 ? "Continue →" : "Review answers", exact: true })
+      .getByRole("button", { name: i === 0 ? "Continue →" : "Review answers →", exact: true })
       .click();
   }
   await page.getByRole("button", { name: "Submit module" }).click();

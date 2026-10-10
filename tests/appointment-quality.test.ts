@@ -65,9 +65,140 @@ test("indirect if questions are not conditional steps; actual optional/condition
   const { p, procedure } = fixture();
   assert.ok(localProcedureSequence(p));
   if (procedure.status !== "configured") throw Error("fixture");
-  procedure.steps[0].text = "If the form is missing, ask for it.";
-  assert.equal(localProcedureSequence(p), undefined);
-  assert.match(inspectLocalProcedureSequences(p).reasons.join(" "), /conditional/);
+  for (const text of [
+    "If the form is missing, ask for it.",
+    "Ask for the form where needed.",
+    "Ask for the form when appropriate.",
+    "You may ask for the form.",
+    "You might need to ask for the form.",
+    "Use either the form or the inbox.",
+    "Send the form when available.",
+    "Check the inbox; otherwise ask for the form.",
+  ]) {
+    procedure.steps[0].text = text;
+    const original = JSON.stringify(p);
+    assert.equal(localProcedureSequence(p), undefined, text);
+    assert.equal(localProcedureApplication(p), undefined, text);
+    assert.match(inspectLocalProcedureSequences(p).reasons.join(" "), /conditional/);
+    for (const trainingLevel of ["learn", "apply"] as const) {
+      const generated = modules.generateConfiguredModule("appointment-booking", "Booking", p, {
+        ...modules.defaultModuleSettings(),
+        trainingLevel,
+        count: 10,
+      });
+      assert.ok(!generated.some((s) => s.provenance?.kind === "sequence"), text);
+    }
+    assert.equal(JSON.stringify(p), original, "generation must not rewrite the saved procedure");
+  }
+});
+
+test("module topic selection explains inherent practice information use without an adaptation choice", () => {
+  const source = readFileSync(new URL("../src/routes/modules.create.tsx", import.meta.url), "utf8");
+  const code = ts.transpileModule(source, {
+    compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  const exports: any = {};
+  const imports: Record<string, any> = {
+    react: { useState: () => ["", () => {}] },
+    "@tanstack/react-router": {
+      createFileRoute: () => (options: unknown) => options,
+      Link: "a",
+      useNavigate: () => () => {},
+    },
+    "@/components/Shell": { Shell: "main" },
+    "@/lib/store": {
+      TOPICS: [{ key: "appointment-booking", title: "Appointment booking", desc: "Booking" }],
+    },
+  };
+  new Function("require", "exports", code)((id: string) => imports[id] ?? require(id), exports);
+  const { renderToStaticMarkup } = require("react-dom/server");
+  const html = renderToStaticMarkup(exports.Route.component());
+  assert.match(html, /We use your practice’s configured information and procedures/);
+  assert.doesNotMatch(html, /adapt information|adapt procedures|type="checkbox"/i);
+});
+
+test("UTI procedure teaches reception actions without assigning them to the clinically responsible roles", () => {
+  // Fictional practice configuration: actions are test inputs, not suggested clinical guidance.
+  const p = practice();
+  const roles = Object.values(p.roleRequests!);
+  roles[0].label = "Doctor";
+  roles[1].label = "Practice Nurse";
+  roles[0].selectedRequestIds.push("utis");
+  const target = procedureTargets(p).find((t) => t.id === "utis")!;
+  const record = confirmProcedure(
+    target,
+    undefined,
+    {
+      steps: [
+        { id: "leave", text: "Tell the patient where to leave the sample." },
+        {
+          id: "process",
+          text: "The Practice Nurse processes the sample using the local procedure.",
+        },
+        { id: "ask", text: "Ask the patient to provide a urine sample." },
+        { id: "book", text: "Book the patient into the practice’s urine-dipping process." },
+      ],
+      stepOrder: ["ask", "book", "leave", "process"],
+      appliesWhen: "For requests following this confirmed sample process.",
+      orderRequirement: "required_linear",
+    },
+    "manager",
+  );
+  if (record.status !== "configured") throw Error("fixture");
+  p.localProcedures = { utis: record };
+  const original = JSON.stringify(p);
+  for (const trainingLevel of ["learn", "apply"] as const) {
+    const settings = { ...modules.defaultModuleSettings(), trainingLevel, count: 10 };
+    const recognition = modules
+      .configuredScenarios("appointment-booking", "Booking", p, settings)
+      .find((s) => s.kind === "mcq" && s.localRoleRequestId === "utis");
+    assert.ok(recognition?.kind === "mcq");
+    assert.equal(recognition.options[recognition.correctIndex], "Doctor or Practice Nurse");
+    assert.ok(!recognition.options.some((option) => /book|sample/i.test(option)));
+
+    const generated = modules.generateConfiguredModule(
+      "appointment-booking",
+      "Booking",
+      p,
+      settings,
+    );
+    const exercise = generated.find((s) => s.provenance?.kind === "sequence");
+    assert.ok(exercise);
+    assert.equal(exercise.status, "draft");
+    assert.deepEqual(exercise.provenance?.snapshot.localProcedure, record);
+    assert.ok(!generated.some((s) => s.kind === "mcq" && s.localRoleRequestId === "utis"));
+    if (trainingLevel === "learn") {
+      assert.ok(exercise.kind === "order" && exercise.sequence);
+      assert.deepEqual(exercise.sequence.correctOrder, record.stepOrder);
+      assert.deepEqual(
+        exercise.sequence.steps.map((s) => s.label),
+        record.steps.map((s) => s.text),
+      );
+      assert.match(exercise.question, /handling this request at reception/);
+    } else {
+      assert.ok(exercise.kind === "mcq");
+      assert.equal(exercise.question, "As the receptionist, what should you do first?");
+      assert.equal(
+        exercise.options[exercise.correctIndex],
+        "Ask the patient to provide a urine sample.",
+      );
+      assert.deepEqual([...exercise.options].sort(), record.steps.map((s) => s.text).sort());
+      assert.ok(
+        !exercise.options.some((option) =>
+          /Ask (?:the )?(?:Doctor|Practice Nurse) to provide/.test(option),
+        ),
+      );
+    }
+  }
+  assert.equal(JSON.stringify(p), original);
+  delete p.localProcedures;
+  const generated = modules.generateConfiguredModule("appointment-booking", "Booking", p, {
+    ...modules.defaultModuleSettings(),
+    trainingLevel: "apply",
+    count: 10,
+  });
+  assert.ok(!generated.some((s) => s.provenance?.kind === "sequence"));
+  assert.doesNotMatch(JSON.stringify(generated), /urine sample|urine-dipping/);
 });
 test("Apply uses only authored first/later steps and freezes their procedure snapshot", () => {
   const { p, procedure } = fixture();

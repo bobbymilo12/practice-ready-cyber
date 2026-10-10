@@ -175,7 +175,7 @@ test("pairing cards supports selecting, moving, unpairing and changing without a
   assert.deepEqual(pairCards({ a: "x" }, "b", "x", false), { a: "x", b: "x" });
 });
 
-test("partial answers save; one-to-one validated; navigation and submission retain one-board scoring", () => {
+test("partial checks are rejected; one-to-one validated; navigation and submission retain one-board scoring", () => {
   const s = roleMatchingScenario(practice([[0], [0, 1], [2], [3]]))!;
   const m = { ...moduleFor(), scenarios: [{ ...s, status: "approved" as const }] };
   let session = startSession(m, assignment, "attempt");
@@ -184,9 +184,12 @@ test("partial answers save; one-to-one validated; navigation and submission reta
     s.targets.map((t) => t.id),
     s.validMatches,
   )!;
-  session = answerSession(session, { [s.items[0].id]: solution[s.items[0].id] });
+  assert.throws(
+    () => answerSession(session, { [s.items[0].id]: solution[s.items[0].id] }),
+    /Match every/,
+  );
   session = JSON.parse(JSON.stringify(session));
-  assert.throws(() => advanceSession(session, m.title), /Match every/);
+  assert.throws(() => advanceSession(session, m.title), /Check answer/);
   assert.throws(() =>
     answerSession(session, { [s.items[0].id]: s.targets[0].id, [s.items[1].id]: s.targets[0].id }),
   );
@@ -273,7 +276,7 @@ test("documented four-role visual fixture generates ten mixed questions without 
   assert.equal(m.scenarios.filter((s) => s.kind === "mcq" && !s.provenance).length, 6);
 });
 
-test("pairings survive navigating between different scenarios and editing after reload", () => {
+test("committed pairings survive navigating between different scenarios and cannot be replaced after reload", () => {
   const m = moduleFor();
   let session = startSession(m, assignment, "navigation");
   const boardIndex = session.queue.findIndex(
@@ -300,15 +303,13 @@ test("pairings survive navigating between different scenarios and editing after 
   assert.deepEqual(session.answers.find((a) => a.scenarioId === board.id)!.value, solution);
   const changed = pairCards(solution, board.items[0].id, solution[board.items[1].id], true);
   session = answerSession(session, changed);
-  assert.throws(() => advanceSession(session, m.title), /Match every/);
+  assert.deepEqual(session.answers.find((a) => a.scenarioId === board.id)!.value, solution);
   session = answerSession(session, solution);
   assert.equal(advanceSession(session, m.title).index, boardIndex + 1);
 });
 
-test("saved status uses matching wording only for matching interactions", () => {
+test("training distinguishes unchecked edits from saved checked answers", () => {
   const source = readFileSync(new URL("../src/routes/train.tsx", import.meta.url), "utf8");
-  assert.match(
-    source,
-    /scenario\.kind === "matching"\s*\? "Matches saved\. You can change them before submitting\."\s*: "Answer selected\. You can review all answers before submitting\."/,
-  );
+  assert.ok(source.includes("Checked answers saved · unchecked edits stay on this page"));
+  assert.ok(source.includes("Your checked answer is recorded and cannot be changed."));
 });

@@ -1,3 +1,4 @@
+import { useManagerAction } from "@/hooks/use-manager-action";
 import { readProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { orderKey, orderLabels } from "@/lib/sequence";
 import { inspectRoleMatching, uniqueMatching } from "@/lib/role-matching";
@@ -15,16 +16,10 @@ export const Route = createFileRoute("/modules/review")({
 function Review() {
   const { id } = Route.useSearch();
   const nav = useNavigate();
+  const action = useManagerAction();
   const module = useApp((s) => s.modules.find((m) => m.id === id));
-  const {
-    practiceData,
-    approveScenario,
-    deleteScenario,
-    regenerateScenario,
-    updateScenario,
-    publishModule,
-    removeDraftModule,
-  } = useApp();
+  const { practiceData, approveScenario, deleteScenario, regenerateScenario, updateScenario } =
+    useApp();
 
   const matchingDiagnostic = useMemo(
     () =>
@@ -54,114 +49,125 @@ function Review() {
 
   return (
     <Shell>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            {module.type} · Draft review
-            {module.topicKey === "appointment-booking" && module.settings?.trainingLevel
-              ? ` · ${module.settings.trainingLevel === "learn" ? "Learn" : "Apply"}`
-              : ""}
-          </p>
-          <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
-            Review draft scenarios
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Manager review required. Approve every scenario, then publish the module for staff.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => {
-              publishModule(module.id);
-              nav({ to: "/dashboard" });
-            }}
-            disabled={!allApproved}
-            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-          >
-            Publish module
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm("Delete this draft module?")) {
-                removeDraftModule(module.id);
-                void nav({ to: "/dashboard" });
-              }
-            }}
-            className="rounded-xl border border-destructive/40 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/5"
-          >
-            Delete draft
-          </button>
-        </div>
-      </div>
-
-      {module.settings && (
-        <Card className="mt-6">
-          <p>
-            {module.scenarios.filter((s) => !s.followUpFor).length} scenarios · Requested length:{" "}
-            {module.settings.length} ({module.settings.count})
-          </p>
-          <Link
-            className="text-primary underline"
-            to="/modules/setup"
-            search={{ id: module.id, topic: module.topicKey, title: module.type }}
-          >
-            Edit settings and regenerate module
-          </Link>
-        </Card>
-      )}
-
-      {module.topicKey === "appointment-booking" && readProcedureDiagnostics(module.id) && (
-        <details className="mt-3 rounded-xl border p-3 text-sm">
-          <summary>Development only: procedure generation diagnostics</summary>
-          <p>
-            Captured from saved workspace data when this draft was generated. Not a live eligibility
-            check.
-          </p>
-          <pre className="mt-2 whitespace-pre-wrap break-words">
-            {JSON.stringify(JSON.parse(readProcedureDiagnostics(module.id)!), null, 2)}
-          </pre>
-        </details>
-      )}
-      {matchingDiagnostic && (
-        <p className="mt-4 text-sm text-muted-foreground">
-          <strong>Matching:</strong> This module contains no matching board. Current role
-          configuration: {matchingDiagnostic.message}
-          {matchingDiagnostic.code === "ready" &&
-            " Regenerate the Learn module to include one when there is room alongside other local questions."}
+      {action.error && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {action.error}
         </p>
       )}
-      <div className="mt-8 space-y-5">
-        {module.scenarios.map((s) => (
-          <ScenarioCard
-            appointmentBooking={module.topicKey === "appointment-booking"}
-            key={s.id}
-            scenario={s}
-            onApprove={() => approveScenario(module.id, s.id)}
-            onDelete={() => deleteScenario(module.id, s.id)}
-            onRegenerate={() => regenerateScenario(module.id, s.id)}
-            onSave={(next) => updateScenario(module.id, next)}
-          />
-        ))}
-      </div>
-
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
-        <div className="text-sm text-muted-foreground">
-          {allApproved
-            ? "All scenarios approved — ready to publish to staff."
-            : "Approve every scenario above before publishing."}
+      <fieldset disabled={action.saving} className="min-w-0">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {module.type} · Draft review
+              {module.topicKey === "appointment-booking" && module.settings?.trainingLevel
+                ? ` · ${module.settings.trainingLevel === "learn" ? "Learn" : "Apply"}`
+                : ""}
+            </p>
+            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
+              Review draft scenarios
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              Manager review required. Approve every scenario, then publish the module for staff.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() =>
+                void action.run({ kind: "publish", moduleId: module.id }, () =>
+                  nav({ to: "/dashboard" }),
+                )
+              }
+              disabled={!allApproved || action.saving}
+              className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+            >
+              {action.pending?.kind === "publish" ? "Publishing…" : "Publish module"}
+            </button>
+            <button
+              type="button"
+              disabled={action.saving || module.published}
+              onClick={() => {
+                if (window.confirm("Delete this draft module?")) {
+                  void action.run({ kind: "delete-draft", moduleId: module.id }, () =>
+                    nav({ to: "/dashboard" }),
+                  );
+                }
+              }}
+              className="rounded-xl border border-destructive/40 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/5"
+            >
+              {action.pending?.kind === "delete-draft" ? "Deleting…" : "Delete draft"}
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => {
-            publishModule(module.id);
-            nav({ to: "/dashboard" });
-          }}
-          disabled={!allApproved}
-          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-        >
-          Publish module
-        </button>
-      </div>
+
+        {module.settings && (
+          <Card className="mt-6">
+            <p>
+              {module.scenarios.filter((s) => !s.followUpFor).length} scenarios · Requested length:{" "}
+              {module.settings.length} ({module.settings.count})
+            </p>
+            <Link
+              className="text-primary underline"
+              to="/modules/setup"
+              search={{ id: module.id, topic: module.topicKey, title: module.type }}
+            >
+              Edit settings and regenerate module
+            </Link>
+          </Card>
+        )}
+
+        {module.topicKey === "appointment-booking" && readProcedureDiagnostics(module.id) && (
+          <details className="mt-3 rounded-xl border p-3 text-sm">
+            <summary>Development only: procedure generation diagnostics</summary>
+            <p>
+              Captured from saved workspace data when this draft was generated. Not a live
+              eligibility check.
+            </p>
+            <pre className="mt-2 whitespace-pre-wrap break-words">
+              {JSON.stringify(JSON.parse(readProcedureDiagnostics(module.id)!), null, 2)}
+            </pre>
+          </details>
+        )}
+        {matchingDiagnostic && (
+          <p className="mt-4 text-sm text-muted-foreground">
+            <strong>Matching:</strong> This module contains no matching board. Current role
+            configuration: {matchingDiagnostic.message}
+            {matchingDiagnostic.code === "ready" &&
+              " Regenerate the Learn module to include one when there is room alongside other local questions."}
+          </p>
+        )}
+        <div className="mt-8 space-y-5">
+          {module.scenarios.map((s) => (
+            <ScenarioCard
+              appointmentBooking={module.topicKey === "appointment-booking"}
+              key={s.id}
+              scenario={s}
+              onApprove={() => approveScenario(module.id, s.id)}
+              onDelete={() => deleteScenario(module.id, s.id)}
+              onRegenerate={() => regenerateScenario(module.id, s.id)}
+              onSave={(next) => updateScenario(module.id, next)}
+            />
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
+          <div className="text-sm text-muted-foreground">
+            {allApproved
+              ? "All scenarios approved — ready to publish to staff."
+              : "Approve every scenario above before publishing."}
+          </div>
+          <button
+            onClick={() =>
+              void action.run({ kind: "publish", moduleId: module.id }, () =>
+                nav({ to: "/dashboard" }),
+              )
+            }
+            disabled={!allApproved || action.saving}
+            className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+          >
+            {action.pending?.kind === "publish" ? "Publishing…" : "Publish module"}
+          </button>
+        </div>
+      </fieldset>
     </Shell>
   );
 }

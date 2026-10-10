@@ -8,7 +8,7 @@ import { createSequenceScenario } from "./sequence.ts";
  * This does not assess clinical correctness or infer missing operational facts.
  */
 const conditionalStep =
-  /\b(if|unless|optional|optionally|depending|alternatively)\b|\b(as needed|where appropriate|when necessary|may need|can skip)\b/i;
+  /\b(if|unless|optional|optionally|depending|alternatively|may|might)\b|\b((?:as|where|when|only when) (?:needed|appropriate|necessary|available)|can skip|either|otherwise)\b/i;
 
 export function inspectLocalProcedureSequences(p: PracticeData) {
   const reasons: string[] = [];
@@ -94,7 +94,7 @@ export function inspectLocalProcedureSequences(p: PracticeData) {
         },
         seed,
       );
-      scenario.question = `Put the steps for handling this request at your practice in the correct order: ${record.requestLabelAtConfirmation}`;
+      scenario.question = `You are handling this request at reception. Put your practice’s procedure steps in the correct order: ${record.requestLabelAtConfirmation}`;
       scenario.patientQuote = record.appliesWhen;
       candidates.push(scenario);
       eligible = true;
@@ -139,7 +139,7 @@ export function localProcedureApplication(
     ]
       .filter(Boolean)
       .join("\n\n"),
-    question: "What should you do first?",
+    question: "As the receptionist, what should you do first?",
     options: ordered,
     correctIndex: 0,
     learningPoint: "Begin with the first step in your practice’s procedure.",

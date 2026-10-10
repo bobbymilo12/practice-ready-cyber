@@ -19,7 +19,7 @@ export function SequenceBoard({
   const move = (from: number, to: number) => {
     if (disabled || from === to) return;
     const next = moveSequence(value, from, to);
-    onChange(next); // Each rearrangement uses the existing answer persistence path.
+    onChange(next); // The training screen keeps rearrangements as drafts until Check answer.
     cards.current[value[from]]?.focus();
     setAnnouncement(`Step moved to position ${to + 1}.`);
     setDragged(undefined);
@@ -28,7 +28,7 @@ export function SequenceBoard({
     <div className="mt-4">
       <p className="text-sm text-muted-foreground">
         Drag the steps into order, or use the arrow controls. You can change your answer before
-        submitting.
+        checking.
       </p>
       <ol className="mt-4 space-y-2">
         {value.map((id, index) => (

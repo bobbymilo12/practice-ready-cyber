@@ -43,7 +43,7 @@ test("rendered cards have drag support and keyboard controls, without answer-key
   assert.ok(!/correct|incorrect|Select this order/.test(html));
   assert.ok(!source.includes("correctOrder"));
 });
-test("arrow and drop handlers call persistence immediately with stable IDs; disabled state prevents edits", () => {
+test("arrow and drop handlers edit a draft with stable IDs; only checking records an answer", () => {
   const module = sequencePreviewModule();
   const scenario = module.scenarios[0];
   if (scenario.kind !== "order" || !scenario.sequence) throw new Error("fixture");
@@ -77,7 +77,7 @@ test("arrow and drop handlers call persistence immediately with stable IDs; disa
       disabled,
       onChange: (next: string[]) => {
         saves++;
-        session = answerSession(session, next);
+        // Match the training screen: board movements only update a local draft.
         value = next;
       },
     });
@@ -91,14 +91,16 @@ test("arrow and drop handlers call persistence immediately with stable IDs; disa
   let tree = elements(render());
   tree.find((e) => e.props?.["aria-label"] === "Move step 1 down").props.onClick();
   assert.equal(saves, 1);
-  assert.deepEqual(session.answers[0].value, value);
+  assert.deepEqual(session.answers, []);
   tree = elements(render());
   tree.filter((e) => e.type === "li")[0].props.onDragStart({ dataTransfer: { setData() {} } });
   tree = elements(render());
   tree.filter((e) => e.type === "li")[3].props.onDrop({ preventDefault() {} });
   assert.equal(saves, 2);
-  assert.deepEqual(JSON.parse(JSON.stringify(session)).answers[0].value, value);
+  assert.deepEqual(JSON.parse(JSON.stringify(session)).answers, []);
   tree = elements(render(true));
   tree.find((e) => e.props?.["aria-label"] === "Move step 1 down").props.onClick();
   assert.equal(saves, 2);
+  session = answerSession(session, value);
+  assert.deepEqual(session.answers[0].value, value);
 });

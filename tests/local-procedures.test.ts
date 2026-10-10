@@ -1,3 +1,4 @@
+import * as managerActions from "../src/lib/manager-actions.ts";
 import { normaliseRoleRequestCategories } from "../src/lib/role-requests.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -202,6 +203,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
     "./training": {},
   });
   const backend = compile("../src/lib/backend.ts", {
+    "./manager-actions": managerActions,
     "./role-requests": { normaliseRoleRequestCategories },
     "./store": store,
     "./dev-mode": { devRole: () => "manager" },
