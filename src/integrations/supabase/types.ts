@@ -38,6 +38,54 @@ export type Database = {
         }
         Relationships: []
       }
+      cookie_consents: {
+        Row: {
+          choice: string
+          created_at: string
+          id: string
+          policy_version: string
+          visitor_id: string | null
+        }
+        Insert: {
+          choice: string
+          created_at?: string
+          id?: string
+          policy_version: string
+          visitor_id?: string | null
+        }
+        Update: {
+          choice?: string
+          created_at?: string
+          id?: string
+          policy_version?: string
+          visitor_id?: string | null
+        }
+        Relationships: []
+      }
+      page_views: {
+        Row: {
+          created_at: string
+          id: string
+          path: string
+          referrer_host: string | null
+          visitor_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          path: string
+          referrer_host?: string | null
+          visitor_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          path?: string
+          referrer_host?: string | null
+          visitor_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -20,7 +20,7 @@ function CookiesPage() {
             This policy explains the cookies and similar technologies PracticeReady uses, in line
             with the Privacy and Electronic Communications Regulations (PECR) and UK GDPR.
           </p>
-          <p className="mt-3 text-sm text-muted-foreground">Last updated: 9 October 2026</p>
+          <p className="mt-3 text-sm text-muted-foreground">Last updated: 10 October 2026</p>
         </section>
         <section className="legal-content">
           <h2>What cookies and similar storage are</h2>
@@ -32,9 +32,11 @@ function CookiesPage() {
 
           <h2>What we use</h2>
           <p>
-            PracticeReady uses only <strong>strictly necessary</strong> storage. It is needed to
-            sign you in, keep your session secure and remember your cookie choice. Under PECR,
-            strictly necessary storage does not require consent, but we still tell you about it.
+            PracticeReady uses <strong>strictly necessary</strong> storage to sign you in, keep your
+            session secure and remember your cookie choice. Under PECR, strictly necessary storage
+            does not require consent, but we still tell you about it. We also use one{" "}
+            <strong>optional analytics</strong> item, which is only set if you choose &quot;Accept
+            all&quot;.
           </p>
           <table>
             <thead>
@@ -69,6 +71,38 @@ function CookiesPage() {
               </tr>
             </tbody>
           </table>
+
+          <h2>Optional analytics (only with your consent)</h2>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Type</th>
+                <th scope="col">Purpose</th>
+                <th scope="col">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>analytics-visitor-id</td>
+                <td>Local storage (first party)</td>
+                <td>
+                  A random ID that lets us count visits and see which pages are used, so we can
+                  improve PracticeReady
+                </td>
+                <td>Until you reject cookies or clear it</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            If you accept, we record the random ID, the page address (without any search or form
+            details), the website that linked you to us on your first page, and the time. We do not
+            record your name, account, IP address or device details. This data stays in our own
+            database and is not shared with analytics or advertising companies. Our lawful basis is
+            your consent. If you reject or later withdraw consent, the ID is deleted from your
+            browser and no further visits are recorded. We also keep a record of each cookie choice
+            (accept or reject, the date and the policy version) to show we asked for consent.
+          </p>
           <p>
             Our fonts are hosted on our own servers, so loading a page does not send your
             information to font providers.
@@ -76,9 +110,9 @@ function CookiesPage() {
 
           <h2>What we don&apos;t use</h2>
           <p>
-            We do not use analytics, advertising, social media or tracking cookies, and we do not
-            share cookie data with third parties for marketing. If we ever introduce optional
-            cookies, we will update this policy and will not set them unless you accept them.
+            We do not use advertising, social media or third-party tracking cookies, and we do not
+            share cookie data with third parties for marketing. If we add any other optional
+            cookies, we will update this policy and ask for your consent again.
           </p>
 
           <h2>Managing your choice</h2>
