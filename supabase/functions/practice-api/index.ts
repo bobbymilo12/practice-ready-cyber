@@ -93,7 +93,12 @@ Deno.serve(async (request) => {
         suggestions: { status: t.suggestions_status, selectedRequestIds: t.selected_request_ids },
       }));
     };
-    const modules: Module[] = state.modules ?? [];
+    // Modules live in practice_modules (see 202610100003_practice_modules.sql), not in state.
+    const { data: moduleRows, error: modulesError } = await admin.rpc("load_practice_modules", {
+      p_practice: profile.practice_id,
+    });
+    check(modulesError);
+    const modules: Module[] = moduleRows ?? [];
     const assignments: Assignment[] = state.assignments ?? [];
     const account = {
       id: profile.id,
@@ -158,7 +163,7 @@ Deno.serve(async (request) => {
         version: practice.version,
         roleTemplates: manager ? await loadRoleTemplates() : undefined,
         state: manager
-          ? { ...state, practiceData: await loadPracticeData() }
+          ? { ...state, modules, practiceData: await loadPracticeData() }
           : {
               practiceData: {
                 practiceName: (await loadPracticeData())?.practiceName || "Your practice",

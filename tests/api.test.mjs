@@ -72,13 +72,16 @@ function query(table) {
 }
 const mockClient = {
   from: query,
-  // Mirrors the SQL functions in 202610090001_practice_tables.sql.
+  // Mirrors the SQL functions in 202610090001_practice_tables.sql and 202610100003_practice_modules.sql.
   rpc: async (name, args) => {
     const practice = tables.practices.find((p) => p.id === args.p_practice);
     if (name === "load_practice_data") return { data: tables.practice_data[args.p_practice] ?? null, error: null };
+    if (name === "load_practice_modules") return { data: tables.practice_modules[args.p_practice] ?? [], error: null };
     if (practice.version !== args.p_version) return { data: null, error: null };
-    Object.assign(practice, { state: args.p_state, version: practice.version + 1 });
+    const { modules, ...state } = args.p_state;
+    Object.assign(practice, { state, version: practice.version + 1 });
     tables.practice_data[args.p_practice] = args.p_data;
+    tables.practice_modules[args.p_practice] = modules ?? [];
     writes.push({ table: "practice_data", operation: "rpc", value: args.p_data, filters: [] });
     return { data: practice.version, error: null };
   },
@@ -153,24 +156,6 @@ function reset(role = "trainee", mustReset = false) {
       id: "oak",
       version: 1,
       state: {
-        modules: [
-          {
-            id: "m1",
-            title: "Booking",
-            published: true,
-            scenarios: [
-              {
-                id: "q1",
-                kind: "mcq",
-                options: ["Wrong", "Correct"],
-                correctIndex: 1,
-                status: "approved",
-                title: "Booking",
-              },
-            ],
-          },
-          { id: "m2", published: true, scenarios: [] },
-        ],
         assignments: [
           { id: "a1", moduleId: "m1", traineeId: "alice" },
           { id: "a2", moduleId: "m2", traineeId: "bob" },
@@ -180,6 +165,26 @@ function reset(role = "trainee", mustReset = false) {
     },
   ];
   tables.practice_data = { oak: { practiceName: "Oak", privateManagerField: "internal" } };
+  tables.practice_modules = {
+    oak: [
+      {
+        id: "m1",
+        title: "Booking",
+        published: true,
+        scenarios: [
+          {
+            id: "q1",
+            kind: "mcq",
+            options: ["Wrong", "Correct"],
+            correctIndex: 1,
+            status: "approved",
+            title: "Booking",
+          },
+        ],
+      },
+      { id: "m2", published: true, scenarios: [] },
+    ],
+  };
   tables.role_templates = [];
   tables.training_sessions = [
     {
@@ -299,7 +304,7 @@ test("failed invitation email reports failure and preserves an account for resen
 test("packages and module settings survive manager save and filtered trainee load", async () => {
   reset("manager");
   const state = ({ ...structuredClone(tables.practices[0].state), practiceData: tables.practice_data.oak });
-  state.modules = [state.modules[0]];
+  state.modules = [structuredClone(tables.practice_modules.oak[0])];
   state.assignments = [
     { id: "bob-configured", moduleId: "m1", traineeId: "bob", packageId: "induction" },
   ];
@@ -320,6 +325,8 @@ test("packages and module settings survive manager save and filtered trainee loa
   const manager = await call({ action: "load" });
   assert.deepEqual(manager.data.state.packages, state.packages);
   assert.deepEqual(manager.data.state.modules[0].settings, state.modules[0].settings);
+  assert.equal(tables.practices[0].state.modules, undefined);
+  assert.deepEqual(tables.practice_modules.oak.map((m) => m.id), ["m1"]);
   user = { id: "bob" };
   const trainee = await call({ action: "load" });
   assert.deepEqual(trainee.data.state.packages, [state.packages[0]]);
@@ -334,8 +341,9 @@ test("invitation assigns only ready induction modules and resend does not duplic
   );
   reset("manager");
   const state = tables.practices[0].state;
-  state.modules[0].settings = { version: 1, answers: {}, extra: "", length: "quick", count: 6 };
-  state.modules.push(
+  const modules = tables.practice_modules.oak;
+  modules[0].settings = { version: 1, answers: {}, extra: "", length: "quick", count: 6 };
+  modules.push(
     { id: "draft", published: false },
     { id: "review", published: true, needsReview: true },
   );
