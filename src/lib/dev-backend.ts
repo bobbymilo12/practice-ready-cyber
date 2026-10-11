@@ -1,5 +1,6 @@
 import { flagPracticeChanges, enforceReviewDecisions } from "./practice-change-tracking.ts";
-import { validateLocalProcedures } from "./local-procedures.ts";
+import { suggestedRole } from "./role-requests.ts";
+import { confirmProcedure, procedureTargets, validateLocalProcedures } from "./local-procedures.ts";
 // Loaded dynamically only for a local development mock session. No network operations belong here.
 import {
   defaultPracticeData,
@@ -28,6 +29,86 @@ type Workspace = {
   sessions: TrainingSession[];
   version: number;
 };
+/** User-supplied visual-test baseline only; never clinical guidance or a real practice default. */
+function managerSeed(): Workspace {
+  const practiceData = {
+    ...Object.fromEntries(Object.keys(defaultPracticeData).map((key) => [key, ""])),
+    practiceName: "Mock practice — visual testing only",
+    staff: [],
+    sameDayReasons: [],
+    rolePolicies: Object.fromEntries(
+      Object.keys(defaultPracticeData.rolePolicies).map((key) => [key, ""]),
+    ),
+  } as unknown as typeof defaultPracticeData;
+  const doctor = {
+    ...suggestedRole("Doctor"),
+    confirmed: true,
+    selectedRequestIds: [
+      "medication-reviews",
+      "prescription-queries",
+      "mental-health-appointments",
+      "utis",
+      "breast-examination",
+      "test-result-queries",
+    ],
+  };
+  const nurse = {
+    ...suggestedRole("Nurse Practitioner"),
+    confirmed: true,
+    selectedRequestIds: [
+      "chest-infections",
+      "coughs",
+      "sore-throats",
+      "ear-problems",
+      "minor-skin-problems",
+      "minor-injuries",
+      "eye-problems",
+    ],
+  };
+  practiceData.roleRequests = { [doctor.roleId]: doctor, [nurse.roleId]: nurse };
+  const target = procedureTargets(practiceData).find((target) => target.id === "utis")!;
+  practiceData.localProcedures = {
+    utis: confirmProcedure(
+      target,
+      undefined,
+      {
+        steps: [
+          {
+            id: "sample",
+            text: "Receptionist asks the patient to come to the practice and drop off a urine sample at reception.",
+          },
+          {
+            id: "booking",
+            text: "Once the sample has been handed in, book the patient into a UTI slot with a GPA.",
+          },
+          {
+            id: "collection",
+            text: "Place the urine sample into the GPA urine sample collection box in reception.",
+          },
+        ],
+        stepOrder: ["sample", "booking", "collection"],
+        appliesWhen: "",
+        orderRequirement: "required_linear",
+      },
+      "dev-manager-morgan",
+    ),
+  };
+  return {
+    state: {
+      practiceData,
+      modules: [],
+      packages: [],
+      assignments: [],
+      setupComplete: true,
+      emojiMarks: {},
+      answers: {},
+      currentDraftId: null,
+    },
+    trainees: [],
+    sessions: [],
+    version: 0,
+  };
+}
 function seed(): Workspace {
   const practiceData = structuredClone(defaultPracticeData);
   practiceData.practiceName = "Demo Willow Practice (fictional)";
@@ -105,7 +186,7 @@ function seed(): Workspace {
 function read(): Workspace {
   const raw = sessionStorage.getItem(storageKey);
   if (raw) return JSON.parse(raw) as Workspace;
-  const workspace = seed();
+  const workspace = devRole() === "manager" ? managerSeed() : seed();
   sessionStorage.setItem(storageKey, JSON.stringify(workspace));
   return workspace;
 }

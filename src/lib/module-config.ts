@@ -1097,7 +1097,7 @@ export function selectedModuleScenarios(
   const selectedCore = core.slice(0, Math.round(count * 0.3));
   const selectedLocal = local.slice(0, count - selectedCore.length);
   // Prefer a procedure for a request already selected for a weaker role-only question.
-  // Never add capacity; matching retains priority at smaller module lengths.
+  // A confirmed procedure must not lose its slot to role recognition or matching.
   const candidates = inspectLocalProcedureSequences(p).candidates;
   const sequence =
     candidates.find((candidate) =>
@@ -1116,10 +1116,22 @@ export function selectedModuleScenarios(
       sameRequest >= 0 ? sameRequest : selectedLocal.findIndex((s, i) => i > 0 && s.kind === "mcq");
     if (index >= 0) selectedLocal.splice(index, 1, scenario);
   };
-  if (settings.trainingLevel === "learn" && selectedLocal.length >= 2) {
-    const matching = roleMatchingScenario(p);
-    if (matching) selectedLocal.splice(1, 1, matching);
-    if (sequence && (!matching || selectedLocal.length >= 4)) replaceWithProcedure(sequence);
+  if (settings.trainingLevel === "learn") {
+    if (sequence && selectedLocal.length) {
+      const requestId = sequence.provenance.snapshot.localProcedure?.requestId;
+      const sameRequest = selectedLocal.findIndex(
+        (s) => s.kind === "mcq" && s.localRoleRequestId === requestId,
+      );
+      // Even a single local slot teaches the saved procedure. Preserve the total/Core budget.
+      selectedLocal.splice(sameRequest >= 0 ? sameRequest : selectedLocal.length - 1, 1, sequence);
+    }
+    if (selectedLocal.length >= 2) {
+      const matching = roleMatchingScenario(p);
+      const index = selectedLocal.findIndex((s, i) => i > 0 && s.kind === "mcq");
+      const fallback = selectedLocal.findIndex((s) => s.kind === "mcq");
+      if (matching && fallback >= 0)
+        selectedLocal.splice(index >= 0 ? index : fallback, 1, matching);
+    }
   }
   if (settings.trainingLevel === "apply" && selectedLocal.length >= 2 && sequence) {
     const application = localProcedureApplication(p, sequence);

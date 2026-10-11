@@ -30,13 +30,11 @@ export function procedureGenerationReport(
           ? "Allocated"
           : !["learn", "apply"].includes(level ?? "")
             ? "No explicit Learn/Apply level"
-            : localCount < 2
-              ? "Fewer than two selected local slots"
-              : level === "learn" && localCount < 4 && scenarios.some((s) => s.kind === "matching")
-                ? "Matching has priority in two or three local slots"
-                : included
-                  ? "Another eligible procedure selected; maximum one procedure per module"
-                  : "No replaceable local MCQ slot";
+            : localCount < (level === "learn" ? 1 : 2)
+              ? "Insufficient selected local slots"
+              : included
+                ? "Another eligible procedure selected; maximum one procedure per module"
+                : "No replaceable local MCQ slot";
       return {
         ...d,
         learnCandidateCreated: d.eligible,

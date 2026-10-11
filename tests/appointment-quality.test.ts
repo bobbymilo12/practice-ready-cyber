@@ -267,8 +267,21 @@ test("real module-builder Generate handler carries saved procedures into Learn a
       target: ts.ScriptTarget.ES2022,
     },
   }).outputText;
-  for (const level of ["learn", "apply"] as const) {
+  for (const { level, count, sparse } of [
+    { level: "learn", count: 1, sparse: false },
+    { level: "learn", count: 3, sparse: false },
+    { level: "learn", count: 4, sparse: false },
+    { level: "learn", count: 10, sparse: false },
+    { level: "learn", count: modules.defaultModuleSettings().count, sparse: true },
+    { level: "apply", count: 10, sparse: false },
+  ] as const) {
     const { p, procedure } = fixture();
+    if (sparse) {
+      // A real practice may have confirmed only one responsibility so far.
+      const role = Object.values(p.roleRequests!)[0];
+      role.selectedRequestIds = ["utis"];
+      p.roleRequests = { [role.roleId]: role };
+    }
     let generated: any[] = [],
       destination: any;
     const states: any[] = [];
@@ -303,12 +316,18 @@ test("real module-builder Generate handler carries saved procedures into Learn a
       "@/lib/store": {
         useApp: () => ({
           practiceData: p,
-          modules: [
-            {
-              id: "draft",
-              settings: { ...modules.defaultModuleSettings(), count: 10, trainingLevel: level },
-            },
-          ],
+          modules: sparse
+            ? []
+            : [
+                {
+                  id: "draft",
+                  settings: { ...modules.defaultModuleSettings(), count, trainingLevel: level },
+                },
+              ],
+          createDraftModule: (_title: string, _type: string, _topic: string, scenarios: any[]) => {
+            generated = scenarios;
+            return "created-draft";
+          },
           configureModule: (_id: string, _settings: unknown, scenarios: any[]) => {
             generated = scenarios;
           },
@@ -328,7 +347,7 @@ test("real module-builder Generate handler carries saved procedures into Learn a
         exports.PredefinedModuleSetup({
           topic: "appointment-booking",
           title: "Booking",
-          id: "draft",
+          id: sparse ? "" : "draft",
         }),
       );
     };
@@ -347,13 +366,18 @@ test("real module-builder Generate handler carries saved procedures into Learn a
       .find((n) => n.type === "button" && n.props.children === "Choose module length →")
       .props.onClick();
     const button = render().find(
-      (n) => n.type === "button" && n.props.children === "Save settings and regenerate",
+      (n) =>
+        n.type === "button" &&
+        n.props.children === (sparse ? "Create module" : "Save settings and regenerate"),
     );
     assert.equal(button.props.disabled, false);
     await button.props.onClick();
     assert.equal(destination.to, "/modules/review");
-    assert.equal(generated.length, 10);
-    assert.equal(generated.filter((s) => s.provenance?.kind === "core").length, 3);
+    assert.equal(generated.length, sparse ? Math.round(count * 0.3) + 1 : count);
+    assert.equal(
+      generated.filter((s) => s.provenance?.kind === "core").length,
+      Math.round(count * 0.3),
+    );
     const q = generated.find((s) => s.provenance?.kind === "sequence");
     assert.ok(q, "the real save handler must include the Local Procedure");
     assert.ok(!generated.some((s) => s.kind === "mcq" && s.localRoleRequestId === "utis"));
@@ -410,10 +434,10 @@ test("generation diagnostics report every saved procedure and exact allocation c
     ...settings,
     count: 2,
   });
-  assert.match(
+  assert.equal(
     procedureGenerationReport(p, "learn", 2, small).procedures.find((d) => d.requestId === "utis")!
       .allocationReason,
-    /Fewer than two/,
+    "Allocated",
   );
 });
 

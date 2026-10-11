@@ -139,7 +139,7 @@ test("candidate selection is deterministic regardless of dictionary insertion an
   });
   assert.notEqual(localProcedureSequence(p)!.provenance.sourceId, first.provenance.sourceId);
 });
-test("matching retains priority; sequences replace one existing local MCQ only with room", () => {
+test("Learn reserves a procedure slot before matching, including short modules", () => {
   const { p } = fixture();
   for (const count of [1, 2, 3, 4, 6, 10]) {
     const settings = { ...defaultModuleSettings(), trainingLevel: "learn" as const, count };
@@ -155,7 +155,7 @@ test("matching retains priority; sequences replace one existing local MCQ only w
     assert.equal(core, baseline.filter((s) => s.provenance?.kind === "core").length);
     const localCount = result.length - core;
     assert.equal(result.filter((s) => s.kind === "matching").length, localCount >= 2 ? 1 : 0);
-    assert.equal(result.filter((s) => s.kind === "order").length, localCount >= 4 ? 1 : 0);
+    assert.equal(result.filter((s) => s.kind === "order").length, localCount >= 1 ? 1 : 0);
     if (localCount >= 4)
       assert.ok(result.filter((s) => s.kind === "mcq" && !s.provenance).length >= 2);
   }
