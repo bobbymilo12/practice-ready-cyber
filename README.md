@@ -23,6 +23,12 @@ configuration: Doctor and Nurse Practitioner responsibilities and the three-step
 This is test data, not clinical guidance. Other practice settings are blank, with no staff or
 generated modules. Existing mock workspaces are reused without overwriting edits.
 
+Mock Manager includes Jamie Example (Mock Trainee), using the same identity as the Mock Trainee
+login. Loading an older Manager workspace adds Jamie only if missing, preserving existing data.
+No modules are assigned automatically. Refresh Mock Manager, then on a published module click
+**Assign to employees → Jamie Example (Mock Trainee) → Assign**. Switch to Mock Trainee in the
+same browser tab to start that training; no invitation or workspace reset is needed.
+
 To reset, open browser developer tools while in the local mock session, go to **Application →
 Session Storage → your local app origin**, delete only `practiceready-dev-workspace-v1`, then
 reload. This discards that mock workspace's edits, modules and attempts and reloads the baseline.

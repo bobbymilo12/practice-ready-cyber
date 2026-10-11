@@ -5,6 +5,7 @@ import {
 import {
   roleRequestSituation,
   roleAnswerChoices,
+  explicitSameDayBooking,
   roleList,
   broadRequestLabel,
 } from "./role-question-presentation.ts";
@@ -1004,15 +1005,35 @@ export function configuredScenarios(
       roleQuestion.title = roleRequestSituation(label).replace(/\.$/, "");
       if (!roles.length) continue; // A role-recognition exercise cannot invent a workflow for employee-only data.
       const apply = settings.trainingLevel === "apply";
-      roleQuestion.patientQuote = apply
-        ? `${roleRequestSituation(label)} The patient asks whether only one type of clinician can help with this request.`
-        : roleRequestSituation(label);
-      roleQuestion.question = apply
-        ? "Which role or roles could you explain can help? Check the booking process before arranging an appointment."
-        : "Who at your practice can help with this?";
+      roleQuestion.patientQuote = `${roleRequestSituation(label)} ${
+        apply
+          ? "You have followed the practice’s booking process. The patient asks which appointment you can arrange."
+          : "The practice’s booking process has confirmed an appointment is needed."
+      }`;
+      roleQuestion.question = "Who should you book the patient an appointment with?";
       roleQuestion.options = roleAnswerChoices(p, id, label, roles);
+      if (apply && explicitSameDayBooking(p, id, label)) {
+        const choices = roleQuestion.options;
+        const timed = (choice: string, timing: string) =>
+          choice.replace(/ appointment/g, ` — ${timing} appointment`);
+        roleQuestion.question = "Which appointment should you book?";
+        roleQuestion.options = [
+          timed(choices[0], "same-day"),
+          timed(choices[0], "routine"),
+          ...choices
+            .slice(1, 2)
+            .flatMap((choice) =>
+              choice.includes(" appointment")
+                ? [timed(choice, "same-day"), timed(choice, "routine")]
+                : [choice],
+            ),
+        ];
+      }
       roleQuestion.correctIndex = 0;
-      roleQuestion.learningPoint = `${roleList(roles.map((r) => r.label))} can handle this request. This identifies eligible roles; follow the practice’s booking process and any individual exceptions before arranging an appointment.`;
+      roleQuestion.learningPoint = `${roleList(roles.map((r) => r.label))} can handle this request. Check individual staff exceptions before choosing a clinician. Follow the practice’s booking process before arranging the appointment.`;
+      if (apply && explicitSameDayBooking(p, id, label))
+        roleQuestion.learningPoint +=
+          " Your practice explicitly lists this request for same-day direct booking.";
     }
     routing.push(roleQuestion);
     for (const exception of staff.filter((s) => s.individualException))

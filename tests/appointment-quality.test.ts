@@ -153,7 +153,10 @@ test("UTI procedure teaches reception actions without assigning them to the clin
       .configuredScenarios("appointment-booking", "Booking", p, settings)
       .find((s) => s.kind === "mcq" && s.localRoleRequestId === "utis");
     assert.ok(recognition?.kind === "mcq");
-    assert.equal(recognition.options[recognition.correctIndex], "Doctor or Practice Nurse");
+    assert.equal(
+      recognition.options[recognition.correctIndex],
+      "Doctor appointment or Practice Nurse appointment",
+    );
     assert.ok(!recognition.options.some((option) => /book|sample/i.test(option)));
 
     const generated = modules.generateConfiguredModule(
@@ -236,7 +239,7 @@ test("eligible roles remain alternatives without contact/booking authority; umbr
       (s) => s.kind === "mcq" && s.localRoleRequestId === "medication-reviews",
     )!;
     assert.ok(q.kind === "mcq");
-    assert.equal(q.options[q.correctIndex], "Doctor or Practice Nurse");
+    assert.equal(q.options[q.correctIndex], "Doctor appointment or Practice Nurse appointment");
     const visible = JSON.stringify(
       questions.map((s) => ({
         title: s.title,

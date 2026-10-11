@@ -1,3 +1,4 @@
+import * as training from "../src/lib/training.ts";
 import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import * as managerActions from "../src/lib/manager-actions.ts";
 import { suggestedRole, normaliseRoleRequestCategories } from "../src/lib/role-requests.ts";
@@ -203,7 +204,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
     "./dev-mode": { devRole: () => "manager" },
     "./local-procedures.ts": procedures,
     "./practice-scenarios": {},
-    "./training": {},
+    "./training": training,
   });
   const backend = compile("../src/lib/backend.ts", {
     "./practice-change-tracking": changeTracking,
@@ -483,9 +484,15 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
       "./dev-mode": { devRole: () => role },
       "./local-procedures.ts": procedures,
       "./practice-scenarios": {},
-      "./training": {},
+      "./training": training,
     });
     const loaded = await devApi("load", {});
+    assert.deepEqual(
+      loaded.trainees.map((t: any) => t.id),
+      ["dev-trainee-jamie"],
+    );
+    assert.equal(loaded.trainees[0].status, "active");
+    assert.deepEqual(loaded.state.assignments, []);
     const data = loaded.state.practiceData;
     assert.deepEqual(Object.keys(data.roleRequests), ["role:doctor", "role:nurse practitioner"]);
     assert.deepEqual(data.roleRequests["role:doctor"].selectedRequestIds, [
@@ -537,6 +544,63 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
     changed.state.practiceData.localProcedures = {};
     stored = JSON.stringify(changed);
     assert.deepEqual((await devApi("load", {})).state.practiceData, changed.state.practiceData);
+    // Upgrade an existing workspace without altering authored content or other trainees.
+    changed.trainees = [{ id: "other", name: "Existing trainee", status: "invited" }];
+    changed.state.modules = [
+      {
+        id: "published",
+        title: "Existing booking module",
+        type: "Booking",
+        published: true,
+        createdAt: 1,
+        scenarios: [{ ...sequence, status: "approved" }],
+      },
+    ];
+    stored = JSON.stringify(changed);
+    role = "trainee";
+    await devApi("load", {});
+    assert.deepEqual(
+      JSON.parse(stored!),
+      changed,
+      "trainee loading does not migrate the workspace",
+    );
+    role = "manager";
+    const restored = await devApi("load", {});
+    const upgraded = JSON.parse(stored!);
+    assert.deepEqual(upgraded.state, changed.state);
+    assert.deepEqual(upgraded.sessions, changed.sessions);
+    assert.deepEqual(upgraded.trainees[0], changed.trainees[0]);
+    assert.equal(upgraded.version, changed.version + 1);
+    assert.deepEqual(
+      restored.trainees.map((t: any) => t.id),
+      ["other", "dev-trainee-jamie"],
+    );
+    const afterUpgrade = stored;
+    await devApi("load", {});
+    assert.equal(stored, afterUpgrade, "repeat loading neither duplicates nor rewrites Jamie");
+
+    // The normal assignment patch and save API make this module available to Mock Trainee.
+    const patch = managerActions.managerActionPatch(
+      { ...restored.state, trainees: restored.trainees },
+      { kind: "assign", moduleId: "published", traineeId: "dev-trainee-jamie" },
+      { id: "manual-assignment", at: 1 },
+    );
+    await devApi("save-practice", {
+      state: { ...restored.state, ...patch },
+      version: restored.version,
+    });
+    role = "trainee";
+    const trainee = await devApi("load", {});
+    assert.equal(trainee.account.id, "dev-trainee-jamie");
+    assert.deepEqual(
+      trainee.state.modules.map((m: any) => m.id),
+      ["published"],
+    );
+    assert.equal(trainee.state.assignments[0].id, "manual-assignment");
+    const started = await devApi("start", { assignmentId: "manual-assignment" });
+    assert.equal(started.session.traineeId, "dev-trainee-jamie");
+    assert.equal(started.session.moduleId, "published");
+    role = "manager";
     // Removing only the mock workspace restores the baseline on the next load.
     stored = null;
     assert.ok((await devApi("load", {})).state.practiceData.localProcedures.utis);

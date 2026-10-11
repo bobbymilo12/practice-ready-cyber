@@ -123,7 +123,7 @@ test("Core v1 has 15 stable codes and 30 unique controlled single-choice pattern
   for (const id of ["care-navigation", "understand-request", "accurate-information"]) {
     assert.equal(
       concepts.find((c) => c.id === `core.appointment-booking.${id}`)?.version,
-      id === "care-navigation" ? 4 : 2,
+      id === "care-navigation" ? 5 : 2,
     );
   }
 });

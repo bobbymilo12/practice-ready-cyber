@@ -23,6 +23,14 @@ import {
 
 const storageKey = "practiceready-dev-workspace-v1";
 const traineeId = "dev-trainee-jamie";
+const mockTrainee = (): Trainee => ({
+  id: traineeId,
+  name: "Jamie Example (Mock Trainee)",
+  email: "jamie.trainee@example.test",
+  role: "Receptionist",
+  status: "active",
+  invitedAt: Date.now(),
+});
 type Workspace = {
   state: PracticeState;
   trainees: Trainee[];
@@ -104,7 +112,7 @@ function managerSeed(): Workspace {
       answers: {},
       currentDraftId: null,
     },
-    trainees: [],
+    trainees: [mockTrainee()],
     sessions: [],
     version: 0,
   };
@@ -185,7 +193,16 @@ function seed(): Workspace {
 }
 function read(): Workspace {
   const raw = sessionStorage.getItem(storageKey);
-  if (raw) return JSON.parse(raw) as Workspace;
+  if (raw) {
+    const workspace = JSON.parse(raw) as Workspace;
+    // Repair older Manager baselines without resetting their practice or assigning training.
+    if (devRole() === "manager" && !workspace.trainees.some((t) => t.id === traineeId)) {
+      workspace.trainees.push(mockTrainee());
+      workspace.version++;
+      sessionStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
+    return workspace;
+  }
   const workspace = devRole() === "manager" ? managerSeed() : seed();
   sessionStorage.setItem(storageKey, JSON.stringify(workspace));
   return workspace;
