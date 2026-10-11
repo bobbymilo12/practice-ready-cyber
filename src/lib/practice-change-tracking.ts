@@ -204,6 +204,37 @@ function usesChange(scenario: Scenario, change: ReviewChange): boolean {
     return !root || change.path.startsWith(`practiceData.${root}`);
   });
 }
+/** Review hints only: absent or edited provenance never implies an exact question dependency. */
+export function recordedSourceChanges(scenario: Scenario, changes: ReviewChange[]): ReviewChange[] {
+  const source = scenario.provenance;
+  if (!source || source.managerModified) return [];
+  const requestId =
+    source.kind === "sequence" ? source.snapshot?.localProcedure?.requestId : undefined;
+  const paths =
+    source.kind === "sequence"
+      ? requestId
+        ? [`practiceData.localProcedures[${requestId}]`]
+        : []
+      : source.kind === "practice_role_matching"
+        ? (source.paths ?? [])
+        : source.kind === "core"
+          ? (Array.isArray(source.inputs) ? source.inputs : [])
+              .filter((input) => input?.source === "practice_setup")
+              .flatMap((input) => input.paths ?? [])
+          : [];
+  if (!Array.isArray(paths)) return [];
+  return changes.filter((change) =>
+    paths.some(
+      (path) =>
+        typeof path === "string" &&
+        (path === change.path ||
+          path.startsWith(change.path + ".") ||
+          path.startsWith(change.path + "[") ||
+          change.path.startsWith(path + ".") ||
+          change.path.startsWith(path + "[")),
+    ),
+  );
+}
 export function flagPracticeChanges(
   before: PracticeData | undefined,
   after: PracticeData,

@@ -415,3 +415,41 @@ test("missing or ambiguous binding metadata requires conservative review rather 
     assert.equal(tracking.flagPracticeChanges(before, after, [module])[0].needsReview, true);
   }
 });
+
+test("question review highlights require recorded source links; unknown dependencies stay module-level", () => {
+  const sequence = localProcedureSequence(withProcedure())!;
+  const changes = [
+    {
+      path: "practiceData.localProcedures[utis]",
+      label: "UTI",
+      reason: "UTI Local Procedure changed.",
+    },
+    {
+      path: "practiceData.localProcedures[other]",
+      label: "Other",
+      reason: "Other procedure changed.",
+    },
+    { path: "practiceData.hours", label: "Hours", reason: "Opening hours changed." },
+  ];
+  assert.deepEqual(tracking.recordedSourceChanges(sequence, changes), [changes[0]]);
+  assert.deepEqual(tracking.recordedSourceChanges(legacy().scenarios[0], changes), []);
+  assert.deepEqual(
+    tracking.recordedSourceChanges(
+      {
+        ...sequence,
+        provenance: { ...sequence.provenance, managerModified: true },
+      },
+      changes,
+    ),
+    [],
+  );
+  const matching = roleMatchingScenario(p())!;
+  const roleChanges = [
+    {
+      path: matching.provenance.paths[0],
+      label: "Role",
+      reason: "Role responsibilities changed.",
+    },
+  ];
+  assert.deepEqual(tracking.recordedSourceChanges(matching, roleChanges), roleChanges);
+});

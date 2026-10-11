@@ -258,7 +258,7 @@ function Dashboard() {
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{m.title}</div>
                   <Link
-                    to="/train"
+                    to="/modules/review"
                     search={{ id: m.id }}
                     className="text-xs font-medium text-primary hover:underline"
                   >

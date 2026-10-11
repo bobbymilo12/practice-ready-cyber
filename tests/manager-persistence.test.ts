@@ -748,3 +748,53 @@ test("reviewed or updated training records its decision and waits for confirmed 
   assert.equal(h.useApp.getState().modules[0].needsReview, false);
   assert.equal(h.useApp.getState().modules[0].reviewConfirmations[0].decision, "updated");
 });
+
+test("dashboard opens published modules in scrollable manager review without attempts or progress writes", async () => {
+  for (const needsReview of [true, false]) {
+    const h = await harness(false, true);
+    h.useApp.setState((s: any) => ({
+      modules: s.modules.map((m: any) => ({
+        ...m,
+        needsReview,
+        reviewReason: needsReview
+          ? "UTI Local Procedure changed.\nBooking instructions changed."
+          : undefined,
+        scenarios: [
+          ...m.scenarios,
+          { ...m.scenarios[0], id: "second", question: "Second question" },
+        ],
+      })),
+    }));
+    const before = JSON.stringify(h.useApp.getState());
+    const sessions = JSON.stringify(h.backend.useConnection.getState().sessions);
+    const requests = h.requests.length;
+    const dashboard = h.ui("dashboard");
+    const open = dashboard.render().find((n) => n.type === "a" && n.props.children === "Open →");
+    assert.equal(open.props.to, "/modules/review");
+    assert.deepEqual(open.props.search, { id: "draft" });
+    const review = h.ui("review");
+    const nodes = review.render();
+    const cards = nodes.filter((n) => typeof n.type === "function" && n.props.scenario);
+    assert.equal(cards.length, 2, "all questions appear together");
+    const renderedCards = cards.flatMap((card) => elements(card.type(card.props)));
+    const text = JSON.stringify([...nodes, ...renderedCards].map((n) => n.props.children));
+    assert.match(text, /Review training/);
+    assert.match(text, /Best answer/);
+    assert.match(text, /Correct/);
+    assert.match(text, /Second question/);
+    assert.doesNotMatch(text, /Check answer/);
+    if (needsReview) {
+      assert.match(text, /Needs review — training paused/);
+      assert.match(text, /UTI Local Procedure changed/);
+      assert.match(text, /Booking instructions changed/);
+      assert.equal(
+        review.button("Confirm existing training is still correct").props.disabled,
+        true,
+      );
+      assert.ok(review.buttons("Publish reviewed training").length);
+    }
+    assert.equal(JSON.stringify(h.useApp.getState()), before);
+    assert.equal(JSON.stringify(h.backend.useConnection.getState().sessions), sessions);
+    assert.equal(h.requests.length, requests, "opening review sends no training or save request");
+  }
+});

@@ -1,4 +1,4 @@
-import { reviewKey } from "@/lib/practice-change-tracking";
+import { recordedSourceChanges, reviewKey } from "@/lib/practice-change-tracking";
 import { useManagerAction } from "@/hooks/use-manager-action";
 import { readProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { orderKey, orderLabels } from "@/lib/sequence";
@@ -9,7 +9,7 @@ import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp, type Scenario } from "@/lib/store";
 
 export const Route = createFileRoute("/modules/review")({
-  head: () => ({ meta: [{ title: "Review draft scenarios — PracticeReady" }] }),
+  head: () => ({ meta: [{ title: "Review training — PracticeReady" }] }),
   validateSearch: (s: Record<string, unknown>) => ({ id: (s.id as string) || "" }),
   component: Review,
 });
@@ -77,16 +77,18 @@ function Review() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm text-muted-foreground">
-              {module.type} · Draft review
+              {module.type} · {module.published ? "Published module review" : "Draft review"}
               {module.topicKey === "appointment-booking" && module.settings?.trainingLevel
                 ? ` · ${module.settings.trainingLevel === "learn" ? "Learn" : "Apply"}`
                 : ""}
             </p>
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
-              Review draft scenarios
+              {module.published ? "Review training" : "Review draft scenarios"}
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Manager review required. Approve every scenario, then publish the module for staff.
+              {module.published
+                ? "Review all questions and their saved answers below. No answers or training attempt are required."
+                : "Manager review required. Approve every scenario, then publish the module for staff."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -120,7 +122,7 @@ function Review() {
 
         {module.needsReview && (
           <Card className="mt-6 border-warning/40 bg-warning/5">
-            <h2 className="font-semibold">Needs review</h2>
+            <h2 className="font-semibold">Needs review — training paused</h2>
             <p className="mt-2 whitespace-pre-line text-sm">
               {module.reviewReason ??
                 "This training changed or may contain outdated practice information."}
@@ -128,7 +130,9 @@ function Review() {
             <p className="mt-3 text-sm">
               Review the questions below against your current practice information. Update or
               regenerate them as needed, then approve and publish the reviewed training. You can
-              also explicitly confirm that the existing training remains correct.
+              also explicitly confirm that the existing training remains correct. Source highlights
+              use recorded links only; review all questions, including those without a source
+              highlight.
             </p>
             <p className="mt-3 text-sm">
               Existing attempts keep their original questions. Reassign corrected training to staff
@@ -248,6 +252,13 @@ function Review() {
               appointmentBooking={module.topicKey === "appointment-booking"}
               key={s.id}
               scenario={s}
+              sourceChanges={
+                module.needsReview
+                  ? recordedSourceChanges(s, module.reviewChanges ?? []).map(
+                      (change) => change.reason,
+                    )
+                  : []
+              }
               onApprove={() => approveScenario(module.id, s.id)}
               onDelete={() => deleteScenario(module.id, s.id)}
               onRegenerate={() => regenerateScenario(module.id, s.id)}
@@ -280,6 +291,7 @@ function Review() {
 }
 
 function ScenarioCard({
+  sourceChanges = [],
   appointmentBooking,
   scenario,
   onApprove,
@@ -287,6 +299,7 @@ function ScenarioCard({
   onRegenerate,
   onSave,
 }: {
+  sourceChanges?: string[];
   appointmentBooking?: boolean;
   scenario: Scenario;
   onApprove: () => void;
@@ -307,6 +320,16 @@ function ScenarioCard({
 
   return (
     <Card>
+      {sourceChanges.length > 0 && (
+        <div className="mb-3 rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
+          <p className="font-semibold">Recorded source changed — check this question</p>
+          <ul className="mt-1 list-disc pl-5">
+            {sourceChanges.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
