@@ -11,9 +11,7 @@ const topics = [
   ["difficult", "Difficult calls & de-escalation"],
   ["first-week", "First week on reception"],
 ];
-test("every predefined topic uses structured configuration; custom retains its manual questions", async ({
-  page,
-}) => {
+test("every topic uses shared configuration and module controls", async ({ page }) => {
   await page.goto("/auth");
   await page.getByRole("button", { name: "Continue as Manager", exact: true }).click();
   test.setTimeout(60000);
@@ -54,7 +52,7 @@ test("every predefined topic uses structured configuration; custom retains its m
   }
   await page.goto("/modules/setup?topic=custom&title=Manual");
   await expect(
-    page.getByLabel("Describe the exact situation this module should cover."),
+    page.getByText("What should staff do for the main task?", { exact: true }),
   ).toBeVisible();
 });
 

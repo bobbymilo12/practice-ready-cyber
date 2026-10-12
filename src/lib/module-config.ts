@@ -1,3 +1,4 @@
+import { applyQuestionDifficulty, practiceQuestionPresentation } from "./module-presentation.ts";
 import {
   inspectLocalProcedureSequences,
   localProcedureApplication,
@@ -60,8 +61,9 @@ export const trainingLevelOptions = [
 ] as const;
 
 export interface ModuleSettings {
-  // Appointment Booking only; absent on legacy modules.
+  // Optional on legacy modules.
   trainingLevel?: "learn" | "apply";
+  difficulty?: import("./training-types").Difficulty;
   version: 1;
   answers: Record<string, string>;
   // Optional additions keep existing version-1 modules compatible.
@@ -410,6 +412,20 @@ topicFields["appointment-booking"].push(
     addLabel: "Add another process",
   },
 );
+topicFields.custom = [
+  {
+    ...q("process", "What should staff do for the main task?", [localProcess]),
+    addLabel: "Add a confirmed instruction",
+    situation: "A colleague asks you to handle the task covered by this module.",
+  },
+  {
+    ...q("exception", "What should staff do when the usual process cannot be followed?", [
+      localProcess,
+    ]),
+    addLabel: "Add a confirmed instruction",
+    situation: "The usual process for this task cannot be followed.",
+  },
+];
 export const extraRuleLabels: Record<string, string> = {
   "appointment-booking": "booking",
   prescriptions: "prescription",
@@ -420,6 +436,7 @@ export const extraRuleLabels: Record<string, string> = {
   "home-visits": "home visit",
   difficult: "difficult-call",
   "first-week": "induction",
+  custom: "custom process",
 };
 for (const fields of Object.values(topicFields)) {
   for (const f of fields) {
@@ -864,12 +881,7 @@ export function configuredScenarios(
   p: PracticeData,
   settings: ModuleSettings,
 ): Scenario[] {
-  if (
-    topic === "appointment-booking" &&
-    settings.trainingLevel &&
-    !["learn", "apply"].includes(settings.trainingLevel)
-  )
-    return [];
+  if (settings.trainingLevel && !["learn", "apply"].includes(settings.trainingLevel)) return [];
   const structuredActions =
     topic === "appointment-booking" && settings.trainingLevel
       ? configuredBookingActions(p, settings)
@@ -923,6 +935,9 @@ export function configuredScenarios(
     correctIndex: 0,
     learningPoint: source,
     status: "draft",
+    ...(topic !== "appointment-booking" && settings.trainingLevel
+      ? practiceQuestionPresentation(topic, label, situation, answer, settings)
+      : {}),
   });
   const fieldLabels = new Set((topicFields[topic] ?? []).map((f) => f.label));
   const facts = moduleFacts(topic, p, settings).sort(
@@ -1105,15 +1120,11 @@ export function selectedModuleScenarios(
   p: PracticeData,
   settings: ModuleSettings,
 ): Scenario[] {
-  if (
-    topic === "appointment-booking" &&
-    settings.trainingLevel &&
-    !["learn", "apply"].includes(settings.trainingLevel)
-  )
-    return [];
+  if (settings.trainingLevel && !["learn", "apply"].includes(settings.trainingLevel)) return [];
   const count = Number.isInteger(settings.count) ? Math.min(100, Math.max(1, settings.count)) : 12;
   const local = configuredScenarios(topic, title, p, settings);
-  if (topic !== "appointment-booking") return local.slice(0, count);
+  if (topic !== "appointment-booking")
+    return local.slice(0, count).map((s) => applyQuestionDifficulty(s, settings.difficulty));
   const core = appointmentCorePool({ topicKey: topic, practice: p, settings });
   const selectedCore = core.slice(0, Math.round(count * 0.3));
   const selectedLocal = local.slice(0, count - selectedCore.length);
@@ -1166,7 +1177,7 @@ export function selectedModuleScenarios(
     if (c < selectedCore.length) result.push(selectedCore[c++]);
     for (let i = 0; i < 2 && l < selectedLocal.length; i++) result.push(selectedLocal[l++]);
   }
-  return result;
+  return result.map((s) => applyQuestionDifficulty(s, settings.difficulty));
 }
 
 export function generateConfiguredModule(
@@ -1185,9 +1196,11 @@ export function generateConfiguredModule(
             correctIndex: (s.correctIndex - offset + s.options.length) % s.options.length,
           }
         : s;
-    // Appointment Booking's selected length is the total stored question count.
-    // Existing recovery questions in saved modules and other topics are unchanged.
-    const follow = topic === "appointment-booking" ? undefined : configuredFollowUp(primary);
+    // Shared Learn/Apply lengths count all stored questions. Legacy settings retain follow-ups.
+    const follow =
+      topic === "appointment-booking" || settings.trainingLevel
+        ? undefined
+        : configuredFollowUp(primary);
     return follow ? [primary, follow] : [primary];
   });
 }
@@ -1321,7 +1334,9 @@ export function regenerateConfiguredScenario(
     return {
       ...module,
       needsReview: module.published || module.needsReview,
-      scenarios: module.scenarios.map((s) => (s.id === scenarioId ? replacement : s)),
+      scenarios: module.scenarios.map((s) =>
+        s.id === scenarioId ? applyQuestionDifficulty(replacement, module.settings?.difficulty) : s,
+      ),
     };
   }
   if (current.followUpFor) {
@@ -1338,9 +1353,14 @@ export function regenerateConfiguredScenario(
     pool.find((s) => !used.has(s.title) && s.title !== current.title) ??
     pool.find((s) => s.title === primaryTitle);
   if (!pick) return module;
-  const replacement: Scenario = { ...pick, id: current.id };
+  const replacement: Scenario = {
+    ...applyQuestionDifficulty(pick, module.settings.difficulty),
+    id: current.id,
+  };
   const follow =
-    module.topicKey === "appointment-booking" ? undefined : configuredFollowUp(replacement);
+    module.topicKey === "appointment-booking" || module.settings.trainingLevel
+      ? undefined
+      : configuredFollowUp(replacement);
   return {
     ...module,
     needsReview: module.published || module.needsReview,

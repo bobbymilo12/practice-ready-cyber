@@ -243,7 +243,7 @@ test("Apply is contextual rather than a re-labelled Learn recipe and avoids ambi
   assert.ok(applied[0].kind === "mcq" && applied[0].localRoleRequestId);
   assert.ok(!applied[0].title.startsWith("Routing:"));
 });
-test("legacy settings remain mixed; other topics ignore an Appointment Booking level", () => {
+test("legacy settings remain mixed; other topics now use explicit Learn/Apply levels", () => {
   const legacy = moduleWithCount();
   assert.equal(legacy.settings!.trainingLevel, undefined);
   assert.ok(legacy.scenarios.some((s) => s.provenance?.level === "learn"));
@@ -255,7 +255,16 @@ test("legacy settings remain mixed; other topics ignore an Appointment Booking l
       ...settings,
       trainingLevel: "apply",
     });
-    assert.deepEqual(
+    assert.ok(plain.length && levelled.length);
+    assert.ok(levelled.every((s) => !s.followUpFor));
+    assert.ok(
+      levelled.some(
+        (s) =>
+          s.question === "What should you do next?" ||
+          s.question === "What would be the best way to respond?",
+      ),
+    );
+    assert.notDeepEqual(
       plain.map(({ id, ...s }) => s),
       levelled.map(({ id, ...s }) => s),
     );

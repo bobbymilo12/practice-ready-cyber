@@ -1556,7 +1556,15 @@ export const useApp = create<AppState>()((set, get) => ({
   configureModule: (id, settings, scenarios) =>
     set((state) => ({
       modules: state.modules.map((m) =>
-        m.id === id ? { ...m, settings, scenarios, needsReview: m.published || m.needsReview } : m,
+        m.id === id
+          ? {
+              ...m,
+              settings,
+              difficulty: settings.difficulty ?? m.difficulty,
+              scenarios,
+              needsReview: m.published || m.needsReview,
+            }
+          : m,
       ),
     })),
 

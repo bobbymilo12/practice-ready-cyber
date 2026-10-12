@@ -1,3 +1,4 @@
+import * as presentation from "../src/lib/module-presentation.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -316,6 +317,7 @@ test("real module-builder Generate handler carries saved procedures into Learn a
       "@/lib/backend": { flushPractice: async () => {} },
       "@/lib/practice-config": config,
       "@/lib/module-config": modules,
+      "@/lib/module-presentation": presentation,
       "@/lib/store": {
         useApp: () => ({
           practiceData: p,

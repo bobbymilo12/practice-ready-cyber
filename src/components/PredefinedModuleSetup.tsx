@@ -1,3 +1,4 @@
+import { difficultyOptions } from "@/lib/module-presentation";
 import { captureProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -35,7 +36,8 @@ export function PredefinedModuleSetup({
     () =>
       existing?.settings ?? {
         ...defaultModuleSettings(),
-        ...(topic === "appointment-booking" ? { trainingLevel: "learn" as const } : {}),
+        trainingLevel: "learn" as const,
+        difficulty: "easy" as const,
       },
   );
   const [phase, setPhase] = useState<"questions" | "length">("questions");
@@ -50,10 +52,7 @@ export function PredefinedModuleSetup({
     selections: {},
     extra: "",
   });
-  const pool =
-    topic === "appointment-booking"
-      ? selectedModuleScenarios(topic, title, practiceData, settings)
-      : configuredScenarios(topic, title, practiceData, settings);
+  const pool = selectedModuleScenarios(topic, title, practiceData, settings);
   const savedResponsibilities = configuredScenarios(topic, title, practiceData, settings).filter(
     (s) =>
       (s.kind === "mcq" && !!s.localRoleRequestId) ||
@@ -81,7 +80,7 @@ export function PredefinedModuleSetup({
             `${title} — draft`,
             topic,
             scenarios,
-            "easy",
+            settings.difficulty ?? "easy",
             undefined,
             settings,
           );
@@ -134,9 +133,9 @@ export function PredefinedModuleSetup({
                   Using information from {practiceData.practiceName}
                 </h2>
                 <p className="mt-2 text-sm">
-                  Confirmed roles, request types and individual exceptions are read directly from
-                  Practice Setup where relevant. Changes to shared information belong in Practice
-                  Setup.
+                  Relevant confirmed processes, roles and individual exceptions come from Practice
+                  Setup. Add any further instructions for this topic below. Update shared practice
+                  information in Practice Setup.
                 </p>
                 <details className="mt-3">
                   <summary className="cursor-pointer text-primary">
@@ -251,46 +250,67 @@ export function PredefinedModuleSetup({
                 </>
               ) : (
                 <Card className="mt-6 space-y-5">
-                  {topic === "appointment-booking" && (
-                    <fieldset>
-                      <legend className="font-display text-xl font-semibold">Training Level</legend>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        {trainingLevelOptions.map((level) => (
-                          <label
-                            key={level.value}
-                            className={`rounded-xl border p-4 ${settings.trainingLevel === level.value ? "border-primary bg-primary/5" : "border-border"}`}
-                          >
-                            <input
-                              type="radio"
-                              disabled={level.disabled}
-                              name="training-level"
-                              value={level.value}
-                              checked={settings.trainingLevel === level.value}
-                              onChange={() =>
-                                level.value !== "handle" &&
-                                setSettings((s) => ({ ...s, trainingLevel: level.value }))
-                              }
-                            />
-                            <span className="ml-2 font-semibold">{level.label}</span>
-                            {level.disabled && (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                Coming soon
-                              </span>
-                            )}
-                            <span className="mt-1 block text-sm text-muted-foreground">
-                              {level.description}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                      {!settings.trainingLevel && (
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          This existing module uses mixed levels. Choose a level to use it for
-                          regeneration.
-                        </p>
-                      )}
-                    </fieldset>
-                  )}
+                  <fieldset>
+                    <legend className="font-display text-xl font-semibold">Training Level</legend>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {trainingLevelOptions.map((level) => (
+                        <label
+                          key={level.value}
+                          className={`rounded-xl border p-4 ${settings.trainingLevel === level.value ? "border-primary bg-primary/5" : "border-border"}`}
+                        >
+                          <input
+                            type="radio"
+                            disabled={level.disabled}
+                            name="training-level"
+                            value={level.value}
+                            checked={settings.trainingLevel === level.value}
+                            onChange={() =>
+                              level.value !== "handle" &&
+                              setSettings((s) => ({ ...s, trainingLevel: level.value }))
+                            }
+                          />
+                          <span className="ml-2 font-semibold">{level.label}</span>
+                          {level.disabled && (
+                            <span className="ml-2 text-xs text-muted-foreground">Coming soon</span>
+                          )}
+                          <span className="mt-1 block text-sm text-muted-foreground">
+                            {level.description}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    {!settings.trainingLevel && (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        This existing module uses mixed levels. Choose a level to use it for
+                        regeneration.
+                      </p>
+                    )}
+                  </fieldset>
+                  <fieldset>
+                    <legend className="font-display text-xl font-semibold">Difficulty</legend>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      {difficultyOptions.map((option) => (
+                        <label
+                          key={option.value}
+                          className={`rounded-xl border p-4 ${settings.difficulty === option.value ? "border-primary bg-primary/5" : "border-border"}`}
+                        >
+                          <input
+                            type="radio"
+                            name="module-difficulty"
+                            value={option.value}
+                            checked={settings.difficulty === option.value}
+                            onChange={() =>
+                              setSettings((s) => ({ ...s, difficulty: option.value }))
+                            }
+                          />
+                          <span className="ml-2 font-semibold">{option.label}</span>
+                          <span className="mt-1 block text-sm text-muted-foreground">
+                            {option.description}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
                   <h2 className="font-display text-xl font-semibold">
                     How long should this module be?
                   </h2>
@@ -335,15 +355,16 @@ export function PredefinedModuleSetup({
                   <p className="text-sm">
                     {Math.min(pool.length, settings.count)} distinct scenarios available for this
                     module.
-                    {topic !== "appointment-booking" &&
-                      " Follow-up practice after missed answers is additional."}
+                    {!settings.trainingLevel &&
+                      topic !== "appointment-booking" &&
+                      " Legacy follow-up practice after missed answers is additional."}
                   </p>
                   {pool.length < settings.count && (
                     <p className="rounded-xl bg-surface p-3 text-sm">
                       The available content supports {pool.length} distinct scenarios, fewer than
-                      the requested {settings.count}. Add further confirmed procedures or role
-                      responsibilities for wider coverage, or create this shorter draft. We will not
-                      invent guidance or repeat scenarios to reach a number.
+                      the requested {settings.count}. Add further confirmed topic information for
+                      wider coverage, or create this shorter draft. We will not invent guidance or
+                      repeat scenarios to reach a number.
                     </p>
                   )}
                   {existing && (
