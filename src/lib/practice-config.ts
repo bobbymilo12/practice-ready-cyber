@@ -1,0 +1,489 @@
+import type { PracticeData, StaffMember } from "./store";
+export type Option = { id: string; label: string };
+const options = (values: [string, string][]): Option[] =>
+  values.map(([id, label]) => ({ id, label }));
+// Retained only for reading existing same-day selections. Not offered for new configuration.
+export const sameDayGroups = [
+  {
+    label: "Acute illness",
+    options: options([
+      ["infection", "New or worsening infection symptoms"],
+      ["respiratory", "Chest/respiratory infection symptoms"],
+      ["urinary", "Urinary symptoms / suspected UTI"],
+      ["ear-throat", "Ear/throat infection symptoms"],
+      ["fever", "Fever / acute illness"],
+      ["cough-breathing", "Significant new cough or breathing-related symptoms"],
+      ["other-acute", "Other acute illness"],
+    ]),
+  },
+  {
+    label: "Pain / new symptoms",
+    options: options([
+      ["abdominal", "New or significant abdominal/stomach pain"],
+      ["headache", "New severe headache"],
+      ["pain", "Significant new pain"],
+      ["worsening", "New or rapidly worsening symptoms"],
+      ["other-new", "Other concerning new symptoms"],
+    ]),
+  },
+  {
+    label: "Children",
+    options: options([
+      ["unwell-child", "Acutely unwell child"],
+      ["child-fever", "Fever in a child"],
+      ["other-child", "Other acute childhood illness"],
+    ]),
+  },
+  {
+    label: "Mental health / safeguarding",
+    options: options([
+      ["mental-health", "Acute mental health concern"],
+      ["safeguarding", "Safeguarding concern"],
+    ]),
+  },
+];
+export const sameDayProcesses = options([
+  ["direct", "Reception can book eligible same-day appointments directly"],
+  ["triage", "Clinical triage is required before booking"],
+  ["depends", "Process depends on the request/appointment type"],
+  ["other", "Other"],
+]);
+export const routineProcesses = options([
+  ["direct", "Reception books directly"],
+  ["by-type", "Reception books according to clinician/appointment type"],
+  ["online", "Online request first"],
+  ["triage", "Clinical triage required"],
+  ["other", "Other"],
+]);
+export const prescriptionMethods = options([
+  ["nhs-app", "NHS App"],
+  ["website", "Practice website / online form"],
+  ["paper", "Paper request at reception"],
+  ["pharmacy", "Nominated pharmacy"],
+  ["telephone", "Telephone"],
+  ["other", "Other"],
+]);
+export const contactMethods = options([
+  ["system", "Internal clinical system/message"],
+  ["phone", "Phone/extension"],
+  ["teams", "Microsoft Teams"],
+  ["person", "In person"],
+  ["other", "Other"],
+]);
+export const contactRoles = ["Duty GP", "Duty clinician", "Duty pharmacist"];
+export const turnarounds = options([
+  ["24", "24 working hours"],
+  ["48", "48 working hours"],
+  ["72", "72 working hours"],
+  ["other", "Other"],
+]);
+export const calendarRules = options([
+  ["unconfirmed", "Not yet confirmed"],
+  ["exclude", "Excluded from turnaround"],
+  ["include", "Included in turnaround"],
+  ["other", "Other"],
+]);
+export const urgentActions = options([
+  ["system", "Send urgent clinical-system request"],
+  ["contact", "Contact responsible clinician"],
+  ["other", "Follow another local process"],
+]);
+export interface Choice {
+  id: string;
+  other: string;
+}
+export type SingleContact =
+  | { kind: "role"; role: string; roleId?: string }
+  | { kind: "staff"; staffId: string }
+  | { kind: "other"; text: string }
+  | { kind: "unconfirmed" };
+export type Contact =
+  SingleContact | { kind: "multiple"; contacts: Exclude<SingleContact, { kind: "unconfirmed" }>[] };
+export function routeContacts(
+  route: ContactRoute,
+): Exclude<SingleContact, { kind: "unconfirmed" }>[] {
+  return route.contact.kind === "multiple"
+    ? route.contact.contacts
+    : route.contact.kind === "unconfirmed"
+      ? []
+      : [route.contact];
+}
+export interface ContactRoute {
+  contact: Contact;
+  method: Choice;
+  instruction: string;
+}
+export interface SafeguardingRoute extends ContactRoute {
+  leadIds?: string[];
+}
+export interface BookingConfig {
+  version: 1;
+  requestMethods?: string[];
+  otherRequestMethod?: string;
+  // Separate domain: these selections do not classify emergency or clinical triage criteria.
+  sameDayPathway: {
+    selected: string[];
+    custom: string[];
+    instruction: string;
+    requestSelections?: { requestId: string; labelSnapshot: string }[];
+  };
+  sameDayProcess: Choice;
+  sameDayInstruction: string;
+  sendUncertainToDutyClinician: boolean;
+  escalation: ContactRoute;
+  routineProcess: Choice;
+  routineInstruction: string;
+}
+export interface PrescriptionConfig {
+  version: 1;
+  methods: string[];
+  otherMethod: string;
+  orderingInstruction: string;
+  turnaround: Choice;
+  turnaroundInstruction: string;
+  weekends: Choice;
+  bankHolidays: Choice;
+  urgentRoute:
+    // Inactive settings are retained only for restoring the separate route, never for routing.
+    | { source: "appointment"; previousSeparateRoute?: ContactRoute }
+    | { source: "separate"; route: ContactRoute };
+  urgentActions: string[];
+  otherAction: string;
+  urgentInstruction: string;
+}
+const choice = (id = ""): Choice => ({ id, other: "" });
+export const emptyContactRoute = (): ContactRoute => ({
+  contact: { kind: "unconfirmed" },
+  method: choice(),
+  instruction: "",
+});
+const join = (...s: (string | undefined)[]) =>
+  [...new Set(s.filter((v): v is string => !!v?.trim()))].join("\n");
+export function bookingFor(p: PracticeData): BookingConfig {
+  if (p.bookingConfig) return p.bookingConfig;
+  return {
+    version: 1,
+    sameDayPathway: {
+      selected: [],
+      custom: [],
+      instruction: p.sameDayReasons.join("\n"),
+    },
+    sameDayProcess: choice(),
+    sameDayInstruction: p.rolePolicies.gpsSameDay,
+    sendUncertainToDutyClinician: false,
+    escalation: { ...emptyContactRoute(), instruction: p.dutyContact },
+    routineProcess: choice(),
+    routineInstruction: p.rolePolicies.gpsRoutine,
+  };
+}
+export function prescriptionsFor(p: PracticeData): PrescriptionConfig {
+  if (p.prescriptionConfig) return p.prescriptionConfig;
+  return {
+    version: 1,
+    methods: [],
+    otherMethod: "",
+    orderingInstruction: join(p.prescriptionOrdering, p.repeatOrderMethods),
+    turnaround: choice(),
+    turnaroundInstruction: p.repeatTurnaround,
+    weekends: choice("unconfirmed"),
+    bankHolidays: choice("unconfirmed"),
+    urgentRoute: p.repeatEmergency.trim()
+      ? { source: "separate", route: emptyContactRoute() }
+      : { source: "appointment" },
+    urgentActions: [],
+    otherAction: "",
+    urgentInstruction: p.repeatEmergency,
+  };
+}
+export function contactText(
+  c: Contact,
+  staff: StaffMember[],
+  roles?: PracticeData["roleRequests"],
+): string {
+  if (c.kind === "multiple")
+    return c.contacts
+      .map((contact) => contactText(contact, staff, roles))
+      .filter(Boolean)
+      .join("; ");
+  if (c.kind === "role" && c.roleId) {
+    const role = roles?.[c.roleId];
+    return role && !role.archived
+      ? role.label
+      : "Previously selected role is no longer available — choose a contact";
+  }
+  if (c.kind === "staff") {
+    const s = staff.find((s) => s.id === c.staffId);
+    return s
+      ? `${s.name} — ${s.role}`
+      : "Previously selected team member is no longer available — choose a contact";
+  }
+  return c.kind === "role" ? c.role : c.kind === "other" ? c.text : "";
+}
+export const choiceText = (c: Choice, list: Option[]) =>
+  c.id === "other" ? c.other : (list.find((o) => o.id === c.id)?.label ?? "");
+export function routeText(r: ContactRoute, p: PracticeData): string {
+  return join(
+    contactText(r.contact, p.staff, p.roleRequests),
+    choiceText(r.method, contactMethods),
+    r.method.id === "phone" ? r.method.other : "",
+    r.instruction,
+  );
+}
+export function safeguardingFor(p: PracticeData): SafeguardingRoute {
+  const route = p.safeguardingRoute ?? emptyContactRoute();
+  // A stored staff ID is unambiguous. Never infer a person from a role or free text.
+  return {
+    ...route,
+    leadIds:
+      p.safeguardingRoute?.leadIds ??
+      (route.contact.kind === "staff" ? [route.contact.staffId] : []),
+  };
+}
+export function safeguardingMissing(p: PracticeData): string[] {
+  const r = safeguardingFor(p);
+  const missing: string[] = [];
+  if (!r.leadIds?.length) missing.push("Select named safeguarding leads");
+  if (r.leadIds?.some((id) => !p.staff.some((s) => s.id === id && s.name.trim())))
+    missing.push("A safeguarding lead is no longer available — review the selected leads");
+  if (!r.method.id || (["other", "phone"].includes(r.method.id) && !r.method.other.trim()))
+    missing.push("How staff should raise a safeguarding concern");
+  return missing;
+}
+export function safeguardingNames(p: PracticeData): string[] {
+  return (safeguardingFor(p).leadIds ?? []).map((id) => {
+    const s = p.staff.find((s) => s.id === id && s.name.trim());
+    return s ? `${s.name} — ${s.role}` : "Team member no longer available — Needs review";
+  });
+}
+// Read-only compatibility projection: never persist derived strings over legacy data.
+export function practiceSummary(p: PracticeData): PracticeData {
+  const safety = safeguardingFor(p);
+  let result = p.safeguardingRoute
+    ? {
+        ...p,
+        localSafeguarding: join(
+          p.safeguardingRoute.leadIds !== undefined || safety.leadIds?.length
+            ? join(
+                safeguardingNames(p).join("; "),
+                choiceText(safety.method, contactMethods),
+                safety.method.id === "phone" ? safety.method.other : "",
+                safety.instruction,
+              )
+            : routeText(p.safeguardingRoute, p),
+          p.localSafeguarding,
+        ),
+      }
+    : p;
+  if (p.bookingConfig) {
+    const b = p.bookingConfig;
+    const criteria = [
+      ...b.sameDayPathway.selected.map(
+        (id) => sameDayGroups.flatMap((g) => g.options).find((o) => o.id === id)?.label ?? id,
+      ),
+      ...b.sameDayPathway.custom,
+    ].filter((s) => s.trim());
+    result = {
+      ...result,
+      sameDayReasons: [
+        join(
+          criteria.length
+            ? `Consider for the same-day pathway: ${criteria.join("; ")}. This does not authorise automatic booking; follow the configured process. These provisional categories are not emergency or clinical triage guidance.`
+            : "",
+          b.sameDayPathway.instruction,
+        ),
+      ].filter(Boolean),
+      dutyContact: routeText(b.escalation, p),
+      rolePolicies: {
+        ...p.rolePolicies,
+        gpsSameDay: join(
+          choiceText(b.sameDayProcess, sameDayProcesses),
+          b.sendUncertainToDutyClinician ? "If reception is unsure, send to duty clinician." : "",
+          b.sameDayInstruction,
+        ),
+        gpsRoutine: join(choiceText(b.routineProcess, routineProcesses), b.routineInstruction),
+      },
+    };
+  }
+  if (p.prescriptionConfig) {
+    const c = p.prescriptionConfig;
+    const ordering = join(
+      c.methods
+        .map((id) =>
+          id === "other"
+            ? c.otherMethod
+            : (prescriptionMethods.find((o) => o.id === id)?.label ?? id),
+        )
+        .filter(Boolean)
+        .join("; "),
+      c.orderingInstruction,
+    );
+    result = {
+      ...result,
+      prescriptionOrdering: ordering,
+      repeatOrderMethods: ordering,
+      repeatTurnaround: join(
+        choiceText(c.turnaround, turnarounds),
+        `Weekends: ${choiceText(c.weekends, calendarRules)}`,
+        `Bank holidays: ${choiceText(c.bankHolidays, calendarRules)}`,
+        c.turnaroundInstruction,
+      ),
+      repeatEmergency: join(
+        c.urgentRoute.source === "appointment"
+          ? `Use appointment escalation: ${result.dutyContact || "Contact and method not yet confirmed"}`
+          : routeText(c.urgentRoute.route, p),
+        c.urgentActions
+          .map((id) =>
+            id === "other" ? c.otherAction : (urgentActions.find((o) => o.id === id)?.label ?? id),
+          )
+          .join("; "),
+        c.urgentInstruction,
+      ),
+    };
+  }
+  return result;
+}
+export function contactMissing(r: ContactRoute, p: PracticeData): boolean {
+  if (r.contact.kind === "multiple")
+    return (
+      !r.contact.contacts.length ||
+      r.contact.contacts.some((contact) => contactMissing({ ...r, contact }, p))
+    );
+  if (r.contact.kind === "unconfirmed") return !r.instruction.trim();
+  const c = r.contact;
+  return (
+    !contactText(c, p.staff, p.roleRequests).trim() ||
+    (c.kind === "role" &&
+      !!c.roleId &&
+      (!p.roleRequests?.[c.roleId] || !!p.roleRequests[c.roleId].archived)) ||
+    (c.kind === "staff" && !p.staff.some((s) => s.id === c.staffId)) ||
+    !r.method.id ||
+    (["other", "phone"].includes(r.method.id) && !r.method.other.trim())
+  );
+}
+export function configMissing(p: PracticeData): { booking: string[]; prescription: string[] } {
+  const b = bookingFor(p),
+    c = prescriptionsFor(p);
+  const validChoice = (v: Choice, instruction: string) =>
+    v.id === "other" ? !!v.other.trim() : !!v.id || !!instruction.trim();
+  return {
+    booking: [
+      b.requestMethods?.includes("other") && !b.otherRequestMethod?.trim()
+        ? "Other appointment request method"
+        : "",
+      !b.sameDayPathway.requestSelections?.length &&
+      !b.sameDayPathway.selected.length &&
+      !b.sameDayPathway.custom.some((s) => s.trim()) &&
+      !b.sameDayPathway.instruction.trim()
+        ? "Same-day pathway criteria"
+        : "",
+      !validChoice(b.sameDayProcess, b.sameDayInstruction) ? "Same-day booking process" : "",
+      !validChoice(b.routineProcess, b.routineInstruction) ? "Routine booking process" : "",
+      contactMissing(b.escalation, p) ? "Escalation contact and method" : "",
+    ].filter(Boolean),
+    prescription: [
+      (!c.methods.length && !c.orderingInstruction.trim()) ||
+      (c.methods.includes("other") && !c.otherMethod.trim())
+        ? "Prescription ordering"
+        : "",
+      !validChoice(c.turnaround, c.turnaroundInstruction) ? "Prescription turnaround" : "",
+      [c.weekends, c.bankHolidays].some((v) => v.id === "other" && !v.other.trim())
+        ? "Weekend / bank-holiday details"
+        : "",
+      !(
+        c.urgentRoute.source === "separate" &&
+        c.urgentRoute.route.contact.kind === "unconfirmed" &&
+        c.urgentInstruction.trim()
+      ) &&
+      contactMissing(c.urgentRoute.source === "appointment" ? b.escalation : c.urgentRoute.route, p)
+        ? "Urgent prescription contact and method"
+        : "",
+      (!c.urgentActions.length && !c.urgentInstruction.trim()) ||
+      (c.urgentActions.includes("other") && !c.otherAction.trim())
+        ? "Urgent prescription action"
+        : "",
+    ].filter(Boolean),
+  };
+}
+
+// Optional restoration data keeps existing version-1 records compatible.
+export function switchUrgentRoute(
+  current: PrescriptionConfig["urgentRoute"],
+  useAppointment: boolean,
+): PrescriptionConfig["urgentRoute"] {
+  if (useAppointment) {
+    return current.source === "appointment"
+      ? current
+      : { source: "appointment", previousSeparateRoute: current.route };
+  }
+  return current.source === "separate"
+    ? current
+    : { source: "separate", route: current.previousSeparateRoute ?? emptyContactRoute() };
+}
+
+export interface ConfigReview {
+  unconfirmed: string[];
+  textOnly: string[];
+  instructions: string[];
+}
+// Derived review prompts, not a persisted approval/audit trail. Never interpret prose as facts.
+export function configReview(p: PracticeData): {
+  booking: ConfigReview;
+  prescription: ConfigReview;
+} {
+  const b = bookingFor(p),
+    c = prescriptionsFor(p);
+  const booking: ConfigReview = { unconfirmed: [], textOnly: [], instructions: [] };
+  const prescription: ConfigReview = { unconfirmed: [], textOnly: [], instructions: [] };
+  const inspect = (
+    review: ConfigReview,
+    label: string,
+    configured: boolean,
+    instruction: string,
+  ) => {
+    if (!configured) (instruction.trim() ? review.textOnly : review.unconfirmed).push(label);
+    if (instruction.trim()) review.instructions.push(label);
+  };
+  const chosen = (v: Choice) =>
+    !!v.id && v.id !== "unconfirmed" && (v.id !== "other" || !!v.other.trim());
+  const contactConfigured = (r: ContactRoute) =>
+    r.contact.kind !== "unconfirmed" && !contactMissing(r, p);
+  inspect(
+    booking,
+    "Same-day pathway criteria",
+    !!b.sameDayPathway.requestSelections?.length ||
+      !!b.sameDayPathway.selected.length ||
+      b.sameDayPathway.custom.some((s) => !!s.trim()),
+    b.sameDayPathway.instruction,
+  );
+  inspect(booking, "Same-day booking process", chosen(b.sameDayProcess), b.sameDayInstruction);
+  inspect(booking, "Routine booking process", chosen(b.routineProcess), b.routineInstruction);
+  inspect(
+    booking,
+    "Appointment escalation contact and method",
+    contactConfigured(b.escalation),
+    b.escalation.instruction,
+  );
+  inspect(
+    prescription,
+    "Prescription ordering",
+    !!c.methods.length && (!c.methods.includes("other") || !!c.otherMethod.trim()),
+    c.orderingInstruction,
+  );
+  inspect(prescription, "Prescription turnaround", chosen(c.turnaround), c.turnaroundInstruction);
+  if (!chosen(c.weekends)) prescription.unconfirmed.push("Weekend turnaround rules");
+  if (!chosen(c.bankHolidays)) prescription.unconfirmed.push("Bank-holiday turnaround rules");
+  const urgent = c.urgentRoute.source === "appointment" ? b.escalation : c.urgentRoute.route;
+  inspect(
+    prescription,
+    "Urgent prescription contact and method",
+    contactConfigured(urgent),
+    join(urgent.instruction, c.urgentRoute.source === "separate" ? c.urgentInstruction : ""),
+  );
+  inspect(
+    prescription,
+    "Urgent prescription actions",
+    !!c.urgentActions.length && (!c.urgentActions.includes("other") || !!c.otherAction.trim()),
+    c.urgentInstruction,
+  );
+  return { booking, prescription };
+}

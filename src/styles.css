@@ -1,0 +1,120 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/plus-jakarta-sans/500.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+}
+
+:root {
+  --radius: 0.875rem;
+
+  /* Base */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.22 0.05 260); /* dark navy */
+  --surface: oklch(0.985 0.005 240);
+  --surface-muted: oklch(0.965 0.012 230);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.05 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.05 260);
+
+  /* Primary: soft professional blue */
+  --primary: oklch(0.55 0.12 240);
+  --primary-foreground: oklch(0.99 0 0);
+
+  /* Secondary: pale blue chip */
+  --secondary: oklch(0.955 0.02 235);
+  --secondary-foreground: oklch(0.28 0.06 255);
+
+  --muted: oklch(0.965 0.008 240);
+  --muted-foreground: oklch(0.48 0.03 255);
+
+  /* Accent: soft healthcare green */
+  --accent: oklch(0.72 0.11 165);
+  --accent-foreground: oklch(0.99 0 0);
+
+  --success: oklch(0.7 0.13 160);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.82 0.14 85);
+  --warning-foreground: oklch(0.25 0.05 260);
+  --destructive: oklch(0.62 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.92 0.01 240);
+  --input: oklch(0.92 0.01 240);
+  --ring: oklch(0.65 0.12 235);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  :where(a, button, summary, [role="button"], input[type="checkbox"], input[type="radio"]):not(
+      :disabled
+    ):not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  :where(button:disabled, input:disabled, [aria-disabled="true"]) {
+    cursor: not-allowed;
+  }
+  html {
+    font-family: var(--font-sans);
+    scrollbar-gutter: stable;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: 0;
+  }
+}
