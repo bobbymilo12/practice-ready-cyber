@@ -58,7 +58,7 @@ test("development invitation retains package assignments across reload", async (
   await expect(page.getByText("Mock trainee added", { exact: true })).toBeVisible();
   await page.reload();
   const assigned = await page.evaluate(() => {
-    const w = JSON.parse(sessionStorage.getItem("practiceready-dev-workspace-v1")!);
+    const w = JSON.parse(localStorage.getItem("practiceready-dev-workspace-v1")!);
     const trainee = w.trainees.find((t: { email: string }) => t.email === "package@example.test");
     return w.state.assignments.filter((a: { traineeId: string }) => a.traineeId === trainee.id);
   });

@@ -30,12 +30,12 @@ No modules are assigned automatically. Refresh Mock Manager, then on a published
 same browser tab to start that training; no invitation or workspace reset is needed.
 
 To reset, open browser developer tools while in the local mock session, go to **Application →
-Session Storage → your local app origin**, delete only `practiceready-dev-workspace-v1`, then
+Local Storage → your local app origin**, delete only `practiceready-dev-workspace-v1`, then
 reload. This discards that mock workspace's edits, modules and attempts and reloads the baseline.
 The equivalent browser-console command is:
 
 ```js
-sessionStorage.removeItem("practiceready-dev-workspace-v1");
+localStorage.removeItem("practiceready-dev-workspace-v1");
 location.reload();
 ```
 

@@ -73,14 +73,18 @@ function query(table) {
 }
 const mockClient = {
   from: query,
-  // Mirrors the SQL functions in 202610090001_practice_tables.sql.
+  // Mirrors the SQL functions in 202610090001_practice_tables.sql and 202610100003_practice_modules.sql.
   rpc: async (name, args) => {
     const practice = tables.practices.find((p) => p.id === args.p_practice);
     if (name === "load_practice_data")
       return { data: tables.practice_data[args.p_practice] ?? null, error: null };
+    if (name === "load_practice_modules")
+      return { data: tables.practice_modules[args.p_practice] ?? [], error: null };
     if (practice.version !== args.p_version) return { data: null, error: null };
-    Object.assign(practice, { state: args.p_state, version: practice.version + 1 });
+    const { modules, ...state } = args.p_state;
+    Object.assign(practice, { state, version: practice.version + 1 });
     tables.practice_data[args.p_practice] = args.p_data;
+    tables.practice_modules[args.p_practice] = modules ?? [];
     writes.push({ table: "practice_data", operation: "rpc", value: args.p_data, filters: [] });
     return { data: practice.version, error: null };
   },
@@ -159,24 +163,6 @@ function reset(role = "trainee", mustReset = false) {
       id: "oak",
       version: 1,
       state: {
-        modules: [
-          {
-            id: "m1",
-            title: "Booking",
-            published: true,
-            scenarios: [
-              {
-                id: "q1",
-                kind: "mcq",
-                options: ["Wrong", "Correct"],
-                correctIndex: 1,
-                status: "approved",
-                title: "Booking",
-              },
-            ],
-          },
-          { id: "m2", published: true, scenarios: [] },
-        ],
         assignments: [
           { id: "a1", moduleId: "m1", traineeId: "alice" },
           { id: "a2", moduleId: "m2", traineeId: "bob" },
@@ -186,6 +172,26 @@ function reset(role = "trainee", mustReset = false) {
     },
   ];
   tables.practice_data = { oak: { practiceName: "Oak", privateManagerField: "internal" } };
+  tables.practice_modules = {
+    oak: [
+      {
+        id: "m1",
+        title: "Booking",
+        published: true,
+        scenarios: [
+          {
+            id: "q1",
+            kind: "mcq",
+            options: ["Wrong", "Correct"],
+            correctIndex: 1,
+            status: "approved",
+            title: "Booking",
+          },
+        ],
+      },
+      { id: "m2", published: true, scenarios: [] },
+    ],
+  };
   tables.role_templates = [];
   tables.training_sessions = [
     {
@@ -314,7 +320,7 @@ test("packages and module settings survive manager save and filtered trainee loa
     ...structuredClone(tables.practices[0].state),
     practiceData: tables.practice_data.oak,
   };
-  state.modules = [state.modules[0]];
+  state.modules = [structuredClone(tables.practice_modules.oak[0])];
   state.assignments = [
     { id: "bob-configured", moduleId: "m1", traineeId: "bob", packageId: "induction" },
   ];
@@ -335,6 +341,11 @@ test("packages and module settings survive manager save and filtered trainee loa
   const manager = await call({ action: "load" });
   assert.deepEqual(manager.data.state.packages, state.packages);
   assert.deepEqual(manager.data.state.modules[0].settings, state.modules[0].settings);
+  assert.equal(tables.practices[0].state.modules, undefined);
+  assert.deepEqual(
+    tables.practice_modules.oak.map((m) => m.id),
+    ["m1"],
+  );
   user = { id: "bob" };
   const trainee = await call({ action: "load" });
   assert.deepEqual(trainee.data.state.packages, [state.packages[0]]);
@@ -349,8 +360,9 @@ test("invitation assigns only ready induction modules and resend does not duplic
   );
   reset("manager");
   const state = tables.practices[0].state;
-  state.modules[0].settings = { version: 1, answers: {}, extra: "", length: "quick", count: 6 };
-  state.modules.push(
+  const modules = tables.practice_modules.oak;
+  modules[0].settings = { version: 1, answers: {}, extra: "", length: "quick", count: 6 };
+  modules.push(
     { id: "draft", published: false },
     { id: "review", published: true, needsReview: true },
   );
@@ -402,20 +414,21 @@ test("a manager cannot remove or see trainees from another practice", async () =
 test("API flags published training on practice changes and refuses a boolean-only dismissal", async () => {
   reset("manager");
   const state = structuredClone(tables.practices[0].state);
-  state.modules = [state.modules[0]];
+  state.modules = [structuredClone(tables.practice_modules.oak[0])];
   state.assignments = [{ id: "review-assignment", moduleId: "m1", traineeId: "bob" }];
   state.practiceData = { ...tables.practice_data.oak, repeatTurnaround: "72 working hours" };
   assert.equal((await call({ action: "save-practice", state, version: 1 })).status, 200);
-  const flagged = tables.practices[0].state.modules[0];
+  const flagged = tables.practice_modules.oak[0];
   assert.equal(flagged.needsReview, true);
   assert.match(flagged.reviewReason, /Prescription turnaround/);
   const dismissed = structuredClone(tables.practices[0].state);
   dismissed.practiceData = tables.practice_data.oak;
+  dismissed.modules = structuredClone(tables.practice_modules.oak);
   dismissed.modules[0].needsReview = false;
   const rejection = await call({ action: "save-practice", state: dismissed, version: 2 });
   assert.equal(rejection.status, 400);
   assert.match(rejection.data.error, /review decision/);
-  assert.equal(tables.practices[0].state.modules[0].needsReview, true);
+  assert.equal(tables.practice_modules.oak[0].needsReview, true);
   user = { id: "bob" };
   const start = await call({ action: "start", assignmentId: "review-assignment" });
   assert.equal(start.status, 400);
@@ -426,12 +439,17 @@ test("API authenticates review decisions, retains history and flags a subsequent
   reset("manager");
   const state = structuredClone(tables.practices[0].state);
   state.modules = [
-    { ...state.modules[0], needsReview: true, reviewReason: "Local process changed." },
+    {
+      ...tables.practice_modules.oak[0],
+      needsReview: true,
+      reviewReason: "Local process changed.",
+    },
   ];
   state.assignments = [];
   state.practiceData = tables.practice_data.oak;
   assert.equal((await call({ action: "save-practice", state, version: 1 })).status, 200);
   const next = structuredClone(tables.practices[0].state);
+  next.modules = structuredClone(tables.practice_modules.oak);
   next.practiceData = tables.practice_data.oak;
   next.modules[0] = next.modules[0].scenarios.reduce(
     (m, q) => approveReviewedQuestion(m, q.id, next.practiceData),
@@ -453,23 +471,24 @@ test("API authenticates review decisions, retains history and flags a subsequent
   module.needsReview = false;
   const result = await call({ action: "save-practice", state: next, version: 2 });
   assert.equal(result.status, 200, JSON.stringify(result.data));
-  const record = tables.practices[0].state.modules[0].reviewConfirmations[0];
+  const record = tables.practice_modules.oak[0].reviewConfirmations[0];
   assert.equal(record.by, "alice");
   assert.equal(record.name, "Alice");
   assert.notEqual(record.at, "1900-01-01T00:00:00Z");
   assert.deepEqual(record.reasons, ["Local process changed."]);
   assert.deepEqual(result.data.reviewConfirmations.m1, [record]);
   const changed = structuredClone(tables.practices[0].state);
+  changed.modules = structuredClone(tables.practice_modules.oak);
   changed.practiceData = { ...tables.practice_data.oak, hours: "09:00–17:00" };
   changed.modules[0].reviewConfirmations = [];
   assert.equal((await call({ action: "save-practice", state: changed, version: 3 })).status, 200);
-  assert.equal(tables.practices[0].state.modules[0].needsReview, true);
-  assert.deepEqual(tables.practices[0].state.modules[0].reviewConfirmations, [record]);
+  assert.equal(tables.practice_modules.oak[0].needsReview, true);
+  assert.deepEqual(tables.practice_modules.oak[0].reviewConfirmations, [record]);
 });
 
 test("trainees receive availability flags but not manager review notes or audit records", async () => {
   reset();
-  const module = tables.practices[0].state.modules[0];
+  const module = tables.practice_modules.oak[0];
   module.needsReview = true;
   module.reviewChanges = [{ reason: "Manager review details" }];
   module.reviewConfirmations = [{ id: "decision", note: "Private manager review note" }];

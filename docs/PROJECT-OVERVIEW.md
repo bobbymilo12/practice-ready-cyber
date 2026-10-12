@@ -50,7 +50,7 @@ TanStack Start server (Nitro on Vercel)
 ```
 
 Without Supabase environment variables, local development uses mock Manager/Trainee accounts
-(`src/lib/dev-backend.ts`, `src/lib/dev-mode.ts`, stored in `sessionStorage`).
+(`src/lib/dev-backend.ts`, `src/lib/dev-mode.ts`, workspace in `localStorage`, mock role in `sessionStorage`).
 
 ### Database tables
 

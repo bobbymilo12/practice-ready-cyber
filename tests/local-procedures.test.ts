@@ -185,7 +185,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
   });
   let fail = false;
   Object.assign(globalThis, {
-    sessionStorage: {
+    localStorage: {
       getItem: () => stored,
       setItem: (_: string, value: string) => {
         if (fail) throw new Error("Storage unavailable");
@@ -462,10 +462,10 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
   let stored: string | null = null;
   let role: string | null = "manager";
   let reads = 0;
-  const previousStorage = globalThis.sessionStorage;
+  const previousStorage = globalThis.localStorage;
   const previousWindow = globalThis.window;
   Object.assign(globalThis, {
-    sessionStorage: {
+    localStorage: {
       getItem: () => {
         reads++;
         return stored;
@@ -611,6 +611,6 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
     assert.equal(reads, previousReads);
     assert.equal(stored, null);
   } finally {
-    Object.assign(globalThis, { sessionStorage: previousStorage, window: previousWindow });
+    Object.assign(globalThis, { localStorage: previousStorage, window: previousWindow });
   }
 });

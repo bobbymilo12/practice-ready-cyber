@@ -56,14 +56,14 @@ test("local mock roles save isolated data, resume training and enforce trainee r
     await expect
       .poll(() =>
         page.evaluate(() => {
-          const w = JSON.parse(sessionStorage.getItem("practiceready-dev-workspace-v1")!);
+          const w = JSON.parse(localStorage.getItem("practiceready-dev-workspace-v1")!);
           return w.sessions[0].index;
         }),
       )
       .toBe(i + 1);
     // Use the persisted mock scenario to choose the actual approved answer.
     const label = await page.evaluate(() => {
-      const w = JSON.parse(sessionStorage.getItem("practiceready-dev-workspace-v1")!);
+      const w = JSON.parse(localStorage.getItem("practiceready-dev-workspace-v1")!);
       const s = w.sessions[0];
       const q = s.scenarios.find((q: { id: string }) => q.id === s.queue[s.index]);
       return q.options[q.correctIndex] as string;

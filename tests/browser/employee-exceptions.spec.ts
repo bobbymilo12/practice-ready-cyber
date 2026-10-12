@@ -130,7 +130,7 @@ for (const mobile of [false, true]) {
 }
 async function readOverrides(page: Page) {
   return page.evaluate(() => {
-    const w = JSON.parse(sessionStorage.getItem("practiceready-dev-workspace-v1")!);
+    const w = JSON.parse(localStorage.getItem("practiceready-dev-workspace-v1")!);
     return w.state.practiceData.staff.find((s: { name: string }) => s.name === "Catherine")
       .requestOverrides as Record<string, Record<string, boolean>> | undefined;
   });
