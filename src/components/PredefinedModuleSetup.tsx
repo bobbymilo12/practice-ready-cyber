@@ -245,7 +245,7 @@ export function PredefinedModuleSetup({
                       className="rounded-xl bg-primary px-5 py-3 text-primary-foreground"
                       onClick={() => setPhase("length")}
                     >
-                      Choose module length →
+                      Choose module length + difficulty
                     </button>
                   </Card>
                 </>

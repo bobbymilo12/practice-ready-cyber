@@ -366,7 +366,7 @@ test("real module-builder Generate handler carries saved procedures into Learn a
       ),
     );
     initial
-      .find((n) => n.type === "button" && n.props.children === "Choose module length →")
+      .find((n) => n.type === "button" && n.props.children === "Choose module length + difficulty")
       .props.onClick();
     const button = render().find(
       (n) =>
