@@ -182,7 +182,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
   });
   let fail = false;
   Object.assign(globalThis, {
-    sessionStorage: {
+    localStorage: {
       getItem: () => stored,
       setItem: (_: string, value: string) => {
         if (fail) throw new Error("Storage unavailable");

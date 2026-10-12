@@ -15,9 +15,9 @@ test("reviewed template selections appear inline and local edits survive restori
   role.archived = true;
   await page.evaluate((role) => {
     const key = "practiceready-dev-workspace-v1";
-    const workspace = JSON.parse(sessionStorage.getItem(key)!);
+    const workspace = JSON.parse(localStorage.getItem(key)!);
     workspace.state.practiceData.roleRequests = { [role.roleId]: role };
-    sessionStorage.setItem(key, JSON.stringify(workspace));
+    localStorage.setItem(key, JSON.stringify(workspace));
   }, role);
   await page.goto("/practice/setup?step=1");
   const nurse = page.locator('[aria-label="Practice role Practice Nurse"]');

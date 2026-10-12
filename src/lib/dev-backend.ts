@@ -102,10 +102,10 @@ function seed(): Workspace {
   };
 }
 function read(): Workspace {
-  const raw = sessionStorage.getItem(storageKey);
+  const raw = localStorage.getItem(storageKey);
   if (raw) return JSON.parse(raw) as Workspace;
   const workspace = seed();
-  sessionStorage.setItem(storageKey, JSON.stringify(workspace));
+  localStorage.setItem(storageKey, JSON.stringify(workspace));
   return workspace;
 }
 export async function devApi(action: string, body: Record<string, unknown>): Promise<unknown> {
@@ -140,7 +140,7 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
         status: "assigned",
       });
       workspace.version++;
-      sessionStorage.setItem(storageKey, JSON.stringify(workspace));
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
     }
     const assignments = state.assignments.filter((a) => a.traineeId === account.id);
     return {
@@ -266,6 +266,6 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
       result = { session };
     }
   }
-  sessionStorage.setItem(storageKey, JSON.stringify(workspace));
+  localStorage.setItem(storageKey, JSON.stringify(workspace));
   return structuredClone(result);
 }
