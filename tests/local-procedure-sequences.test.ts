@@ -139,7 +139,7 @@ test("candidate selection is deterministic regardless of dictionary insertion an
   });
   assert.notEqual(localProcedureSequence(p)!.provenance.sourceId, first.provenance.sourceId);
 });
-test("matching retains priority; sequences replace one existing local MCQ only with room", () => {
+test("Learn reserves a procedure slot before matching, including short modules", () => {
   const { p } = fixture();
   for (const count of [1, 2, 3, 4, 6, 10]) {
     const settings = { ...defaultModuleSettings(), trainingLevel: "learn" as const, count };
@@ -155,7 +155,7 @@ test("matching retains priority; sequences replace one existing local MCQ only w
     assert.equal(core, baseline.filter((s) => s.provenance?.kind === "core").length);
     const localCount = result.length - core;
     assert.equal(result.filter((s) => s.kind === "matching").length, localCount >= 2 ? 1 : 0);
-    assert.equal(result.filter((s) => s.kind === "order").length, localCount >= 4 ? 1 : 0);
+    assert.equal(result.filter((s) => s.kind === "order").length, localCount >= 1 ? 1 : 0);
     if (localCount >= 4)
       assert.ok(result.filter((s) => s.kind === "mcq" && !s.provenance).length >= 2);
   }
@@ -248,11 +248,57 @@ test("manager review shows source/version/context, suppresses empty quotes and d
   const source = readFileSync(new URL("../src/routes/modules.review.tsx", import.meta.url), "utf8");
   assert.ok(source.includes("Manager-confirmed practice procedure"));
   assert.ok(source.includes("scenario.provenance.snapshot.localProcedure.appliesWhen"));
-  assert.ok(source.includes('disabled={scenario.provenance?.kind === "sequence"}'));
+  assert.ok(
+    source.includes('disabled={scenario.provenance?.kind === "sequence" && !reviewingChanges}'),
+  );
   const editor = readFileSync(
     new URL("../src/components/LocalProcedures.tsx", import.meta.url),
     "utf8",
   );
   assert.ok(editor.includes('<option value="unassessed">Not sure / not specified</option>'));
   assert.ok(editor.includes('<option value="required_linear">'));
+});
+
+test("review regeneration uses the exact current procedure and leaves existing attempts untouched", () => {
+  const { p, record, target } = fixture();
+  const scenario = { ...localProcedureSequence(p)!, status: "approved" as const };
+  const module: Module = {
+    id: "review-module",
+    title: "Booking",
+    type: "Booking",
+    topicKey: "appointment-booking",
+    published: true,
+    createdAt: 1,
+    scenarios: [scenario],
+  };
+  const session = startSession(
+    module,
+    {
+      id: "assignment",
+      moduleId: module.id,
+      traineeId: "trainee",
+      assignedAt: 1,
+      status: "assigned",
+    },
+    "existing-attempt",
+  );
+  const frozen = JSON.stringify(session);
+  const draft = procedureDraft(record);
+  draft.steps[0].text = "Open the updated reception form.";
+  p.localProcedures![target.id] = confirmProcedure(target, record, draft, "manager");
+  const regenerated = regenerateConfiguredScenario(
+    { ...module, needsReview: true },
+    scenario.id,
+    p,
+  );
+  assert.equal(regenerated.scenarios[0].status, "draft");
+  assert.equal(regenerated.scenarios[0].id, scenario.id);
+  assert.equal(regenerated.scenarios[0].provenance?.kind, "sequence");
+  assert.equal(regenerated.scenarios[0].provenance?.sourceVersion, record.version + 1);
+  assert.equal(JSON.stringify(session), frozen);
+  delete p.localProcedures![target.id];
+  assert.throws(
+    () => regenerateConfiguredScenario({ ...module, needsReview: true }, scenario.id, p),
+    /No eligible/,
+  );
 });

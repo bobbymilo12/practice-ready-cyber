@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApp } from "@/lib/store";
+import { practiceChangePatch, useApp } from "@/lib/store";
 import { addPracticeRequest, practiceRequestChoices } from "@/lib/practice-requests";
 import { bookingFor, sameDayGroups } from "@/lib/practice-config";
 
@@ -97,7 +97,9 @@ export function SameDayRequests() {
             disabled={!label.trim()}
             className="rounded-xl bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
             onClick={() => {
-              useApp.setState((s) => ({ practiceData: addPracticeRequest(s.practiceData, label) }));
+              useApp.setState((s) =>
+                practiceChangePatch(s, addPracticeRequest(s.practiceData, label)),
+              );
               setLabel("");
               setAdding(false);
             }}

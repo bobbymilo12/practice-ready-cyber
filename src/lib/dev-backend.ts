@@ -1,4 +1,6 @@
-import { validateLocalProcedures } from "./local-procedures.ts";
+import { flagPracticeChanges, enforceReviewDecisions } from "./practice-change-tracking.ts";
+import { suggestedRole } from "./role-requests.ts";
+import { confirmProcedure, procedureTargets, validateLocalProcedures } from "./local-procedures.ts";
 // Loaded dynamically only for a local development mock session. No network operations belong here.
 import {
   defaultPracticeData,
@@ -21,12 +23,100 @@ import {
 
 const storageKey = "practiceready-dev-workspace-v1";
 const traineeId = "dev-trainee-jamie";
+const mockTrainee = (): Trainee => ({
+  id: traineeId,
+  name: "Jamie Example (Mock Trainee)",
+  email: "jamie.trainee@example.test",
+  role: "Receptionist",
+  status: "active",
+  invitedAt: Date.now(),
+});
 type Workspace = {
   state: PracticeState;
   trainees: Trainee[];
   sessions: TrainingSession[];
   version: number;
 };
+/** User-supplied visual-test baseline only; never clinical guidance or a real practice default. */
+function managerSeed(): Workspace {
+  const practiceData = {
+    ...Object.fromEntries(Object.keys(defaultPracticeData).map((key) => [key, ""])),
+    practiceName: "Mock practice — visual testing only",
+    staff: [],
+    sameDayReasons: [],
+    rolePolicies: Object.fromEntries(
+      Object.keys(defaultPracticeData.rolePolicies).map((key) => [key, ""]),
+    ),
+  } as unknown as typeof defaultPracticeData;
+  const doctor = {
+    ...suggestedRole("Doctor"),
+    confirmed: true,
+    selectedRequestIds: [
+      "medication-reviews",
+      "prescription-queries",
+      "mental-health-appointments",
+      "utis",
+      "breast-examination",
+      "test-result-queries",
+    ],
+  };
+  const nurse = {
+    ...suggestedRole("Nurse Practitioner"),
+    confirmed: true,
+    selectedRequestIds: [
+      "chest-infections",
+      "coughs",
+      "sore-throats",
+      "ear-problems",
+      "minor-skin-problems",
+      "minor-injuries",
+      "eye-problems",
+    ],
+  };
+  practiceData.roleRequests = { [doctor.roleId]: doctor, [nurse.roleId]: nurse };
+  const target = procedureTargets(practiceData).find((target) => target.id === "utis")!;
+  practiceData.localProcedures = {
+    utis: confirmProcedure(
+      target,
+      undefined,
+      {
+        steps: [
+          {
+            id: "sample",
+            text: "Receptionist asks the patient to come to the practice and drop off a urine sample at reception.",
+          },
+          {
+            id: "booking",
+            text: "Once the sample has been handed in, book the patient into a UTI slot with a GPA.",
+          },
+          {
+            id: "collection",
+            text: "Place the urine sample into the GPA urine sample collection box in reception.",
+          },
+        ],
+        stepOrder: ["sample", "booking", "collection"],
+        appliesWhen: "",
+        orderRequirement: "required_linear",
+      },
+      "dev-manager-morgan",
+    ),
+  };
+  return {
+    state: {
+      practiceData,
+      modules: [],
+      packages: [],
+      assignments: [],
+      setupComplete: true,
+      emojiMarks: {},
+      answers: {},
+      currentDraftId: null,
+    },
+    trainees: [mockTrainee()],
+    sessions: [],
+    version: 0,
+  };
+}
 function seed(): Workspace {
   const practiceData = structuredClone(defaultPracticeData);
   practiceData.practiceName = "Demo Willow Practice (fictional)";
@@ -103,8 +193,17 @@ function seed(): Workspace {
 }
 function read(): Workspace {
   const raw = localStorage.getItem(storageKey);
-  if (raw) return JSON.parse(raw) as Workspace;
-  const workspace = seed();
+  if (raw) {
+    const workspace = JSON.parse(raw) as Workspace;
+    // Repair older Manager baselines without resetting their practice or assigning training.
+    if (devRole() === "manager" && !workspace.trainees.some((t) => t.id === traineeId)) {
+      workspace.trainees.push(mockTrainee());
+      workspace.version++;
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
+    }
+    return workspace;
+  }
+  const workspace = devRole() === "manager" ? managerSeed() : seed();
   localStorage.setItem(storageKey, JSON.stringify(workspace));
   return workspace;
 }
@@ -151,7 +250,16 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
           ? state
           : {
               practiceData: { ...state.practiceData, staff: [] },
-              modules: state.modules.filter((m) => assignments.some((a) => a.moduleId === m.id)),
+              modules: state.modules
+                .filter((m) => assignments.some((a) => a.moduleId === m.id))
+                .map(
+                  ({
+                    reviewConfirmations: _history,
+                    reviewChanges: _changes,
+                    reviewedQuestions: _approvals,
+                    ...module
+                  }) => module,
+                ),
               packages: state.packages,
               assignments,
               emojiMarks: state.emojiMarks,
@@ -167,8 +275,29 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
       validateLocalProcedures((body.state as PracticeState)?.practiceData?.localProcedures);
       if (body.version !== workspace.version)
         throw new Error("Mock practice changed. Reload and try again.");
-      workspace.state = body.state as PracticeState;
-      result = { version: ++workspace.version };
+      const next = body.state as PracticeState;
+      next.modules = enforceReviewDecisions(
+        workspace.state.modules,
+        next.modules,
+        next.practiceData,
+        { id: account.id ?? "dev-manager", name: account.name },
+        new Date().toISOString(),
+        workspace.state.practiceData,
+      );
+      next.modules = flagPracticeChanges(
+        workspace.state.practiceData,
+        next.practiceData,
+        next.modules,
+      );
+      workspace.state = next;
+      result = {
+        version: ++workspace.version,
+        reviewConfirmations: Object.fromEntries(
+          next.modules
+            .filter((m) => m.reviewConfirmations?.length)
+            .map((m) => [m.id, m.reviewConfirmations]),
+        ),
+      };
     } else if (action === "invite") {
       const email = String(body.email ?? "").trim();
       const existing = workspace.trainees.find((t) => t.email === email);

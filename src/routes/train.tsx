@@ -1,5 +1,5 @@
 import { SequenceBoard } from "@/components/SequenceBoard";
-import { orderLabels } from "@/lib/sequence";
+import { orderKey, orderLabels } from "@/lib/sequence";
 import { MatchingBoard } from "@/components/MatchingBoard";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -11,7 +11,9 @@ import {
   type TrainingSession,
   type AnswerValue,
   isMatchingAnswer,
-  matchingComplete,
+  matchingFeedback,
+  answerIsComplete,
+  evaluateAnswer,
   primaryScenarios,
 } from "@/lib/training";
 
@@ -126,8 +128,8 @@ function Training({ id }: { id: string }) {
           </Link>
           <h1 className="mt-5 font-display text-2xl font-bold">Review your answers</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Check your selected answers before submitting this module. Your score and feedback will
-            only be shown after submission.
+            Review your checked answers before submitting this module. Your score is based on the
+            first answer you checked for each main question; follow-up practice does not change it.
           </p>
           <Card className="mt-6">
             <ol className="space-y-4">
@@ -203,7 +205,7 @@ function Training({ id }: { id: string }) {
               ? "Manager preview · no results recorded"
               : busy
                 ? "Saving…"
-                : "Answers saved to your account"}
+                : "Checked answers saved · unchecked edits stay on this page"}
           </span>
         </div>
         <h1 className="mt-5 font-display text-2xl font-bold">{module.title}</h1>
@@ -270,26 +272,41 @@ function ScenarioBlock({
   isLast: boolean;
 }) {
   const [localAnswer, setLocalAnswer] = useState<SavedAnswer>();
-  const selected = preview ? localAnswer : answer;
-  const [items, setItems] = useState<string[]>(() => {
-    if (Array.isArray(answer?.value)) return answer.value;
-    if (scenario.kind !== "order" || scenario.sequence) return [];
-    return [...scenario.steps.slice(1), scenario.steps[0]];
+  const committed = preview
+    ? localAnswer
+    : answer && answerIsComplete(scenario, answer.value)
+      ? answer
+      : undefined;
+  const [draft, setDraft] = useState<AnswerValue | undefined>(() => {
+    if (answer) return answer.value;
+    if (scenario.kind === "matching") return {};
+    if (scenario.kind === "order")
+      return scenario.sequence
+        ? [...scenario.sequence.presentationOrder]
+        : [...scenario.steps.slice(1), scenario.steps[0]];
+    return undefined;
   });
-  const check = (value: AnswerValue) => {
-    if (busy) return;
+  const selected = committed?.value ?? draft;
+  const locked = busy || !!committed;
+  const edit = (value: AnswerValue) => {
+    if (!locked) setDraft(value);
+  };
+  const check = () => {
+    if (locked || !answerIsComplete(scenario, draft)) return;
     if (preview)
       setLocalAnswer({
         scenarioId: scenario.id,
         title: scenario.title,
-        value,
+        value: structuredClone(draft),
+        correct: evaluateAnswer(scenario, draft),
       });
-    else onAnswer(value);
+    else onAnswer(draft);
   };
+  const items = Array.isArray(selected) ? selected : [];
   const move = (index: number, direction: number) => {
     const next = [...items];
     [next[index], next[index + direction]] = [next[index + direction], next[index]];
-    setItems(next);
+    edit(next);
   };
   return (
     <Card className="mt-6">
@@ -305,15 +322,15 @@ function ScenarioBlock({
           {scenario.options.map((option, i) => (
             <button
               key={i}
-              disabled={busy}
-              aria-pressed={selected?.value === i}
-              onClick={() => check(i)}
-              className={`flex w-full gap-3 rounded-xl border p-4 text-left text-sm disabled:cursor-default ${selected?.value === i ? "border-primary bg-primary/10" : "border-border hover:border-primary"}`}
+              disabled={locked}
+              aria-pressed={selected === i}
+              onClick={() => edit(i)}
+              className={`flex w-full gap-3 rounded-xl border p-4 text-left text-sm disabled:cursor-default ${selected === i ? "border-primary bg-primary/10" : "border-border hover:border-primary"}`}
             >
               <span className="font-semibold">{String.fromCharCode(65 + i)}.</span>
               <span>
                 {option}
-                {selected?.value === i && <span className="ml-2 text-primary">(Selected)</span>}
+                {selected === i && <span className="ml-2 text-primary">(Selected)</span>}
               </span>
             </button>
           ))}
@@ -323,24 +340,22 @@ function ScenarioBlock({
           instructions={scenario.provenance.managerModified ? scenario.question : undefined}
           items={scenario.items}
           targets={scenario.targets}
-          value={isMatchingAnswer(selected?.value) ? selected.value : {}}
+          value={isMatchingAnswer(selected) ? selected : {}}
           oneToOne={scenario.pairingMode === "one_to_one"}
-          disabled={busy}
-          onChange={check}
+          disabled={locked}
+          onChange={edit}
         />
-      ) : scenario.kind === "order" && scenario.sequence ? (
+      ) : scenario.sequence ? (
         <SequenceBoard
           steps={scenario.sequence.steps}
-          value={
-            Array.isArray(selected?.value) ? selected.value : scenario.sequence.presentationOrder
-          }
-          disabled={busy}
-          onChange={check}
+          value={items}
+          disabled={locked}
+          onChange={edit}
         />
-      ) : scenario.kind === "order" ? (
+      ) : (
         <>
           <p className="mt-2 text-xs text-muted-foreground">
-            Use the arrows to arrange the steps, then select this order.
+            Use the arrows to arrange the steps, then check your answer.
           </p>
           <ol className="mt-4 space-y-2">
             {items.map((step, i) => (
@@ -350,46 +365,76 @@ function ScenarioBlock({
               >
                 <span>{i + 1}.</span>
                 <span className="flex-1">{step}</span>
-                {(!preview || !selected) && (
-                  <div className="flex gap-2">
-                    <button
-                      aria-label={`Move step ${i + 1} up`}
-                      disabled={busy || i === 0}
-                      onClick={() => move(i, -1)}
-                      className="rounded border px-3 py-2 disabled:opacity-30"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      aria-label={`Move step ${i + 1} down`}
-                      disabled={busy || i === items.length - 1}
-                      onClick={() => move(i, 1)}
-                      className="rounded border px-3 py-2 disabled:opacity-30"
-                    >
-                      ↓
-                    </button>
-                  </div>
-                )}
+                <div className="flex gap-2">
+                  <button
+                    aria-label={`Move step ${i + 1} up`}
+                    disabled={locked || i === 0}
+                    onClick={() => move(i, -1)}
+                    className="rounded border px-3 py-2 disabled:opacity-30"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    aria-label={`Move step ${i + 1} down`}
+                    disabled={locked || i === items.length - 1}
+                    onClick={() => move(i, 1)}
+                    className="rounded border px-3 py-2 disabled:opacity-30"
+                  >
+                    ↓
+                  </button>
+                </div>
               </li>
             ))}
           </ol>
-          {(!preview || !selected) && (
-            <button
-              disabled={busy}
-              onClick={() => check(items)}
-              className="mt-4 rounded-xl bg-primary px-4 py-3 text-sm text-primary-foreground disabled:opacity-50"
-            >
-              Select this order
-            </button>
-          )}
         </>
-      ) : null}
-      {selected && (
-        <p className="mt-6 text-sm">
-          {scenario.kind === "matching"
-            ? "Matches saved. You can change them before submitting."
-            : "Answer selected. You can review all answers before submitting."}
-        </p>
+      )}
+      {committed ? (
+        <div role="status" className="mt-6 rounded-xl bg-surface p-4 text-sm">
+          <p className="font-semibold">{committed.correct ? "Correct." : "Incorrect."}</p>
+          {scenario.kind === "mcq" && (
+            <p className="mt-2">Correct answer: {scenario.options[scenario.correctIndex]}</p>
+          )}
+          {scenario.kind === "order" && (
+            <p className="mt-2">
+              Correct order: {orderLabels(scenario, orderKey(scenario)).join(" → ")}
+            </p>
+          )}
+          {scenario.kind === "matching" && (
+            <ul className="mt-2 space-y-1">
+              {matchingFeedback(scenario, committed.value).map((item) => (
+                <li key={item.id}>
+                  {item.label}: {item.correct ? "Correct" : "Incorrect"} ·{" "}
+                  {scenario.targets
+                    .filter((t) => item.validTargets.includes(t.id))
+                    .map((t) => t.label)
+                    .join(" or ")}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 whitespace-pre-line">{scenario.learningPoint}</p>
+          {scenario.managerNote && (
+            <p className="mt-2">From your manager: {scenario.managerNote}</p>
+          )}
+          <p className="mt-3">
+            Your checked answer is recorded and cannot be changed. Follow-up practice does not
+            change your first-answer score.
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="mt-6 text-sm">
+            You can change your answer before checking. Unchecked edits are not saved when you leave
+            or refresh this page.
+          </p>
+          <button
+            disabled={busy || !answerIsComplete(scenario, draft)}
+            onClick={check}
+            className="mt-4 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            Check answer
+          </button>
+        </>
       )}
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <button
@@ -400,18 +445,11 @@ function ScenarioBlock({
           ← Previous question
         </button>
         <button
-          disabled={
-            busy ||
-            !selected ||
-            (scenario.kind === "matching" && !matchingComplete(scenario, selected.value)) ||
-            (scenario.kind === "order" &&
-              !scenario.sequence &&
-              JSON.stringify(items) !== JSON.stringify(selected.value))
-          }
+          disabled={busy || !committed}
           onClick={onContinue}
           className="ml-auto rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
         >
-          {isLast ? (preview ? "Finish preview" : "Review answers →") : "Next question →"}
+          {isLast ? (preview ? "Finish preview" : "Review answers →") : "Continue →"}
         </button>
       </div>
     </Card>

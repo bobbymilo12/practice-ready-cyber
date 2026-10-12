@@ -16,6 +16,35 @@ development still works with mock Manager/Trainee accounts. Real accounts, the E
 email are set up in [docs/SETUP.md](docs/SETUP.md).
 AI-generated content stays draft until a manager approves it.
 
+### Reusable local Mock Manager baseline
+
+On localhost development, a fresh **Mock Manager** workspace loads the agreed visual-test
+configuration: Doctor and Nurse Practitioner responsibilities and the three-step UTI procedure.
+This is test data, not clinical guidance. Other practice settings are blank, with no staff or
+generated modules. Existing mock workspaces are reused without overwriting edits.
+
+Mock Manager includes Jamie Example (Mock Trainee), using the same identity as the Mock Trainee
+login. Loading an older Manager workspace adds Jamie only if missing, preserving existing data.
+No modules are assigned automatically. Refresh Mock Manager, then on a published module click
+**Assign to employees → Jamie Example (Mock Trainee) → Assign**. Switch to Mock Trainee in the
+same browser tab to start that training; no invitation or workspace reset is needed.
+
+To reset, open browser developer tools while in the local mock session, go to **Application →
+Local Storage → your local app origin**, delete only `practiceready-dev-workspace-v1`, then
+reload. This discards that mock workspace's edits, modules and attempts and reloads the baseline.
+The equivalent browser-console command is:
+
+```js
+localStorage.removeItem("practiceready-dev-workspace-v1");
+location.reload();
+```
+
+The baseline is only loaded for a fresh Mock Manager workspace. Mock Trainee retains its existing
+demo when started first; to use the Manager baseline, switch to Mock Manager and reset as above.
+Real authenticated accounts continue loading their own Supabase practice; this seed is never
+imported into a database. Browser-session edits do not update the baseline in source.
+
+
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Start the dev server |

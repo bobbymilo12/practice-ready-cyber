@@ -36,19 +36,18 @@ const content: Record<string, Content> = {
     distractorPatterns: [
       {
         id: "promise-gp",
-        theme: "Automatically promise a GP",
-        response: "Promise a GP appointment before finding out what help the patient needs.",
+        theme: "Prioritise clinician preference",
+        response: "Ask which GP they would prefer to see.",
       },
       {
         id: "ignore-request",
-        theme: "Ignore the nature of the request",
-        response: "Choose the next step without asking about the nature of the request.",
+        theme: "Prioritise appointment times",
+        response: "Start by checking which appointment times suit them.",
       },
       {
         id: "assume-route",
         theme: "Unsupported routing assumption",
-        response:
-          "Assume the destination should be the same as for the patient's previous request.",
+        response: "Ask which appointment type they had last time and look for a similar slot.",
       },
     ],
   },
@@ -74,18 +73,18 @@ const content: Record<string, Content> = {
     distractorPatterns: [
       {
         id: "diagnosing",
-        theme: "Claim reception is diagnosing",
-        response: "Explain that reception needs the information to diagnose the problem.",
+        theme: "Offer choices before explaining the question",
+        response: "Explain the appointment types available and ask them to choose.",
       },
       {
         id: "pressure",
-        theme: "Pressure the patient",
-        response: "Ask for the full account again without explaining why it would help.",
+        theme: "Reassure without explaining the purpose",
+        response: "Reassure them that the conversation is private, then repeat the question.",
       },
       {
         id: "invent-policy",
-        theme: "Unsupported local policy claim",
-        response: "Say it is a booking requirement without checking the practice’s policy.",
+        theme: "Hand over before explaining",
+        response: "Offer to ask a colleague to explain the booking process.",
       },
     ],
   },
@@ -108,55 +107,55 @@ const content: Record<string, Content> = {
       {
         id: "interrupt",
         theme: "Unnecessary interruption",
-        response: "Move on to appointment preferences before the patient finishes explaining.",
+        response: "Ask which appointment times would suit them.",
       },
       {
         id: "assume-issue",
         theme: "Assume the issue",
-        response: "Finish the explanation for the patient based on a similar conversation.",
+        response: "Suggest what you think they mean and ask for a yes-or-no answer.",
       },
       {
         id: "select-route",
         theme: "Invent or select a pathway prematurely",
-        response: "Select a pathway before hearing what the patient needs.",
+        response: "Explain the usual options for the part of the request you have heard.",
       },
     ],
   },
   AB15: {
     correctBehaviour:
-      "Respond with patience and empathy, give the patient time and use clear language to check understanding.",
+      "Ask which part is unclear, explain it in a different way and check it makes sense.",
     allowedVariations: [
       {
         id: "confused",
         situation:
-          "A patient says they are confused by an explanation and asks you to explain it another way.",
+          "A patient says they don’t understand what you’ve explained and asks you to go over it again.",
       },
       {
         id: "frustrated",
         situation:
-          "A patient sounds frustrated and says they are struggling to explain what they need.",
+          "A patient sounds frustrated and says they cannot follow the instructions you have just given.",
       },
       {
         id: "hesitant",
-        situation: "A patient hesitates and says they are not sure how to describe their request.",
+        situation:
+          "A patient hesitates after your explanation and says they are unsure what to do next.",
       },
     ],
     distractorPatterns: [
       {
         id: "dismiss",
-        theme: "Dismissive response",
-        response:
-          "Repeat that the explanation has already been given rather than checking what is unclear.",
+        theme: "Repeat without adapting",
+        response: "Repeat the same explanation more slowly.",
       },
       {
         id: "rush",
-        theme: "Unnecessarily rush the patient",
-        response: "Press the patient to finish quickly instead of giving them time to explain.",
+        theme: "Defer checking understanding",
+        response: "Go over the information again and suggest they call back with any questions.",
       },
       {
         id: "confront",
-        theme: "Confrontation and assumptions",
-        response: "Focus on correcting the patient’s tone before understanding their request.",
+        theme: "Hand over before clarifying",
+        response: "Ask a colleague to take over the explanation.",
       },
     ],
   },
@@ -191,18 +190,17 @@ const applyContent: Record<string, Content> = {
       {
         id: "promise-gp",
         theme: "Assume a GP appointment",
-        response:
-          "Start arranging the requested GP appointment and leave the reason for the visit until later.",
+        response: "Check their preferred GP’s appointment times first, then ask about the request.",
       },
       {
         id: "ignore-request",
         theme: "Prioritise booking preferences over understanding",
-        response: "Ask only which day and time would suit them before choosing the next step.",
+        response: "Start with their preferred day and time, then discuss appointment types.",
       },
       {
         id: "assume-route",
         theme: "Unsupported routing assumption",
-        response: "Use their previous appointment type as the starting decision for this request.",
+        response: "Look up their last appointment and offer to arrange the same type.",
       },
     ],
   },
@@ -229,20 +227,19 @@ const applyContent: Record<string, Content> = {
     distractorPatterns: [
       {
         id: "diagnosing",
-        theme: "Overstate reception's role",
-        response: "Explain that the details let reception work out what is medically wrong.",
+        theme: "Offer choices before explaining the question",
+        response: "Describe the appointment types available and ask which they would prefer.",
       },
       {
         id: "pressure",
         theme: "Repeat the request without explanation",
         response:
-          "Ask them to give the full account first, then explain what the information is for.",
+          "Reassure them that their information is confidential and ask the question again.",
       },
       {
         id: "invent-policy",
-        theme: "Unsupported policy explanation",
-        response:
-          "Describe full disclosure as a booking requirement without checking whether that is the practice’s policy.",
+        theme: "Hand over before explaining",
+        response: "Offer to pass the conversation to a colleague who can explain the process.",
       },
     ],
   },
@@ -265,23 +262,24 @@ const applyContent: Record<string, Content> = {
       {
         id: "interrupt",
         theme: "Prematurely narrow the request",
-        response: "Move straight to a short yes-or-no question about the request you expect.",
+        response:
+          "Ask a yes-or-no question to check whether this matches the request you recognise.",
       },
       {
         id: "assume-issue",
         theme: "Fill gaps from experience",
-        response: "Finish their explanation using the details of the similar request you remember.",
+        response: "Summarise the similar request you have in mind and ask if that sounds right.",
       },
       {
         id: "select-route",
         theme: "Choose a route too early",
-        response: "Choose the next step now and invite the patient to add details afterwards.",
+        response: "Outline the usual next steps, then ask what else they wanted to add.",
       },
     ],
   },
   AB15: {
     correctBehaviour:
-      "Acknowledge the difficulty, give them time and use a simpler explanation before checking what is still unclear.",
+      "Reassure them that it is fine to ask again, find out what is unclear and explain it differently.",
     allowedVariations: [
       {
         id: "confused",
@@ -291,30 +289,29 @@ const applyContent: Record<string, Content> = {
       {
         id: "frustrated",
         situation:
-          "A patient says, “I keep trying to explain, but I do not think you understand.” They sound frustrated and stop speaking.",
+          "After you explain the next steps, a patient says, “I have heard that twice, but I still don’t know what I need to do.”",
       },
       {
         id: "hesitant",
         situation:
-          "A patient keeps starting and stopping while describing their request. They apologise and say they cannot find the right words.",
+          "You have explained the next steps. A patient apologises for asking again and says they are unsure which step comes first.",
       },
     ],
     distractorPatterns: [
       {
         id: "dismiss",
         theme: "Repeat without adapting",
-        response: "Repeat the same explanation more slowly without asking which part is unclear.",
+        response: "Repeat the instructions slowly, pausing between each step.",
       },
       {
         id: "rush",
         theme: "Move on without checking",
-        response:
-          "Give a quick summary and move to the next question before checking their understanding.",
+        response: "Summarise the instructions and suggest they call back when they are ready.",
       },
       {
         id: "confront",
-        theme: "Correct rather than understand",
-        response: "Explain why your first response was right before inviting them to continue.",
+        theme: "Hand over before clarifying",
+        response: "Ask a colleague to give them the explanation instead.",
       },
     ],
   },

@@ -55,6 +55,8 @@ export interface TrainingSession {
   updatedAt: number;
   review?: boolean;
   result?: TrainingResult;
+  // Missing on legacy attempts: their overwritten first responses cannot be reconstructed.
+  answerFlow?: "check";
 }
 
 export const primaryScenarios = (module: Module) =>
@@ -72,54 +74,81 @@ export function startSession(module: Module, assignment: Assignment, id: string)
     queue: primaryScenarios(module).map((s) => s.id),
     index: 0,
     answers: [],
+    answerFlow: "check",
     updatedAt: Date.now(),
   };
 }
 
+/** Structural completeness only; draft editing must not record an attempt. */
+export function answerIsComplete(scenario: Scenario, value: unknown): value is AnswerValue {
+  if (scenario.kind === "mcq")
+    return (
+      Number.isInteger(value) &&
+      (value as number) >= 0 &&
+      (value as number) < scenario.options.length
+    );
+  if (scenario.kind === "matching")
+    return (
+      matchingComplete(scenario, value) &&
+      isMatchingAnswer(value) &&
+      Object.keys(value).every((key) => scenario.items.some((item) => item.id === key))
+    );
+  const key = orderKey(scenario);
+  return scenario.sequence
+    ? isStepPermutation(value, key)
+    : Array.isArray(value) &&
+        value.length === key.length &&
+        JSON.stringify([...value].sort()) === JSON.stringify([...key].sort());
+}
+
+export function evaluateAnswer(scenario: Scenario, value: unknown): boolean {
+  if (!answerIsComplete(scenario, value))
+    throw new Error(
+      scenario.kind === "mcq"
+        ? "Choose one answer."
+        : scenario.kind === "matching"
+          ? "Match every request before checking."
+          : "Arrange all the steps before checking.",
+    );
+  if (scenario.kind === "mcq") return value === scenario.correctIndex;
+  if (scenario.kind === "matching")
+    return matchingFeedback(scenario, value).every((item) => item.correct);
+  return (value as string[]).every((step, index) => step === orderKey(scenario)[index]);
+}
+
+/** Complete legacy saved answers are retained; incomplete legacy matching is a draft. */
+export function committedAnswer(
+  session: TrainingSession,
+  scenario: Scenario,
+): SavedAnswer | undefined {
+  return session.answers.find(
+    (answer) => answer.scenarioId === scenario.id && answerIsComplete(scenario, answer.value),
+  );
+}
+
+/** Called only by Check answer. The first committed response is immutable, including retries. */
 export function answerSession(session: TrainingSession, value: unknown): TrainingSession {
   if (session.result) throw new Error("This attempt is already complete.");
   if (session.review) throw new Error("Review your answers before submitting the module.");
   const scenarioId = session.queue[session.index];
-
   const scenario = session.scenarios.find((s) => s.id === scenarioId);
   if (!scenario) throw new Error("Scenario not found.");
-  let correct: boolean;
-  if (scenario.kind === "mcq") {
-    if (
-      !Number.isInteger(value) ||
-      (value as number) < 0 ||
-      (value as number) >= scenario.options.length
-    )
-      throw new Error("Choose one answer.");
-    correct = value === scenario.correctIndex;
-  } else if (scenario.kind === "matching") {
-    if (
-      !isMatchingAnswer(value) ||
-      Object.keys(value).some((key) => !scenario.items.some((i) => i.id === key)) ||
-      Object.values(value).some((id) => !scenario.targets.some((t) => t.id === id)) ||
-      (scenario.pairingMode === "one_to_one" &&
-        new Set(Object.values(value)).size !== Object.keys(value).length)
-    )
-      throw new Error("Choose one of the shown roles for each request.");
-    correct =
-      matchingComplete(scenario, value) &&
-      matchingFeedback(scenario, value).every((i) => i.correct);
-  } else if (scenario.kind === "order") {
-    const key = orderKey(scenario);
-    if (
-      scenario.sequence
-        ? !isStepPermutation(value, key)
-        : !Array.isArray(value) ||
-          value.length !== key.length ||
-          JSON.stringify([...value].sort()) !== JSON.stringify([...key].sort())
-    )
-      throw new Error("Arrange all the steps before checking.");
-    correct = (value as string[]).every((step, i) => step === key[i]);
-  } else throw new Error("Unsupported interaction.");
-  const queue = [...session.queue];
+  if (committedAnswer(session, scenario)) return session;
+  const correct = evaluateAnswer(scenario, value);
+  // Old matching edits could have queued recovery before the board was complete.
+  // Remove only unattempted recovery for that known incomplete response; retain history.
+  const incompleteLegacy = session.answers.some((a) => a.scenarioId === scenarioId);
+  const queue = session.queue.filter((id) => {
+    const pending = session.scenarios.find((s) => s.id === id);
+    return (
+      !incompleteLegacy ||
+      pending?.followUpFor !== scenarioId ||
+      session.answers.some((a) => a.scenarioId === id)
+    );
+  });
   if (!correct && !scenario.followUpFor) {
     const followUp = session.scenarios.find((s) => s.followUpFor === scenario.id);
-    if (followUp && !queue.includes(followUp.id)) queue.push(followUp.id);
+    if (followUp?.status === "approved" && !queue.includes(followUp.id)) queue.push(followUp.id);
   }
   return {
     ...session,
@@ -151,14 +180,9 @@ export function previousSession(session: TrainingSession): TrainingSession {
 export function advanceSession(session: TrainingSession, moduleTitle: string): TrainingSession {
   if (session.result) return session;
   if (session.review) return session;
-  if (!session.answers.some((a) => a.scenarioId === session.queue[session.index]))
-    throw new Error("Answer this scenario first.");
-  const current = session.scenarios.find((s) => s.id === session.queue[session.index]);
-  if (
-    current?.kind === "matching" &&
-    !matchingComplete(current, session.answers.find((a) => a.scenarioId === current.id)?.value)
-  )
-    throw new Error("Match every request before continuing.");
+  const scenario = session.scenarios.find((s) => s.id === session.queue[session.index]);
+  if (!scenario || !committedAnswer(session, scenario))
+    throw new Error("Answer this scenario first using Check answer.");
   if (session.index + 1 < session.queue.length)
     return { ...session, index: session.index + 1, updatedAt: Date.now() };
   return { ...session, review: true, updatedAt: Date.now() };
@@ -171,9 +195,7 @@ export function submitSession(session: TrainingSession, moduleTitle: string): Tr
     session.queue.some((id) => {
       const scenario = session.scenarios.find((s) => s.id === id);
       const answer = session.answers.find((a) => a.scenarioId === id);
-      return (
-        !answer || (scenario?.kind === "matching" && !matchingComplete(scenario, answer.value))
-      );
+      return !scenario || !answer || !answerIsComplete(scenario, answer.value);
     })
   )
     throw new Error("Answer every request before submitting.");
@@ -186,6 +208,7 @@ export function submitSession(session: TrainingSession, moduleTitle: string): Tr
     updatedAt: Date.now(),
     result: {
       attemptId: session.id,
+      ...(session.answerFlow === "check" ? { scoreBasis: "first_committed" as const } : {}),
       moduleId: session.moduleId,
       moduleTitle,
       traineeId: session.traineeId,
@@ -210,7 +233,13 @@ export function assignmentProgress(assignment: Assignment, sessions: TrainingSes
   const fraction = completed
     ? 1
     : latest
-      ? Math.min(latest.answers.length / Math.max(latest.queue.length, 1), 0.99)
+      ? Math.min(
+          latest.answers.filter((answer) => {
+            const scenario = latest.scenarios.find((s) => s.id === answer.scenarioId);
+            return scenario && answerIsComplete(scenario, answer.value);
+          }).length / Math.max(latest.queue.length, 1),
+          0.99,
+        )
       : 0;
   return {
     latest,

@@ -471,3 +471,35 @@ test("Core executor fails closed when opposite levels reuse a fictional presenta
     !result.eligibility.eligible && result.eligibility.reasons.includes("cross_level_duplicate"),
   );
 });
+
+test("behavioural Learn and Apply questions use natural prompts and contextual judgement alternatives", () => {
+  for (const code of executableCodes) {
+    const concept = approvedRecipeConcept(code);
+    const generate = createCoreGenerator([concept]);
+    for (const template of concept.templates!) {
+      const recipe = template.executable!;
+      for (let i = 0; i < recipe.allowedVariations.length; i++) {
+        const scenario = generate(
+          concept.id,
+          context(),
+          recipe.eligibleLevel,
+          "single_choice",
+          i,
+        ).scenario!;
+        assert.equal(scenario.question, "What would be the best way to respond?");
+        assert.equal(new Set(scenario.options).size, 4);
+        assert.equal(scenario.options[scenario.correctIndex], recipe.correctBehaviour);
+        assert.doesNotMatch(
+          scenario.options.join(" "),
+          /Press the patient|correcting the patient|diagnose the problem|medically wrong|without checking|instead of giving/i,
+        );
+        if (code === "AB15") {
+          assert.match(scenario.patientQuote, /explain|explanation|instructions|next steps/i);
+          assert.match(scenario.options[scenario.correctIndex], /unclear.*different/i);
+          assert.ok(scenario.options.some((o) => /slowly/.test(o)));
+          assert.ok(scenario.options.some((o) => /colleague/.test(o)));
+        }
+      }
+    }
+  }
+});

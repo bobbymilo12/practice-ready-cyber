@@ -1,3 +1,10 @@
+import {
+  pendingQuestionReviews,
+  questionReviewScope,
+  recordedSourceChanges,
+  reviewKey,
+} from "@/lib/practice-change-tracking";
+import { useManagerAction } from "@/hooks/use-manager-action";
 import { readProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { orderKey, orderLabels } from "@/lib/sequence";
 import { inspectRoleMatching, uniqueMatching } from "@/lib/role-matching";
@@ -7,7 +14,7 @@ import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp, type Scenario } from "@/lib/store";
 
 export const Route = createFileRoute("/modules/review")({
-  head: () => ({ meta: [{ title: "Review draft scenarios — PracticeReady" }] }),
+  head: () => ({ meta: [{ title: "Review training — PracticeReady" }] }),
   validateSearch: (s: Record<string, unknown>) => ({ id: (s.id as string) || "" }),
   component: Review,
 });
@@ -15,16 +22,10 @@ export const Route = createFileRoute("/modules/review")({
 function Review() {
   const { id } = Route.useSearch();
   const nav = useNavigate();
+  const action = useManagerAction();
   const module = useApp((s) => s.modules.find((m) => m.id === id));
-  const {
-    practiceData,
-    approveScenario,
-    deleteScenario,
-    regenerateScenario,
-    updateScenario,
-    publishModule,
-    removeDraftModule,
-  } = useApp();
+  const { practiceData, approveScenario, deleteScenario, regenerateScenario, updateScenario } =
+    useApp();
 
   const matchingDiagnostic = useMemo(
     () =>
@@ -52,121 +53,213 @@ function Review() {
   const allApproved =
     module.scenarios.length > 0 && module.scenarios.every((s) => s.status === "approved");
 
+  const currentReviewKey = reviewKey(module, practiceData);
+  const pendingReviews = pendingQuestionReviews(module, practiceData);
+  const reviewScope = questionReviewScope(module);
+  const decisionReady = pendingReviews.length === 0;
+  const publish = () =>
+    void action.run(
+      {
+        kind: "publish",
+        moduleId: module.id,
+        ...(module.needsReview ? { reviewKey: currentReviewKey } : {}),
+      },
+      () => nav({ to: "/dashboard" }),
+    );
   return (
     <Shell>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            {module.type} · Draft review
-            {module.topicKey === "appointment-booking" && module.settings?.trainingLevel
-              ? ` · ${module.settings.trainingLevel === "learn" ? "Learn" : "Apply"}`
-              : ""}
-          </p>
-          <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
-            Review draft scenarios
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Manager review required. Approve every scenario, then publish the module for staff.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => {
-              publishModule(module.id);
-              nav({ to: "/dashboard" });
-            }}
-            disabled={!allApproved}
-            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-          >
-            Publish module
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm("Delete this draft module?")) {
-                removeDraftModule(module.id);
-                void nav({ to: "/dashboard" });
-              }
-            }}
-            className="rounded-xl border border-destructive/40 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/5"
-          >
-            Delete draft
-          </button>
-        </div>
-      </div>
-
-      {module.settings && (
-        <Card className="mt-6">
-          <p>
-            {module.scenarios.filter((s) => !s.followUpFor).length} scenarios · Requested length:{" "}
-            {module.settings.length} ({module.settings.count})
-          </p>
-          <Link
-            className="text-primary underline"
-            to="/modules/setup"
-            search={{ id: module.id, topic: module.topicKey, title: module.type }}
-          >
-            Edit settings and regenerate module
-          </Link>
-        </Card>
-      )}
-
-      {module.topicKey === "appointment-booking" && readProcedureDiagnostics(module.id) && (
-        <details className="mt-3 rounded-xl border p-3 text-sm">
-          <summary>Development only: procedure generation diagnostics</summary>
-          <p>
-            Captured from saved workspace data when this draft was generated. Not a live eligibility
-            check.
-          </p>
-          <pre className="mt-2 whitespace-pre-wrap break-words">
-            {JSON.stringify(JSON.parse(readProcedureDiagnostics(module.id)!), null, 2)}
-          </pre>
-        </details>
-      )}
-      {matchingDiagnostic && (
-        <p className="mt-4 text-sm text-muted-foreground">
-          <strong>Matching:</strong> This module contains no matching board. Current role
-          configuration: {matchingDiagnostic.message}
-          {matchingDiagnostic.code === "ready" &&
-            " Regenerate the Learn module to include one when there is room alongside other local questions."}
+      {action.error && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {action.error}
         </p>
       )}
-      <div className="mt-8 space-y-5">
-        {module.scenarios.map((s) => (
-          <ScenarioCard
-            appointmentBooking={module.topicKey === "appointment-booking"}
-            key={s.id}
-            scenario={s}
-            onApprove={() => approveScenario(module.id, s.id)}
-            onDelete={() => deleteScenario(module.id, s.id)}
-            onRegenerate={() => regenerateScenario(module.id, s.id)}
-            onSave={(next) => updateScenario(module.id, next)}
-          />
-        ))}
-      </div>
-
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
-        <div className="text-sm text-muted-foreground">
-          {allApproved
-            ? "All scenarios approved — ready to publish to staff."
-            : "Approve every scenario above before publishing."}
+      <fieldset disabled={action.saving} className="min-w-0">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {module.type} · {module.published ? "Published module review" : "Draft review"}
+              {module.settings?.trainingLevel
+                ? ` · ${module.settings.trainingLevel === "learn" ? "Learn" : "Apply"}`
+                : ""}
+              {module.settings?.difficulty ? " · " + module.settings.difficulty : ""}
+            </p>
+            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
+              {module.published ? "Review training" : "Review draft scenarios"}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              {module.published
+                ? "Review all questions and their saved answers below. No answers or training attempt are required."
+                : "Manager review required. Approve every scenario, then publish the module for staff."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={publish}
+              disabled={!allApproved || action.saving || (!!module.needsReview && !decisionReady)}
+              className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+            >
+              {action.pending?.kind === "publish"
+                ? "Publishing…"
+                : module.needsReview
+                  ? "Publish reviewed module"
+                  : "Publish module"}
+            </button>
+            <button
+              type="button"
+              disabled={action.saving || module.published}
+              onClick={() => {
+                if (window.confirm("Delete this draft module?")) {
+                  void action.run({ kind: "delete-draft", moduleId: module.id }, () =>
+                    nav({ to: "/dashboard" }),
+                  );
+                }
+              }}
+              className="rounded-xl border border-destructive/40 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/5"
+            >
+              {action.pending?.kind === "delete-draft" ? "Deleting…" : "Delete draft"}
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => {
-            publishModule(module.id);
-            nav({ to: "/dashboard" });
-          }}
-          disabled={!allApproved}
-          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-        >
-          Publish module
-        </button>
-      </div>
+
+        {module.needsReview && (
+          <Card className="mt-6 border-warning/40 bg-warning/5">
+            <h2 className="font-semibold">Needs review — training paused</h2>
+            <p className="mt-2 whitespace-pre-line text-sm">
+              {module.reviewReason ??
+                "This training changed or may contain outdated practice information."}
+            </p>
+            <p className="mt-3 text-sm">
+              {reviewScope.broad
+                ? "We cannot reliably identify every affected question. Review and approve all questions before republishing this module. Highlights show recorded source links only."
+                : "We’ve flagged the questions that may be affected below. Review and approve these questions before republishing the module."}
+            </p>
+            <p className="mt-2 text-sm">
+              {pendingReviews.length} questions awaiting review approval.
+            </p>
+            <p className="mt-3 text-sm">
+              Existing attempts keep their original questions. Reassign corrected training to staff
+              who have already started it.
+            </p>
+            <Link to="/data-hub" className="mt-3 inline-block text-sm text-primary underline">
+              View current practice information
+            </Link>
+          </Card>
+        )}
+        {!!module.reviewConfirmations?.length && (
+          <details className="mt-6 rounded-xl border p-4 text-sm">
+            <summary>Recorded review decisions</summary>
+            <ul className="mt-3 space-y-3">
+              {module.reviewConfirmations.map((record) => (
+                <li key={record.id}>
+                  <p className="font-medium">
+                    {record.decision === "unchanged"
+                      ? "Confirmed existing training still correct"
+                      : "Reviewed and republished"}
+                  </p>
+                  <p>
+                    {record.name || record.by} ·{" "}
+                    {new Date(record.at).toLocaleString("en-GB", { timeZone: "Europe/London" })}
+                  </p>
+                  <p className="whitespace-pre-wrap">{record.note}</p>
+                  <ul>
+                    {record.reasons.map((reason, index) => (
+                      <li key={index}>{reason}</li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        {module.settings && (
+          <Card className="mt-6">
+            <p>
+              {module.scenarios.filter((s) => !s.followUpFor).length} scenarios · Requested length:{" "}
+              {module.settings.length} ({module.settings.count})
+            </p>
+            <Link
+              className="text-primary underline"
+              to="/modules/setup"
+              search={{ id: module.id, topic: module.topicKey, title: module.type }}
+            >
+              Edit settings and regenerate module
+            </Link>
+          </Card>
+        )}
+
+        {module.topicKey === "appointment-booking" && readProcedureDiagnostics(module.id) && (
+          <details className="mt-3 rounded-xl border p-3 text-sm">
+            <summary>Development only: procedure generation diagnostics</summary>
+            <p>
+              Captured from saved workspace data when this draft was generated. Not a live
+              eligibility check.
+            </p>
+            <pre className="mt-2 whitespace-pre-wrap break-words">
+              {JSON.stringify(JSON.parse(readProcedureDiagnostics(module.id)!), null, 2)}
+            </pre>
+          </details>
+        )}
+        {matchingDiagnostic && (
+          <p className="mt-4 text-sm text-muted-foreground">
+            <strong>Matching:</strong> This module contains no matching board. Current role
+            configuration: {matchingDiagnostic.message}
+            {matchingDiagnostic.code === "ready" &&
+              " Regenerate the Learn module to include one when there is room alongside other local questions."}
+          </p>
+        )}
+        <div className="mt-8 space-y-5">
+          {module.scenarios.map((s) => (
+            <ScenarioCard
+              appointmentBooking={module.topicKey === "appointment-booking"}
+              key={s.id}
+              scenario={s}
+              reviewRequired={pendingReviews.includes(s.id)}
+              reviewingChanges={!!module.needsReview}
+              sourceChanges={
+                module.needsReview
+                  ? recordedSourceChanges(s, module.reviewChanges ?? []).map(
+                      (change) => change.reason,
+                    )
+                  : []
+              }
+              onApprove={() => approveScenario(module.id, s.id)}
+              onDelete={() => deleteScenario(module.id, s.id)}
+              onRegenerate={() => regenerateScenario(module.id, s.id)}
+              onSave={(next) => updateScenario(module.id, next)}
+            />
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
+          <div className="text-sm text-muted-foreground">
+            {pendingReviews.length
+              ? "Review and approve the required questions before republishing."
+              : allApproved
+                ? "All scenarios approved — ready to publish to staff."
+                : "Approve every scenario above before publishing."}
+          </div>
+          <button
+            onClick={publish}
+            disabled={!allApproved || action.saving || (!!module.needsReview && !decisionReady)}
+            className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+          >
+            {action.pending?.kind === "publish"
+              ? "Publishing…"
+              : module.needsReview
+                ? "Publish reviewed module"
+                : "Publish module"}
+          </button>
+        </div>
+      </fieldset>
     </Shell>
   );
 }
 
 function ScenarioCard({
+  sourceChanges = [],
+  reviewRequired = false,
+  reviewingChanges = false,
   appointmentBooking,
   scenario,
   onApprove,
@@ -174,6 +267,9 @@ function ScenarioCard({
   onRegenerate,
   onSave,
 }: {
+  sourceChanges?: string[];
+  reviewRequired?: boolean;
+  reviewingChanges?: boolean;
   appointmentBooking?: boolean;
   scenario: Scenario;
   onApprove: () => void;
@@ -182,6 +278,7 @@ function ScenarioCard({
   onSave: (s: Scenario) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [regenerationError, setRegenerationError] = useState("");
   const [draft, setDraft] = useState<Scenario>(scenario);
   const solution =
     scenario.kind === "matching" && scenario.pairingMode === "one_to_one"
@@ -194,6 +291,19 @@ function ScenarioCard({
 
   return (
     <Card>
+      {sourceChanges.length > 0 && (
+        <div className="mb-3 rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
+          <p className="font-semibold">
+            {reviewRequired ? "Needs review" : "Reviewed"} — Practice information used by this
+            question has changed.
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {sourceChanges.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -215,8 +325,10 @@ function ScenarioCard({
             <h3 className="mt-1 font-display text-lg font-semibold">{scenario.title}</h3>
           )}
         </div>
-        <Badge tone={scenario.status === "approved" ? "approved" : "draft"}>
-          {scenario.status === "approved" ? "Approved" : "Requires manager review"}
+        <Badge tone={scenario.status === "approved" && !reviewRequired ? "approved" : "draft"}>
+          {scenario.status === "approved" && !reviewRequired
+            ? "Approved"
+            : "Requires manager review"}
         </Badge>
       </div>
 
@@ -331,8 +443,8 @@ function ScenarioCard({
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
-            Mappings are retained from generation. To use changed role responsibilities, generate a
-            new module.
+            Mappings are retained from generation. During a practice-change review, Regenerate uses
+            the current confirmed role responsibilities.
           </p>
         </div>
       )}
@@ -351,8 +463,8 @@ function ScenarioCard({
             </p>
           )}
           <p className="text-muted-foreground">
-            Updated procedure information is used when a new module is generated. This exercise
-            retains its saved procedure.
+            This exercise retains its saved procedure. During a practice-change review, Regenerate
+            uses the current confirmed procedure if it is eligible.
           </p>
         </div>
       )}
@@ -424,6 +536,11 @@ function ScenarioCard({
         />
       </div>
 
+      {regenerationError && (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          {regenerationError}
+        </p>
+      )}
       <div className="mt-5 flex flex-wrap gap-2">
         {editing ? (
           <>
@@ -450,7 +567,7 @@ function ScenarioCard({
           <>
             <button
               onClick={onApprove}
-              disabled={scenario.status === "approved"}
+              disabled={scenario.status === "approved" && !reviewRequired}
               className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-40"
             >
               Approve
@@ -465,13 +582,24 @@ function ScenarioCard({
               Edit
             </button>
             <button
-              disabled={scenario.provenance?.kind === "sequence"}
+              disabled={scenario.provenance?.kind === "sequence" && !reviewingChanges}
               title={
                 scenario.provenance?.kind === "sequence"
-                  ? "Generate a new module to use updated procedure information."
+                  ? reviewingChanges
+                    ? "Regenerate from the current confirmed procedure."
+                    : "Generate a new module to use updated procedure information."
                   : undefined
               }
-              onClick={onRegenerate}
+              onClick={() => {
+                setRegenerationError("");
+                try {
+                  onRegenerate();
+                } catch (error) {
+                  setRegenerationError(
+                    error instanceof Error ? error.message : "Could not regenerate this question.",
+                  );
+                }
+              }}
               className="rounded-lg border border-border px-3 py-2 text-sm"
             >
               Regenerate
@@ -480,7 +608,7 @@ function ScenarioCard({
               onClick={onDelete}
               className="ml-auto rounded-lg border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5"
             >
-              Delete draft
+              Delete
             </button>
           </>
         )}

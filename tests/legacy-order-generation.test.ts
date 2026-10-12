@@ -1,3 +1,4 @@
+import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -17,11 +18,13 @@ test("actual custom draft generation retains MCQs for ordering/mixed preferences
   const exports: Record<string, any> = {};
   new Function("require", "exports", js)(
     (id: string) =>
-      id === "./module-config"
-        ? config
-        : id === "./practice-scenarios"
-          ? { practiceScenarios }
-          : require(id),
+      id === "./practice-change-tracking"
+        ? changeTracking
+        : id === "./module-config"
+          ? config
+          : id === "./practice-scenarios"
+            ? { practiceScenarios }
+            : require(id),
     exports,
   );
   exports.useApp.setState({ practiceData: empty(), answers: {} });

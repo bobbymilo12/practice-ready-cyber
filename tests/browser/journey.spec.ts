@@ -189,17 +189,19 @@ test("password change, saved feedback, different followup, next module and compl
   await page.getByRole("link", { name: "Continue Training" }).click();
   await page.getByRole("button", { name: "Begin training" }).click();
   await page.getByRole("button", { name: "Guess the process" }).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(
-    page.getByText("Answer selected. You can review all answers before submitting."),
+    page.getByText("Your checked answer is recorded and cannot be changed.", { exact: false }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByText("Answer selected. You can review all answers before submitting."),
+    page.getByText("Your checked answer is recorded and cannot be changed.", { exact: false }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Next question →", exact: true }).click();
+  await page.getByRole("button", { name: "Continue →", exact: true }).click();
   await expect(page.getByRole("button", { name: "← Previous question" })).toBeEnabled();
   await page.getByRole("button", { name: "Check the local rules again" }).click();
-  await page.getByRole("button", { name: "Review answers" }).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
+  await page.getByRole("button", { name: "Review answers →" }).click();
   await page.getByRole("button", { name: "Submit module" }).click();
   await expect(page.getByRole("heading", { name: "Improved with extra practice" })).toBeVisible();
   expect(sessions[0].result?.correct).toBe(0);
@@ -209,8 +211,8 @@ test("password change, saved feedback, different followup, next module and compl
   await page.getByRole("button", { name: "Begin training" }).click();
   await page.getByRole("button", { name: "Move step 3 up" }).click();
   await page.getByRole("button", { name: "Move step 2 up" }).click();
-  await page.getByRole("button", { name: "Select this order" }).click();
-  await page.getByRole("button", { name: "Review answers" }).click();
+  await page.getByRole("button", { name: "Check answer" }).click();
+  await page.getByRole("button", { name: "Review answers →" }).click();
   await page.getByRole("button", { name: "Submit module" }).click();
   await expect(
     page.getByRole("heading", { name: "All assigned training completed!" }),
@@ -227,11 +229,12 @@ test("failed answer can be retried, and trainee cannot open manager routes", asy
   await page.getByRole("button", { name: "Begin training" }).click();
   mock.failNextAnswer();
   await page.getByRole("button", { name: "Check the local rules" }).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Could not save");
   await expect(page.getByRole("heading", { name: "Correct", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Check the local rules" }).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(
-    page.getByText("Answer selected. You can review all answers before submitting."),
+    page.getByText("Your checked answer is recorded and cannot be changed.", { exact: false }),
   ).toBeVisible();
 });
 
@@ -251,7 +254,7 @@ test("unassigned trainee has an empty homepage, not the published library", asyn
   await expect(page.getByRole("heading", { name: "Module unavailable" })).toBeVisible();
 });
 
-test("previous and next preserve selections, allow changes and hide correctness until submission", async ({
+test("previous and continue preserve committed responses and first-answer scoring", async ({
   page,
 }) => {
   const { sessions } = await mockAccount(page);
@@ -260,23 +263,27 @@ test("previous and next preserve selections, allow changes and hide correctness 
   await page.getByRole("button", { name: "Begin training" }).click();
   await expect(page.getByRole("button", { name: "← Previous question" })).toBeDisabled();
   await page.getByRole("button", { name: "Guess the process" }).click();
-  await page.getByRole("button", { name: "Next question →" }).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
+  await page.getByRole("button", { name: "Continue →" }).click();
   await page.getByRole("button", { name: "← Previous question" }).click();
   await expect(page.getByRole("button", { name: /Guess the process/ })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await page.getByRole("button", { name: "Check the local rules", exact: false }).click();
+  await expect(
+    page.getByRole("button", { name: "Check the local rules", exact: false }),
+  ).toBeDisabled();
   await page.reload();
-  await expect(page.getByRole("button", { name: /Check the local rules/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: /Guess the process/ })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await expect(page.getByText(/Correct answer|Incorrect answer|found difficult/)).toHaveCount(0);
-  await page.getByRole("button", { name: "Next question →" }).click();
+  await expect(page.getByText("Incorrect.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Continue →" }).click();
   await page.getByRole("button", { name: "Check the local rules again" }).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await page.getByRole("button", { name: "Review answers →" }).click();
   await page.getByRole("button", { name: "Submit module" }).click();
   await expect(page).toHaveURL(/results/);
-  expect(sessions[0].result?.correct).toBe(1);
+  expect(sessions[0].result?.correct).toBe(0);
 });

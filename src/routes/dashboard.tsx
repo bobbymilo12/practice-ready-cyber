@@ -1,3 +1,4 @@
+import { useManagerAction } from "@/hooks/use-manager-action";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
@@ -8,7 +9,7 @@ import {
   readLegacyPractice,
   useConnection,
 } from "@/lib/backend";
-import { assignmentProgress } from "@/lib/training";
+import { assignmentProgress, primaryScenarios } from "@/lib/training";
 import { useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/dashboard")({
@@ -28,11 +29,10 @@ function Dashboard() {
   const modules = useApp((s) => s.modules);
   const results = useApp((s) => s.results);
   const practiceData = useApp((s) => s.practiceData);
-  const clearReviewFlag = useApp((s) => s.clearReviewFlag);
+  const action = useManagerAction();
   const trainees = useApp((s) => s.trainees);
   const assignments = useApp((s) => s.assignments);
   const setupComplete = useApp((s) => s.setupComplete);
-  const removeDraftModule = useApp((s) => s.removeDraftModule);
 
   const drafts = modules.flatMap((m) => m.scenarios.filter((s) => s.status === "draft"));
   const published = modules.filter((m) => m.published);
@@ -41,6 +41,11 @@ function Dashboard() {
 
   return (
     <Shell>
+      {action.error && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {action.error}
+        </p>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-muted-foreground">{practiceData.practiceName}</p>
@@ -157,7 +162,7 @@ function Dashboard() {
               >
                 <div>
                   <div className="font-medium">{m.title}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="whitespace-pre-line text-xs text-muted-foreground">
                     {m.reviewReason ??
                       "Practice data changed — scenarios may contain outdated information."}
                   </div>
@@ -168,14 +173,8 @@ function Dashboard() {
                     search={{ id: m.id }}
                     className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
                   >
-                    Review
+                    Review / confirm
                   </Link>
-                  <button
-                    onClick={() => clearReviewFlag(m.id)}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs"
-                  >
-                    Dismiss
-                  </button>
                 </div>
               </div>
             ))}
@@ -229,12 +228,16 @@ function Dashboard() {
                 </Link>
                 <button
                   type="button"
+                  disabled={action.saving}
                   onClick={() => {
-                    if (window.confirm("Delete this draft module?")) removeDraftModule(m.id);
+                    if (window.confirm("Delete this draft module?"))
+                      void action.run({ kind: "delete-draft", moduleId: m.id });
                   }}
                   className="shrink-0 text-xs text-destructive hover:underline"
                 >
-                  Delete draft
+                  {action.pending?.kind === "delete-draft" && action.pending.moduleId === m.id
+                    ? "Deleting…"
+                    : "Delete draft"}
                 </button>
               </div>
             ))}
@@ -244,7 +247,10 @@ function Dashboard() {
         <Card>
           <div className="flex items-center justify-between">
             <h3 className="font-display text-lg font-semibold">Published modules</h3>
-            <Badge tone="approved">Live</Badge>
+            <Badge tone="approved">
+              {published.filter((m) => !m.needsReview && primaryScenarios(m).length > 0).length}{" "}
+              available
+            </Badge>
           </div>
           <div className="mt-4 space-y-3">
             {published.map((m) => (
@@ -252,7 +258,7 @@ function Dashboard() {
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{m.title}</div>
                   <Link
-                    to="/train"
+                    to="/modules/review"
                     search={{ id: m.id }}
                     className="text-xs font-medium text-primary hover:underline"
                   >
@@ -263,7 +269,7 @@ function Dashboard() {
                   {m.scenarios.length} approved scenarios
                   {m.needsReview && (
                     <span className="ml-2 text-[color:var(--warning-foreground)]">
-                      · review recommended
+                      · Needs review — training paused
                     </span>
                   )}
                 </div>
@@ -386,13 +392,18 @@ function Stat({
 function AssignControl({ moduleId }: { moduleId: string }) {
   const trainees = useApp((s) => s.trainees);
   const assignments = useApp((s) => s.assignments);
-  const assignModule = useApp((s) => s.assignModule);
+  const action = useManagerAction();
   const [open, setOpen] = useState(false);
 
   if (trainees.length === 0) return null;
 
   return (
     <div className="mt-2">
+      {action.error && (
+        <p role="alert" className="mb-2 text-xs text-destructive">
+          {action.error}
+        </p>
+      )}
       <button
         onClick={() => setOpen((o) => !o)}
         className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:bg-surface"
@@ -409,11 +420,17 @@ function AssignControl({ moduleId }: { moduleId: string }) {
               <div key={t.id} className="flex items-center justify-between gap-2 text-xs">
                 <span>{t.name || t.email}</span>
                 <button
-                  disabled={assigned}
-                  onClick={() => assignModule(t.id, moduleId)}
+                  disabled={assigned || action.saving}
+                  onClick={() => void action.run({ kind: "assign", traineeId: t.id, moduleId })}
                   className="rounded-md bg-primary px-2 py-1 font-medium text-primary-foreground disabled:opacity-40"
                 >
-                  {assigned ? "Assigned" : "Assign"}
+                  {action.pending &&
+                  "traineeId" in action.pending &&
+                  action.pending.traineeId === t.id
+                    ? "Assigning…"
+                    : assigned
+                      ? "Assigned"
+                      : "Assign"}
                 </button>
               </div>
             );

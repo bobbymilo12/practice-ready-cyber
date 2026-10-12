@@ -1,5 +1,6 @@
 import type { PracticeData } from "./store";
 import type { PracticeRoleRequests } from "./role-requests";
+import { practiceRequestChoices } from "./practice-requests.ts";
 import { selectedRequests } from "./role-requests.ts";
 
 export const roleList = (names: string[]) =>
@@ -62,13 +63,13 @@ export function roleAnswerChoices(
         ),
     )
     .map((r) => r.label);
-  const correct = roleList([...new Set(valid.map((r) => r.label))]);
+  const correct = roleList([...new Set(valid.map((r) => `${r.label} appointment`))]);
   const distinct = [...new Set(alternatives)];
   // A binary recognition question is safer than fabricated destinations or filler.
   return [
     correct,
     ...(distinct.length
-      ? distinct.slice(0, 3)
+      ? distinct.slice(0, 3).map((name) => `${name} appointment`)
       : ["None of these practice roles handles this request."]),
   ];
 }
@@ -81,6 +82,32 @@ export function broadRequestLabel(label: string): boolean {
     ) ||
     /^(other|general|administrative|admin)( requests?| queries| enquiries| issues)?$/i.test(
       label.trim(),
+    )
+  );
+}
+
+/** Only explicit, unconditional same-day direct booking supports a combined question.
+ * Absence from the same-day list never establishes routine eligibility.
+ */
+export function explicitSameDayBooking(p: PracticeData, requestId: string, label: string): boolean {
+  const booking = p.bookingConfig;
+  const request = practiceRequestChoices(p).find((r) => r.id === requestId);
+  return !!(
+    booking &&
+    request &&
+    !request.conflict &&
+    request.label === label &&
+    booking.sameDayPathway.requestSelections?.some(
+      (r) => r.requestId === requestId && r.labelSnapshot === label,
+    ) &&
+    booking.sameDayProcess.id === "direct" &&
+    !booking.sameDayProcess.other.trim() &&
+    !booking.sameDayInstruction.trim() &&
+    !booking.sameDayPathway.instruction.trim() &&
+    !p.localProcedures?.[requestId] &&
+    !Object.values(p.rolePolicies).some((value) => value.trim()) &&
+    !p.staff.some((person) =>
+      Object.values(person.requestOverrides ?? {}).some((overrides) => requestId in overrides),
     )
   );
 }

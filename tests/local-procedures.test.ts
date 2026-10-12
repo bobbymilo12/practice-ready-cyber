@@ -1,4 +1,7 @@
-import { normaliseRoleRequestCategories } from "../src/lib/role-requests.ts";
+import * as training from "../src/lib/training.ts";
+import * as changeTracking from "../src/lib/practice-change-tracking.ts";
+import * as managerActions from "../src/lib/manager-actions.ts";
+import { suggestedRole, normaliseRoleRequestCategories } from "../src/lib/role-requests.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -166,7 +169,7 @@ function compile(path: string, imports: Record<string, unknown>) {
 test("save/reload uses whole-practice storage; failed/stale saves leave confirmed records and sessions untouched", async () => {
   const state = {
     practiceData: p,
-    modules: [{ id: "existing", scenarios: [] }],
+    modules: [{ id: "existing", published: true, scenarios: [] }],
     packages: [],
     assignments: [],
     setupComplete: true,
@@ -195,13 +198,17 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
   const useApp = create(() => ({ ...state, account: null }));
   const store = { useApp, defaultPracticeData: empty() };
   const dev = compile("../src/lib/dev-backend.ts", {
+    "./role-requests.ts": { suggestedRole },
+    "./practice-change-tracking.ts": changeTracking,
     "./store": store,
     "./dev-mode": { devRole: () => "manager" },
     "./local-procedures.ts": procedures,
     "./practice-scenarios": {},
-    "./training": {},
+    "./training": training,
   });
   const backend = compile("../src/lib/backend.ts", {
+    "./practice-change-tracking": changeTracking,
+    "./manager-actions": managerActions,
     "./role-requests": { normaliseRoleRequestCategories },
     "./store": store,
     "./dev-mode": { devRole: () => "manager" },
@@ -218,13 +225,15 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
     /Storage unavailable/,
   );
   assert.equal(useApp.getState().practiceData.localProcedures, undefined);
+  assert.equal(useApp.getState().modules[0].needsReview, undefined);
   fail = false;
   await backend.saveLocalProcedures([record], { [target.id]: 0 });
   assert.equal(useApp.getState().practiceData.localProcedures[target.id].version, 1);
   await backend.loadWorkspace();
   assert.deepEqual(useApp.getState().practiceData.localProcedures[target.id], record);
   const data = JSON.parse(stored);
-  assert.deepEqual(data.state.modules, state.modules);
+  assert.equal(data.state.modules[0].needsReview, true);
+  assert.deepEqual(data.state.modules[0].scenarios, state.modules[0].scenarios);
   assert.deepEqual(data.sessions, [{ id: "session", traineeId: "other", answers: {} }]);
   await assert.rejects(backend.saveLocalProcedures([record], { [target.id]: 0 }), /has changed/);
   const draft = procedureDraft(record);
@@ -447,4 +456,161 @@ test("Appointment Booking has a compact central summary, with no editor or dupli
   const hub = readFileSync(new URL("../src/routes/data-hub.tsx", import.meta.url), "utf8");
   assert.ok(hub.includes("<LocalProcedures />"));
   assert.ok(hub.replace(/\s+/g, " ").includes("These can be reused in training."));
+});
+
+test("fresh Mock Manager loads the requested baseline once; real sessions cannot read or seed it", async () => {
+  let stored: string | null = null;
+  let role: string | null = "manager";
+  let reads = 0;
+  const previousStorage = globalThis.localStorage;
+  const previousWindow = globalThis.window;
+  Object.assign(globalThis, {
+    localStorage: {
+      getItem: () => {
+        reads++;
+        return stored;
+      },
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    },
+    window: { location: { search: "" } },
+  });
+  try {
+    const { devApi } = compile("../src/lib/dev-backend.ts", {
+      "./practice-change-tracking.ts": changeTracking,
+      "./role-requests.ts": { suggestedRole },
+      "./store": { defaultPracticeData: empty() },
+      "./dev-mode": { devRole: () => role },
+      "./local-procedures.ts": procedures,
+      "./practice-scenarios": {},
+      "./training": training,
+    });
+    const loaded = await devApi("load", {});
+    assert.deepEqual(
+      loaded.trainees.map((t: any) => t.id),
+      ["dev-trainee-jamie"],
+    );
+    assert.equal(loaded.trainees[0].status, "active");
+    assert.deepEqual(loaded.state.assignments, []);
+    const data = loaded.state.practiceData;
+    assert.deepEqual(Object.keys(data.roleRequests), ["role:doctor", "role:nurse practitioner"]);
+    assert.deepEqual(data.roleRequests["role:doctor"].selectedRequestIds, [
+      "medication-reviews",
+      "prescription-queries",
+      "mental-health-appointments",
+      "utis",
+      "breast-examination",
+      "test-result-queries",
+    ]);
+    assert.deepEqual(data.roleRequests["role:nurse practitioner"].selectedRequestIds, [
+      "chest-infections",
+      "coughs",
+      "sore-throats",
+      "ear-problems",
+      "minor-skin-problems",
+      "minor-injuries",
+      "eye-problems",
+    ]);
+    for (const role of Object.values(data.roleRequests) as any[]) {
+      assert.equal(role.confirmed, true);
+      assert.ok(
+        role.selectedRequestIds.every((id: string) =>
+          role.categories.some((c: any) => c.requests.some((r: any) => r.id === id)),
+        ),
+      );
+    }
+    assert.deepEqual(data.staff, []);
+    assert.equal(data.hours, "");
+    assert.equal(data.prescriptionOrdering, "");
+    assert.deepEqual(loaded.state.modules, []);
+    procedures.validateLocalProcedures(data.localProcedures);
+    const sequence = generateConfiguredModule("appointment-booking", "Booking", data, {
+      ...defaultModuleSettings(),
+      trainingLevel: "learn",
+    }).find((s) => s.kind === "order");
+    assert.ok(sequence?.kind === "order" && sequence.sequence);
+    assert.deepEqual(sequence.sequence.correctOrder, ["sample", "booking", "collection"]);
+    assert.deepEqual(
+      sequence.sequence.steps.map((s) => s.label),
+      [
+        "Receptionist asks the patient to come to the practice and drop off a urine sample at reception.",
+        "Once the sample has been handed in, book the patient into a UTI slot with a GPA.",
+        "Place the urine sample into the GPA urine sample collection box in reception.",
+      ],
+    );
+    const changed = JSON.parse(stored!);
+    changed.state.practiceData.roleRequests["role:doctor"].selectedRequestIds = [];
+    changed.state.practiceData.localProcedures = {};
+    stored = JSON.stringify(changed);
+    assert.deepEqual((await devApi("load", {})).state.practiceData, changed.state.practiceData);
+    // Upgrade an existing workspace without altering authored content or other trainees.
+    changed.trainees = [{ id: "other", name: "Existing trainee", status: "invited" }];
+    changed.state.modules = [
+      {
+        id: "published",
+        title: "Existing booking module",
+        type: "Booking",
+        published: true,
+        createdAt: 1,
+        scenarios: [{ ...sequence, status: "approved" }],
+      },
+    ];
+    stored = JSON.stringify(changed);
+    role = "trainee";
+    await devApi("load", {});
+    assert.deepEqual(
+      JSON.parse(stored!),
+      changed,
+      "trainee loading does not migrate the workspace",
+    );
+    role = "manager";
+    const restored = await devApi("load", {});
+    const upgraded = JSON.parse(stored!);
+    assert.deepEqual(upgraded.state, changed.state);
+    assert.deepEqual(upgraded.sessions, changed.sessions);
+    assert.deepEqual(upgraded.trainees[0], changed.trainees[0]);
+    assert.equal(upgraded.version, changed.version + 1);
+    assert.deepEqual(
+      restored.trainees.map((t: any) => t.id),
+      ["other", "dev-trainee-jamie"],
+    );
+    const afterUpgrade = stored;
+    await devApi("load", {});
+    assert.equal(stored, afterUpgrade, "repeat loading neither duplicates nor rewrites Jamie");
+
+    // The normal assignment patch and save API make this module available to Mock Trainee.
+    const patch = managerActions.managerActionPatch(
+      { ...restored.state, trainees: restored.trainees },
+      { kind: "assign", moduleId: "published", traineeId: "dev-trainee-jamie" },
+      { id: "manual-assignment", at: 1 },
+    );
+    await devApi("save-practice", {
+      state: { ...restored.state, ...patch },
+      version: restored.version,
+    });
+    role = "trainee";
+    const trainee = await devApi("load", {});
+    assert.equal(trainee.account.id, "dev-trainee-jamie");
+    assert.deepEqual(
+      trainee.state.modules.map((m: any) => m.id),
+      ["published"],
+    );
+    assert.equal(trainee.state.assignments[0].id, "manual-assignment");
+    const started = await devApi("start", { assignmentId: "manual-assignment" });
+    assert.equal(started.session.traineeId, "dev-trainee-jamie");
+    assert.equal(started.session.moduleId, "published");
+    role = "manager";
+    // Removing only the mock workspace restores the baseline on the next load.
+    stored = null;
+    assert.ok((await devApi("load", {})).state.practiceData.localProcedures.utis);
+    role = null;
+    stored = null;
+    const previousReads = reads;
+    await assert.rejects(devApi("load", {}), /No local mock session/);
+    assert.equal(reads, previousReads);
+    assert.equal(stored, null);
+  } finally {
+    Object.assign(globalThis, { localStorage: previousStorage, window: previousWindow });
+  }
 });

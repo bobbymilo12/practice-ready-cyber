@@ -109,6 +109,23 @@ export interface TrainingPackage {
   updatedAt: number;
 }
 
+export interface ReviewChange {
+  path: string;
+  label: string;
+  reason: string;
+  before?: string;
+  after?: string;
+}
+export interface ReviewConfirmation {
+  id: string;
+  decision: "unchanged" | "updated";
+  note: string;
+  reviewKey: string;
+  by: string;
+  name: string;
+  at: string;
+  reasons: string[];
+}
 export interface Module {
   id: string;
   type: string;
@@ -122,10 +139,14 @@ export interface Module {
   settings?: import("./module-config").ModuleSettings;
   needsReview?: boolean;
   reviewReason?: string;
+  reviewChanges?: ReviewChange[];
+  reviewedQuestions?: Record<string, string>;
+  reviewConfirmations?: ReviewConfirmation[];
   packageId?: string;
 }
 
 export interface TrainingResult {
+  scoreBasis?: "first_committed";
   attemptId?: string;
   strongTitles?: string[];
   recoveredTitles?: string[];

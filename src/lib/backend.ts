@@ -1,3 +1,5 @@
+import { flagPracticeChanges } from "./practice-change-tracking";
+import { managerActionKey, managerActionPatch, type ManagerAction } from "./manager-actions";
 import { normaliseRoleRequestCategories } from "./role-requests";
 import { validateLocalProcedures, procedureTargets, type LocalProcedure } from "./local-procedures";
 import { setRoleTemplates, type RoleTemplate } from "./role-templates";
@@ -38,15 +40,18 @@ export const useConnection = create<{
   ready: boolean;
   loading: boolean;
   saving: boolean;
+  managerSaving: boolean;
   error: string;
   sessions: TrainingSession[];
 }>(() => ({
   ready: false,
   loading: true,
   saving: false,
+  managerSaving: false,
   error: "",
   sessions: [],
 }));
+let managerOperation: { key: string; promise: Promise<void> } | null = null;
 let version = 0;
 let applying = false;
 let dirty = false;
@@ -96,7 +101,9 @@ export async function api<T>(action: string, body: Record<string, unknown> = {})
     body: JSON.stringify({ ...body, action }),
     signal: AbortSignal.timeout(25000),
   });
-  const payload = await response.json().catch(() => ({ error: "The service is unavailable. Please try again." }));
+  const payload = await response
+    .json()
+    .catch(() => ({ error: "The service is unavailable. Please try again." }));
   if (!response.ok || payload.error)
     throw new Error(payload.error || "Could not save. Please try again.");
   return payload;
@@ -125,6 +132,7 @@ function clearWorkspace() {
 
 let loadingWorkspace: Promise<void> | null = null;
 export function loadWorkspace(): Promise<void> {
+  if (managerOperation) return managerOperation.promise.catch(() => {}).then(() => loadWorkspace());
   if (loadingWorkspace) return loadingWorkspace;
   loadingWorkspace = fetchWorkspace().finally(() => {
     loadingWorkspace = null;
@@ -221,6 +229,79 @@ export async function flushPractice() {
   return saving;
 }
 
+/** Consequential manager actions stay outside visible state until persistence is confirmed. */
+export function confirmManagerAction(action: ManagerAction): Promise<void> {
+  const key = managerActionKey(action);
+  if (managerOperation)
+    return managerOperation.key === key
+      ? managerOperation.promise
+      : Promise.reject(new Error("Another training action is saving. Wait for it to finish."));
+  const ticket = generation;
+  const accountId = useApp.getState().account?.id;
+  const identity = { id: crypto.randomUUID(), at: Date.now() };
+  useConnection.setState({ managerSaving: true });
+  const promise = Promise.resolve()
+    .then(async () => {
+      while (saving || dirty) await flushPractice();
+      if (
+        ticket !== generation ||
+        useApp.getState().account?.id !== accountId ||
+        !useConnection.getState().ready ||
+        useApp.getState().account?.role !== "manager"
+      )
+        throw new Error("Please log in as a manager before saving this action.");
+      const current = useApp.getState();
+      const patch = managerActionPatch(current, action, identity);
+      if (!Object.keys(patch).length) return;
+      const state = { ...practiceState(current), ...patch };
+      const request = (async () => {
+        useConnection.setState({ saving: true });
+        const result = await api<{
+          version: number;
+          reviewConfirmations?: Record<string, AppState["modules"][number]["reviewConfirmations"]>;
+        }>("save-practice", { state, version });
+        if (ticket !== generation || useApp.getState().account?.id !== accountId)
+          throw new Error("Your session changed. Reopen the practice to check the saved action.");
+        if (!Number.isInteger(result.version) || result.version <= version)
+          throw new Error(
+            "Save confirmation was incomplete. Reload your practice to check the action.",
+          );
+        version = result.version;
+        applying = true;
+        try {
+          useApp.setState((latest) => {
+            const patch = managerActionPatch(latest, action, identity, current);
+            if (patch.modules && result.reviewConfirmations)
+              patch.modules = patch.modules.map((module) =>
+                result.reviewConfirmations?.[module.id]
+                  ? { ...module, reviewConfirmations: result.reviewConfirmations[module.id] }
+                  : module,
+              );
+            return patch;
+          });
+        } finally {
+          applying = false;
+        }
+      })();
+      saving = request;
+      try {
+        await request;
+      } finally {
+        if (saving === request) saving = null;
+        if (ticket === generation) {
+          useConnection.setState({ saving: false });
+          if (dirty) void flushPractice().catch(() => {});
+        }
+      }
+    })
+    .finally(() => {
+      if (managerOperation?.promise === promise) managerOperation = null;
+      useConnection.setState({ managerSaving: false });
+    });
+  managerOperation = { key, promise };
+  return promise;
+}
+
 /** Persist first: failed saves never replace confirmed procedure records in the store. */
 export async function saveLocalProcedures(
   updates: LocalProcedure[],
@@ -249,6 +330,7 @@ export async function saveLocalProcedures(
   const ticket = generation;
   const state = practiceState(current);
   state.practiceData = { ...state.practiceData, localProcedures: records };
+  state.modules = flagPracticeChanges(current.practiceData, state.practiceData, state.modules);
   saving = (async () => {
     useConnection.setState({ saving: true, error: "" });
     try {
@@ -258,7 +340,13 @@ export async function saveLocalProcedures(
       version = result.version;
       applying = true;
       try {
-        useApp.setState((s) => ({ practiceData: { ...s.practiceData, localProcedures: records } }));
+        useApp.setState((s) => {
+          const practiceData = { ...s.practiceData, localProcedures: records };
+          return {
+            practiceData,
+            modules: flagPracticeChanges(current.practiceData, practiceData, s.modules),
+          };
+        });
       } finally {
         applying = false;
       }
@@ -285,6 +373,17 @@ export function initializeBackend() {
   clearWorkspace();
   useApp.subscribe((state, previous) => {
     if (applying || !useConnection.getState().ready || state.account?.role !== "manager") return;
+    if (state.practiceData !== previous.practiceData) {
+      const modules = flagPracticeChanges(previous.practiceData, state.practiceData, state.modules);
+      if (modules !== state.modules) {
+        applying = true;
+        try {
+          useApp.setState({ modules });
+        } finally {
+          applying = false;
+        }
+      }
+    }
     if (
       state.modules !== previous.modules ||
       state.packages !== previous.packages ||

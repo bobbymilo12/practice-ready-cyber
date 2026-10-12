@@ -60,9 +60,9 @@ const empty = (): PracticeData => ({
   },
 });
 
-test("all nine topics have their own configuration and empty information never produces invented guidance", () => {
-  assert.equal(Object.keys(topicFields).length, 9);
-  assert.equal(topicFields.custom, undefined);
+test("all ten topics have their own configuration and empty information never produces invented guidance", () => {
+  assert.equal(Object.keys(topicFields).length, 10);
+  assert.ok(topicFields.custom.length);
   for (const topic of Object.keys(topicFields)) {
     assert.ok(fieldsForTopic(topic, empty()).length);
     assert.deepEqual(configuredScenarios(topic, topic, empty(), defaultModuleSettings()), []);
@@ -71,6 +71,7 @@ test("all nine topics have their own configuration and empty information never p
     const settings = defaultModuleSettings();
     for (const f of fieldsForTopic(topic, p))
       settings.answers[f.key] = optionsForField(f, p)[0] ?? "";
+    if (topic === "custom") settings.extra = "Open the confirmed local task form.";
     assert.ok(configuredScenarios(topic, topic, p, settings).length > 0, topic);
   }
 });
@@ -115,6 +116,29 @@ test("confirmed responsibilities include individual additions, exclude removals 
       s.title.startsWith("Routing:"),
     ),
   );
+  for (const trainingLevel of ["learn", "apply"] as const) {
+    for (const difficulty of ["easy", "intermediate", "advanced"] as const) {
+      const questions = generateConfiguredModule("vaccines", "Vaccines", p, {
+        ...settings,
+        trainingLevel,
+        difficulty,
+      });
+      const route = questions.find((s) => s.title === "Routing: Vaccinations");
+      assert.ok(route?.kind === "mcq");
+      assert.match(route.options[route.correctIndex], /Robin/);
+      assert.doesNotMatch(route.options[route.correctIndex], /Sam/);
+      const exception = questions.find((s) => s.title.startsWith("Individual exception: Sam"));
+      assert.ok(exception?.kind === "mcq");
+      assert.match(exception.options[exception.correctIndex], /excluded/);
+      const added = generateConfiguredModule("fit-notes", "Fit notes", p, {
+        ...settings,
+        trainingLevel,
+        difficulty,
+      }).find((s) => s.title.startsWith("Routing:"));
+      assert.ok(added?.kind === "mcq");
+      assert.match(added.options[added.correctIndex], /Sam/);
+    }
+  }
   role.confirmed = false;
   assert.deepEqual(configuredScenarios("vaccines", "Vaccines", p, settings), []);
 });

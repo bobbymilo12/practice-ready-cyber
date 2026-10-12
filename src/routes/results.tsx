@@ -73,13 +73,20 @@ function Results() {
           <div className="grid gap-6 sm:grid-cols-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                First-answer score
+                {r.scoreBasis === "first_committed"
+                  ? "First-answer score"
+                  : "Recorded-answer score"}
               </div>
               <div className="mt-1 font-display text-4xl font-bold">
                 {r.correct}
                 <span className="text-muted-foreground">/{r.total}</span>
               </div>
               <div className="text-sm text-muted-foreground">{pct}%</div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {r.scoreBasis === "first_committed"
+                  ? "Based on your first checked answer to each main question. Follow-up practice does not change this score."
+                  : "This attempt began before explicit answer checking was introduced. Its saved responses are retained; earlier selections cannot be reconstructed."}
+              </p>
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

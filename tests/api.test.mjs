@@ -1,3 +1,4 @@
+import { approveReviewedQuestion, reviewKey } from "../src/lib/practice-change-tracking.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
@@ -75,8 +76,10 @@ const mockClient = {
   // Mirrors the SQL functions in 202610090001_practice_tables.sql and 202610100003_practice_modules.sql.
   rpc: async (name, args) => {
     const practice = tables.practices.find((p) => p.id === args.p_practice);
-    if (name === "load_practice_data") return { data: tables.practice_data[args.p_practice] ?? null, error: null };
-    if (name === "load_practice_modules") return { data: tables.practice_modules[args.p_practice] ?? [], error: null };
+    if (name === "load_practice_data")
+      return { data: tables.practice_data[args.p_practice] ?? null, error: null };
+    if (name === "load_practice_modules")
+      return { data: tables.practice_modules[args.p_practice] ?? [], error: null };
     if (practice.version !== args.p_version) return { data: null, error: null };
     const { modules, ...state } = args.p_state;
     Object.assign(practice, { state, version: practice.version + 1 });
@@ -132,7 +135,11 @@ const js = ts
   })
   .outputText.replace('"npm:@supabase/supabase-js@2.57.4"', JSON.stringify(sdk))
   .replace('"../../../src/lib/local-procedures.ts"', JSON.stringify(proceduresUrl))
-  .replace('"../../../src/lib/training.ts"', JSON.stringify(trainingUrl));
+  .replace('"../../../src/lib/training.ts"', JSON.stringify(trainingUrl))
+  .replace(
+    '"../../../src/lib/practice-change-tracking.ts"',
+    JSON.stringify(new URL("../src/lib/practice-change-tracking.ts", import.meta.url).href),
+  );
 await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
 
 function reset(role = "trainee", mustReset = false) {
@@ -271,6 +278,9 @@ test("API calculates scores itself and retrying finish does not create a second 
   const sessionId = start.data.session.id;
   const args = { assignmentId: "a1", sessionId, scenarioId: "q1" };
   await call({ ...args, action: "answer", value: 0, correct: true });
+  const retryAnswer = await call({ ...args, action: "answer", value: 1, correct: true });
+  assert.equal(retryAnswer.data.session.answers[0].value, 0);
+  assert.equal(retryAnswer.data.session.answers[0].correct, false);
   await call({ ...args, action: "continue", result: { correct: 99 } });
   const end = await call({ ...args, action: "submit", result: { correct: 99 } });
   assert.equal(end.data.session.result.correct, 0);
@@ -281,7 +291,10 @@ test("API calculates scores itself and retrying finish does not create a second 
 test("stale manager saves are rejected without overwriting the practice", async () => {
   reset("manager");
   tables.practices[0].state.assignments = [];
-  const state = ({ ...structuredClone(tables.practices[0].state), practiceData: tables.practice_data.oak });
+  const state = {
+    ...structuredClone(tables.practices[0].state),
+    practiceData: tables.practice_data.oak,
+  };
   state.modules = [];
   const r = await call({ action: "save-practice", version: 0, state });
   assert.equal(r.status, 409);
@@ -303,7 +316,10 @@ test("failed invitation email reports failure and preserves an account for resen
 
 test("packages and module settings survive manager save and filtered trainee load", async () => {
   reset("manager");
-  const state = ({ ...structuredClone(tables.practices[0].state), practiceData: tables.practice_data.oak });
+  const state = {
+    ...structuredClone(tables.practices[0].state),
+    practiceData: tables.practice_data.oak,
+  };
   state.modules = [structuredClone(tables.practice_modules.oak[0])];
   state.assignments = [
     { id: "bob-configured", moduleId: "m1", traineeId: "bob", packageId: "induction" },
@@ -326,7 +342,10 @@ test("packages and module settings survive manager save and filtered trainee loa
   assert.deepEqual(manager.data.state.packages, state.packages);
   assert.deepEqual(manager.data.state.modules[0].settings, state.modules[0].settings);
   assert.equal(tables.practices[0].state.modules, undefined);
-  assert.deepEqual(tables.practice_modules.oak.map((m) => m.id), ["m1"]);
+  assert.deepEqual(
+    tables.practice_modules.oak.map((m) => m.id),
+    ["m1"],
+  );
   user = { id: "bob" };
   const trainee = await call({ action: "load" });
   assert.deepEqual(trainee.data.state.packages, [state.packages[0]]);
@@ -390,4 +409,91 @@ test("a manager cannot remove or see trainees from another practice", async () =
   assert.equal(tables.practices[0].version, 1);
   const { data } = await call({ action: "load" });
   assert.ok(!data.trainees.some((t) => t.id === "eve"));
+});
+
+test("API flags published training on practice changes and refuses a boolean-only dismissal", async () => {
+  reset("manager");
+  const state = structuredClone(tables.practices[0].state);
+  state.modules = [structuredClone(tables.practice_modules.oak[0])];
+  state.assignments = [{ id: "review-assignment", moduleId: "m1", traineeId: "bob" }];
+  state.practiceData = { ...tables.practice_data.oak, repeatTurnaround: "72 working hours" };
+  assert.equal((await call({ action: "save-practice", state, version: 1 })).status, 200);
+  const flagged = tables.practice_modules.oak[0];
+  assert.equal(flagged.needsReview, true);
+  assert.match(flagged.reviewReason, /Prescription turnaround/);
+  const dismissed = structuredClone(tables.practices[0].state);
+  dismissed.practiceData = tables.practice_data.oak;
+  dismissed.modules = structuredClone(tables.practice_modules.oak);
+  dismissed.modules[0].needsReview = false;
+  const rejection = await call({ action: "save-practice", state: dismissed, version: 2 });
+  assert.equal(rejection.status, 400);
+  assert.match(rejection.data.error, /review decision/);
+  assert.equal(tables.practice_modules.oak[0].needsReview, true);
+  user = { id: "bob" };
+  const start = await call({ action: "start", assignmentId: "review-assignment" });
+  assert.equal(start.status, 400);
+  assert.match(start.data.error, /manager review/);
+});
+
+test("API authenticates review decisions, retains history and flags a subsequent change", async () => {
+  reset("manager");
+  const state = structuredClone(tables.practices[0].state);
+  state.modules = [
+    {
+      ...tables.practice_modules.oak[0],
+      needsReview: true,
+      reviewReason: "Local process changed.",
+    },
+  ];
+  state.assignments = [];
+  state.practiceData = tables.practice_data.oak;
+  assert.equal((await call({ action: "save-practice", state, version: 1 })).status, 200);
+  const next = structuredClone(tables.practices[0].state);
+  next.modules = structuredClone(tables.practice_modules.oak);
+  next.practiceData = tables.practice_data.oak;
+  next.modules[0] = next.modules[0].scenarios.reduce(
+    (m, q) => approveReviewedQuestion(m, q.id, next.practiceData),
+    next.modules[0],
+  );
+  const module = next.modules[0];
+  module.reviewConfirmations = [
+    {
+      id: "review-decision",
+      decision: "unchanged",
+      note: "Checked the saved training against current local rules.",
+      reviewKey: reviewKey(module, next.practiceData),
+      by: "forged",
+      name: "forged",
+      at: "1900-01-01T00:00:00Z",
+      reasons: ["forged"],
+    },
+  ];
+  module.needsReview = false;
+  const result = await call({ action: "save-practice", state: next, version: 2 });
+  assert.equal(result.status, 200, JSON.stringify(result.data));
+  const record = tables.practice_modules.oak[0].reviewConfirmations[0];
+  assert.equal(record.by, "alice");
+  assert.equal(record.name, "Alice");
+  assert.notEqual(record.at, "1900-01-01T00:00:00Z");
+  assert.deepEqual(record.reasons, ["Local process changed."]);
+  assert.deepEqual(result.data.reviewConfirmations.m1, [record]);
+  const changed = structuredClone(tables.practices[0].state);
+  changed.modules = structuredClone(tables.practice_modules.oak);
+  changed.practiceData = { ...tables.practice_data.oak, hours: "09:00–17:00" };
+  changed.modules[0].reviewConfirmations = [];
+  assert.equal((await call({ action: "save-practice", state: changed, version: 3 })).status, 200);
+  assert.equal(tables.practice_modules.oak[0].needsReview, true);
+  assert.deepEqual(tables.practice_modules.oak[0].reviewConfirmations, [record]);
+});
+
+test("trainees receive availability flags but not manager review notes or audit records", async () => {
+  reset();
+  const module = tables.practice_modules.oak[0];
+  module.needsReview = true;
+  module.reviewChanges = [{ reason: "Manager review details" }];
+  module.reviewConfirmations = [{ id: "decision", note: "Private manager review note" }];
+  const response = await call({ action: "load" });
+  assert.equal(response.data.state.modules[0].needsReview, true);
+  assert.equal(response.data.state.modules[0].reviewChanges, undefined);
+  assert.equal(response.data.state.modules[0].reviewConfirmations, undefined);
 });

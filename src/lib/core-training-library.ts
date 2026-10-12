@@ -272,21 +272,21 @@ export const coreBindingSources: Record<Binding, "practice_setup" | "module_setu
 // Product-owner instruction records internal PracticeReady approval, not NHS endorsement.
 // Future content changes must increment version and receive a new explicit approval.
 export const approvedAppointmentCoreVersions: Readonly<Record<string, number>> = {
-  AB01: 4,
-  AB03: 3,
-  AB04: 3,
-  AB15: 3,
+  AB01: 5,
+  AB03: 4,
+  AB04: 4,
+  AB15: 4,
 };
 const editorialApproval = {
   by: "PracticeReady editorial — product owner",
-  on: "2026-09-30",
+  on: "2026-10-11",
   notes:
-    "Core v1 approval explicitly authorised by the product owner for the current concept and both version-2 Learn/Apply recipes, including the requested level-specific presentation refinement.",
+    "Product-owner requested editorial update: natural reception questions and plausible behavioural alternatives for Learn and Apply. No local or clinical rules added.",
 } as const;
 
 export const coreTrainingLibrary: readonly CoreTrainingConcept[] = entries.map((e) => {
   const previous = previousSources[e.slug];
-  const version = (previous ? 2 : 1) + (["AB01", "AB03", "AB04", "AB15"].includes(e.code) ? 2 : 0);
+  const version = (previous ? 2 : 1) + (["AB01", "AB03", "AB04", "AB15"].includes(e.code) ? 3 : 0);
   const approved = approvedAppointmentCoreVersions[e.code] === version;
   const templates: Template[] = (["learn", "apply"] as const).map((level) => ({
     id: `core.appointment-booking.${e.code.toLowerCase()}.${level}.v1`,

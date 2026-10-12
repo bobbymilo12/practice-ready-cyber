@@ -1,3 +1,4 @@
+import { useManagerAction } from "@/hooks/use-manager-action";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { useConnection } from "@/lib/backend";
@@ -32,8 +33,7 @@ function TraineeDetail() {
   const modules = useApp((s) => s.modules);
   const results = useApp((s) => s.results);
   const assignments = useApp((s) => s.assignments);
-  const assignModule = useApp((s) => s.assignModule);
-  const reassignModule = useApp((s) => s.reassignModule);
+  const action = useManagerAction();
   const markResult = useApp((s) => s.markResult);
 
   if (!trainee) {
@@ -92,6 +92,11 @@ function TraineeDetail() {
 
   return (
     <Shell>
+      {action.error && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {action.error}
+        </p>
+      )}
       <Link to="/dashboard" className="text-sm text-primary hover:underline">
         ← Back to dashboard
       </Link>
@@ -179,10 +184,19 @@ function TraineeDetail() {
                   </p>
                 </div>
                 <button
-                  onClick={() => reassignModule(trainee.id, module.id)}
+                  disabled={action.saving}
+                  onClick={() =>
+                    void action.run({
+                      kind: "reassign",
+                      traineeId: trainee.id,
+                      moduleId: module.id,
+                    })
+                  }
                   className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface"
                 >
-                  Redo — reassign module
+                  {action.pending?.kind === "reassign" && action.pending.moduleId === module.id
+                    ? "Reassigning…"
+                    : "Redo — reassign module"}
                 </button>
               </div>
 
@@ -250,10 +264,15 @@ function TraineeDetail() {
               >
                 <div className="font-medium">{m.title}</div>
                 <button
-                  onClick={() => assignModule(trainee.id, m.id)}
+                  disabled={action.saving}
+                  onClick={() =>
+                    void action.run({ kind: "assign", traineeId: trainee.id, moduleId: m.id })
+                  }
                   className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
                 >
-                  Assign
+                  {action.pending?.kind === "assign" && action.pending.moduleId === m.id
+                    ? "Assigning…"
+                    : "Assign"}
                 </button>
               </div>
             ))}

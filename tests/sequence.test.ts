@@ -95,7 +95,7 @@ test("answer validation rejects duplicate, missing, unknown IDs and labels used 
     assert.throws(() => answerSession(session, invalid));
 });
 
-test("each saved rearrangement survives navigation/reload; exact order counts as one scenario", () => {
+test("first checked order survives navigation/reload; exact order counts as one scenario", () => {
   const module = sequencePreviewModule();
   let session = startSession(module, assignment, "attempt");
   const scenario = module.scenarios[0];
@@ -108,7 +108,8 @@ test("each saved rearrangement survives navigation/reload; exact order counts as
   assert.deepEqual(session.answers[0].value, ids);
   session = answerSession(session, scenario.sequence.correctOrder);
   const result = submitSession(advanceSession(session, module.title), module.title);
-  assert.equal(result.result!.correct, 1);
+  assert.equal(result.result!.correct, session.answers[0].correct ? 1 : 0);
+  assert.deepEqual(session.answers[0].value, ids);
   assert.equal(result.result!.total, 1);
   const wrong = answerSession(
     startSession(module, assignment, "wrong"),

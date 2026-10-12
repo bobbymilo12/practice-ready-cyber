@@ -20,8 +20,8 @@ function CreateModule() {
         </div>
         <h1 className="mt-6 font-display text-3xl font-bold">What should staff practise?</h1>
         <p className="mt-2 text-muted-foreground">
-          Pick a topic. Next we’ll ask a few quick questions, then draft the scenarios for you to
-          review. Want to{" "}
+          Pick a topic. We use your practice’s configured information and procedures to draft
+          training for you to review. Want to{" "}
           <Link to="/modules/merge" className="text-primary underline">
             combine existing modules
           </Link>{" "}

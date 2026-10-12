@@ -11,9 +11,7 @@ const topics = [
   ["difficult", "Difficult calls & de-escalation"],
   ["first-week", "First week on reception"],
 ];
-test("every predefined topic uses structured configuration; custom retains its manual questions", async ({
-  page,
-}) => {
+test("every topic uses shared configuration and module controls", async ({ page }) => {
   await page.goto("/auth");
   await page.getByRole("button", { name: "Continue as Manager", exact: true }).click();
   test.setTimeout(60000);
@@ -35,7 +33,7 @@ test("every predefined topic uses structured configuration; custom retains its m
     await page
       .getByLabel("Additional local rule or procedure")
       .fill(`Confirmed ${topic} handover: use the local inbox.`);
-    await page.getByRole("button", { name: "Choose module length →" }).click();
+    await page.getByRole("button", { name: "Choose module length + difficulty" }).click();
     await expect(
       page.getByRole("heading", { name: "How long should this module be?" }),
     ).toBeVisible();
@@ -54,7 +52,7 @@ test("every predefined topic uses structured configuration; custom retains its m
   }
   await page.goto("/modules/setup?topic=custom&title=Manual");
   await expect(
-    page.getByLabel("Describe the exact situation this module should cover."),
+    page.getByText("What should staff do for the main task?", { exact: true }),
   ).toBeVisible();
 });
 
@@ -71,7 +69,7 @@ test("module settings persist, can be edited and regenerate into unapproved scen
   await page
     .getByLabel("Additional local rule or procedure")
     .fill("Use the local results inbox for a handover.");
-  await page.getByRole("button", { name: "Choose module length →" }).click();
+  await page.getByRole("button", { name: "Choose module length + difficulty" }).click();
   await page.getByRole("radio", { name: /Custom length/ }).check();
   await page.getByRole("spinbutton", { name: "Number of scenarios", exact: true }).fill("2");
   await page.getByRole("button", { name: "Create module", exact: true }).click();
@@ -87,7 +85,7 @@ test("module settings persist, can be edited and regenerate into unapproved scen
   await expect(page.getByLabel("Additional local rule or procedure")).toHaveValue(
     "Use the local results inbox for a handover.",
   );
-  await page.getByRole("button", { name: "Choose module length →" }).click();
+  await page.getByRole("button", { name: "Choose module length + difficulty" }).click();
   await expect(
     page.getByRole("spinbutton", { name: "Number of scenarios", exact: true }),
   ).toHaveValue("2");
@@ -193,7 +191,7 @@ for (const topic of ["appointment-booking", "prescriptions"]) {
     await page
       .getByLabel("Additional local rule or procedure")
       .fill("Record the local handover reference in the request.");
-    await page.getByRole("button", { name: "Choose module length →" }).click();
+    await page.getByRole("button", { name: "Choose module length + difficulty" }).click();
     await page.getByRole("radio", { name: /Thorough/ }).check();
     await page.getByRole("button", { name: "Create module", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Review draft scenarios" })).toBeVisible();
@@ -209,7 +207,7 @@ for (const topic of ["appointment-booking", "prescriptions"]) {
     await expect(page.getByLabel("Additional local rule or procedure")).toHaveValue(
       "Record the local handover reference in the request.",
     );
-    await page.getByRole("button", { name: "Choose module length →" }).click();
+    await page.getByRole("button", { name: "Choose module length + difficulty" }).click();
     await expect(page.getByRole("radio", { name: /Thorough/ })).toBeChecked();
   });
 }

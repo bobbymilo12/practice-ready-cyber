@@ -1,3 +1,4 @@
+import { applyQuestionDifficulty, practiceQuestionPresentation } from "./module-presentation.ts";
 import {
   inspectLocalProcedureSequences,
   localProcedureApplication,
@@ -5,6 +6,7 @@ import {
 import {
   roleRequestSituation,
   roleAnswerChoices,
+  explicitSameDayBooking,
   roleList,
   broadRequestLabel,
 } from "./role-question-presentation.ts";
@@ -59,8 +61,9 @@ export const trainingLevelOptions = [
 ] as const;
 
 export interface ModuleSettings {
-  // Appointment Booking only; absent on legacy modules.
+  // Optional on legacy modules.
   trainingLevel?: "learn" | "apply";
+  difficulty?: import("./training-types").Difficulty;
   version: 1;
   answers: Record<string, string>;
   // Optional additions keep existing version-1 modules compatible.
@@ -409,6 +412,20 @@ topicFields["appointment-booking"].push(
     addLabel: "Add another process",
   },
 );
+topicFields.custom = [
+  {
+    ...q("process", "What should staff do for the main task?", [localProcess]),
+    addLabel: "Add a confirmed instruction",
+    situation: "A colleague asks you to handle the task covered by this module.",
+  },
+  {
+    ...q("exception", "What should staff do when the usual process cannot be followed?", [
+      localProcess,
+    ]),
+    addLabel: "Add a confirmed instruction",
+    situation: "The usual process for this task cannot be followed.",
+  },
+];
 export const extraRuleLabels: Record<string, string> = {
   "appointment-booking": "booking",
   prescriptions: "prescription",
@@ -419,6 +436,7 @@ export const extraRuleLabels: Record<string, string> = {
   "home-visits": "home visit",
   difficult: "difficult-call",
   "first-week": "induction",
+  custom: "custom process",
 };
 for (const fields of Object.values(topicFields)) {
   for (const f of fields) {
@@ -863,12 +881,7 @@ export function configuredScenarios(
   p: PracticeData,
   settings: ModuleSettings,
 ): Scenario[] {
-  if (
-    topic === "appointment-booking" &&
-    settings.trainingLevel &&
-    !["learn", "apply"].includes(settings.trainingLevel)
-  )
-    return [];
+  if (settings.trainingLevel && !["learn", "apply"].includes(settings.trainingLevel)) return [];
   const structuredActions =
     topic === "appointment-booking" && settings.trainingLevel
       ? configuredBookingActions(p, settings)
@@ -922,6 +935,9 @@ export function configuredScenarios(
     correctIndex: 0,
     learningPoint: source,
     status: "draft",
+    ...(topic !== "appointment-booking" && settings.trainingLevel
+      ? practiceQuestionPresentation(topic, label, situation, answer, settings)
+      : {}),
   });
   const fieldLabels = new Set((topicFields[topic] ?? []).map((f) => f.label));
   const facts = moduleFacts(topic, p, settings).sort(
@@ -1004,15 +1020,35 @@ export function configuredScenarios(
       roleQuestion.title = roleRequestSituation(label).replace(/\.$/, "");
       if (!roles.length) continue; // A role-recognition exercise cannot invent a workflow for employee-only data.
       const apply = settings.trainingLevel === "apply";
-      roleQuestion.patientQuote = apply
-        ? `${roleRequestSituation(label)} The patient asks whether only one type of clinician can help with this request.`
-        : roleRequestSituation(label);
-      roleQuestion.question = apply
-        ? "Which role or roles could you explain can help? Check the booking process before arranging an appointment."
-        : "Who at your practice can help with this?";
+      roleQuestion.patientQuote = `${roleRequestSituation(label)} ${
+        apply
+          ? "You have followed the practice’s booking process. The patient asks which appointment you can arrange."
+          : "The practice’s booking process has confirmed an appointment is needed."
+      }`;
+      roleQuestion.question = "Who should you book the patient an appointment with?";
       roleQuestion.options = roleAnswerChoices(p, id, label, roles);
+      if (apply && explicitSameDayBooking(p, id, label)) {
+        const choices = roleQuestion.options;
+        const timed = (choice: string, timing: string) =>
+          choice.replace(/ appointment/g, ` — ${timing} appointment`);
+        roleQuestion.question = "Which appointment should you book?";
+        roleQuestion.options = [
+          timed(choices[0], "same-day"),
+          timed(choices[0], "routine"),
+          ...choices
+            .slice(1, 2)
+            .flatMap((choice) =>
+              choice.includes(" appointment")
+                ? [timed(choice, "same-day"), timed(choice, "routine")]
+                : [choice],
+            ),
+        ];
+      }
       roleQuestion.correctIndex = 0;
-      roleQuestion.learningPoint = `${roleList(roles.map((r) => r.label))} can handle this request. This identifies eligible roles; follow the practice’s booking process and any individual exceptions before arranging an appointment.`;
+      roleQuestion.learningPoint = `${roleList(roles.map((r) => r.label))} can handle this request. Check individual staff exceptions before choosing a clinician. Follow the practice’s booking process before arranging the appointment.`;
+      if (apply && explicitSameDayBooking(p, id, label))
+        roleQuestion.learningPoint +=
+          " Your practice explicitly lists this request for same-day direct booking.";
     }
     routing.push(roleQuestion);
     for (const exception of staff.filter((s) => s.individualException))
@@ -1084,20 +1120,16 @@ export function selectedModuleScenarios(
   p: PracticeData,
   settings: ModuleSettings,
 ): Scenario[] {
-  if (
-    topic === "appointment-booking" &&
-    settings.trainingLevel &&
-    !["learn", "apply"].includes(settings.trainingLevel)
-  )
-    return [];
+  if (settings.trainingLevel && !["learn", "apply"].includes(settings.trainingLevel)) return [];
   const count = Number.isInteger(settings.count) ? Math.min(100, Math.max(1, settings.count)) : 12;
   const local = configuredScenarios(topic, title, p, settings);
-  if (topic !== "appointment-booking") return local.slice(0, count);
+  if (topic !== "appointment-booking")
+    return local.slice(0, count).map((s) => applyQuestionDifficulty(s, settings.difficulty));
   const core = appointmentCorePool({ topicKey: topic, practice: p, settings });
   const selectedCore = core.slice(0, Math.round(count * 0.3));
   const selectedLocal = local.slice(0, count - selectedCore.length);
   // Prefer a procedure for a request already selected for a weaker role-only question.
-  // Never add capacity; matching retains priority at smaller module lengths.
+  // A confirmed procedure must not lose its slot to role recognition or matching.
   const candidates = inspectLocalProcedureSequences(p).candidates;
   const sequence =
     candidates.find((candidate) =>
@@ -1116,10 +1148,22 @@ export function selectedModuleScenarios(
       sameRequest >= 0 ? sameRequest : selectedLocal.findIndex((s, i) => i > 0 && s.kind === "mcq");
     if (index >= 0) selectedLocal.splice(index, 1, scenario);
   };
-  if (settings.trainingLevel === "learn" && selectedLocal.length >= 2) {
-    const matching = roleMatchingScenario(p);
-    if (matching) selectedLocal.splice(1, 1, matching);
-    if (sequence && (!matching || selectedLocal.length >= 4)) replaceWithProcedure(sequence);
+  if (settings.trainingLevel === "learn") {
+    if (sequence && selectedLocal.length) {
+      const requestId = sequence.provenance.snapshot.localProcedure?.requestId;
+      const sameRequest = selectedLocal.findIndex(
+        (s) => s.kind === "mcq" && s.localRoleRequestId === requestId,
+      );
+      // Even a single local slot teaches the saved procedure. Preserve the total/Core budget.
+      selectedLocal.splice(sameRequest >= 0 ? sameRequest : selectedLocal.length - 1, 1, sequence);
+    }
+    if (selectedLocal.length >= 2) {
+      const matching = roleMatchingScenario(p);
+      const index = selectedLocal.findIndex((s, i) => i > 0 && s.kind === "mcq");
+      const fallback = selectedLocal.findIndex((s) => s.kind === "mcq");
+      if (matching && fallback >= 0)
+        selectedLocal.splice(index >= 0 ? index : fallback, 1, matching);
+    }
   }
   if (settings.trainingLevel === "apply" && selectedLocal.length >= 2 && sequence) {
     const application = localProcedureApplication(p, sequence);
@@ -1133,7 +1177,7 @@ export function selectedModuleScenarios(
     if (c < selectedCore.length) result.push(selectedCore[c++]);
     for (let i = 0; i < 2 && l < selectedLocal.length; i++) result.push(selectedLocal[l++]);
   }
-  return result;
+  return result.map((s) => applyQuestionDifficulty(s, settings.difficulty));
 }
 
 export function generateConfiguredModule(
@@ -1152,9 +1196,11 @@ export function generateConfiguredModule(
             correctIndex: (s.correctIndex - offset + s.options.length) % s.options.length,
           }
         : s;
-    // Appointment Booking's selected length is the total stored question count.
-    // Existing recovery questions in saved modules and other topics are unchanged.
-    const follow = topic === "appointment-booking" ? undefined : configuredFollowUp(primary);
+    // Shared Learn/Apply lengths count all stored questions. Legacy settings retain follow-ups.
+    const follow =
+      topic === "appointment-booking" || settings.trainingLevel
+        ? undefined
+        : configuredFollowUp(primary);
     return follow ? [primary, follow] : [primary];
   });
 }
@@ -1223,11 +1269,41 @@ export function regenerateConfiguredScenario(
 ): Module {
   const current = module.scenarios.find((s) => s.id === scenarioId);
   // Procedure-based exercises keep their immutable source; new modules use updated knowledge.
-  if (current?.provenance?.kind === "sequence") return module;
-  if (!module.settings) return module;
+  if (current?.provenance?.kind === "sequence") {
+    if (!module.needsReview) return module;
+    const requestId = current.provenance.snapshot.localProcedure?.requestId;
+    const source = inspectLocalProcedureSequences(practice).candidates.find(
+      (s) => s.provenance.snapshot.localProcedure?.requestId === requestId,
+    );
+    if (!source)
+      throw new Error(
+        "No eligible confirmed procedure is available for this question. Review the procedure in Practice Setup, or delete this question.",
+      );
+    const replacement =
+      current.kind === "mcq" ? localProcedureApplication(practice, source)! : source;
+    return {
+      ...module,
+      scenarios: module.scenarios.map((s) =>
+        s.id === scenarioId ? { ...replacement, id: scenarioId, status: "draft" } : s,
+      ),
+    };
+  }
   if (!current) return module;
   if (current.kind === "matching") {
-    // Re-presentation uses the original evidence; live setup cannot rewrite this question.
+    if (module.needsReview) {
+      const replacement = roleMatchingScenario(practice);
+      if (!replacement)
+        throw new Error(
+          "Current role configuration cannot generate this matching question. Review Practice Setup, or delete this question.",
+        );
+      return {
+        ...module,
+        scenarios: module.scenarios.map((s) =>
+          s.id === scenarioId ? { ...replacement, id: scenarioId, status: "draft" } : s,
+        ),
+      };
+    }
+    // Re-presentation uses the original evidence outside a practice-change review.
     return {
       ...module,
       needsReview: module.published || module.needsReview,
@@ -1242,6 +1318,7 @@ export function regenerateConfiguredScenario(
       ),
     };
   }
+  if (!module.settings) return module;
   if (current.provenance) {
     if (current.kind !== "mcq") return module;
     const replacement = regenerateAppointmentCore(
@@ -1257,7 +1334,9 @@ export function regenerateConfiguredScenario(
     return {
       ...module,
       needsReview: module.published || module.needsReview,
-      scenarios: module.scenarios.map((s) => (s.id === scenarioId ? replacement : s)),
+      scenarios: module.scenarios.map((s) =>
+        s.id === scenarioId ? applyQuestionDifficulty(replacement, module.settings?.difficulty) : s,
+      ),
     };
   }
   if (current.followUpFor) {
@@ -1274,9 +1353,14 @@ export function regenerateConfiguredScenario(
     pool.find((s) => !used.has(s.title) && s.title !== current.title) ??
     pool.find((s) => s.title === primaryTitle);
   if (!pick) return module;
-  const replacement: Scenario = { ...pick, id: current.id };
+  const replacement: Scenario = {
+    ...applyQuestionDifficulty(pick, module.settings.difficulty),
+    id: current.id,
+  };
   const follow =
-    module.topicKey === "appointment-booking" ? undefined : configuredFollowUp(replacement);
+    module.topicKey === "appointment-booking" || module.settings.trainingLevel
+      ? undefined
+      : configuredFollowUp(replacement);
   return {
     ...module,
     needsReview: module.published || module.needsReview,

@@ -322,10 +322,7 @@ export function createCoreGenerator(library: readonly CoreTrainingConcept[]) {
           kind: "mcq",
           title: variation.title ?? "Understanding the request",
           patientQuote: variation.situation,
-          question:
-            level === "learn"
-              ? "Which response best reflects good care navigation?"
-              : "How would you respond?",
+          question: "What would be the best way to respond?",
           options,
           correctIndex: (responses.length - shift) % responses.length,
           learningPoint: recipe.correctBehaviour,
