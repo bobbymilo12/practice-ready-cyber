@@ -1,4 +1,4 @@
-import { reviewKey } from "../src/lib/practice-change-tracking.ts";
+import { approveReviewedQuestion, reviewKey } from "../src/lib/practice-change-tracking.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
@@ -433,6 +433,10 @@ test("API authenticates review decisions, retains history and flags a subsequent
   assert.equal((await call({ action: "save-practice", state, version: 1 })).status, 200);
   const next = structuredClone(tables.practices[0].state);
   next.practiceData = tables.practice_data.oak;
+  next.modules[0] = next.modules[0].scenarios.reduce(
+    (m, q) => approveReviewedQuestion(m, q.id, next.practiceData),
+    next.modules[0],
+  );
   const module = next.modules[0];
   module.reviewConfirmations = [
     {

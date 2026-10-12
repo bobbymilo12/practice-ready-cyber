@@ -1256,11 +1256,41 @@ export function regenerateConfiguredScenario(
 ): Module {
   const current = module.scenarios.find((s) => s.id === scenarioId);
   // Procedure-based exercises keep their immutable source; new modules use updated knowledge.
-  if (current?.provenance?.kind === "sequence") return module;
-  if (!module.settings) return module;
+  if (current?.provenance?.kind === "sequence") {
+    if (!module.needsReview) return module;
+    const requestId = current.provenance.snapshot.localProcedure?.requestId;
+    const source = inspectLocalProcedureSequences(practice).candidates.find(
+      (s) => s.provenance.snapshot.localProcedure?.requestId === requestId,
+    );
+    if (!source)
+      throw new Error(
+        "No eligible confirmed procedure is available for this question. Review the procedure in Practice Setup, or delete this question.",
+      );
+    const replacement =
+      current.kind === "mcq" ? localProcedureApplication(practice, source)! : source;
+    return {
+      ...module,
+      scenarios: module.scenarios.map((s) =>
+        s.id === scenarioId ? { ...replacement, id: scenarioId, status: "draft" } : s,
+      ),
+    };
+  }
   if (!current) return module;
   if (current.kind === "matching") {
-    // Re-presentation uses the original evidence; live setup cannot rewrite this question.
+    if (module.needsReview) {
+      const replacement = roleMatchingScenario(practice);
+      if (!replacement)
+        throw new Error(
+          "Current role configuration cannot generate this matching question. Review Practice Setup, or delete this question.",
+        );
+      return {
+        ...module,
+        scenarios: module.scenarios.map((s) =>
+          s.id === scenarioId ? { ...replacement, id: scenarioId, status: "draft" } : s,
+        ),
+      };
+    }
+    // Re-presentation uses the original evidence outside a practice-change review.
     return {
       ...module,
       needsReview: module.published || module.needsReview,
@@ -1275,6 +1305,7 @@ export function regenerateConfiguredScenario(
       ),
     };
   }
+  if (!module.settings) return module;
   if (current.provenance) {
     if (current.kind !== "mcq") return module;
     const replacement = regenerateAppointmentCore(

@@ -1,10 +1,9 @@
-import { reviewKey } from "./practice-change-tracking.ts";
+import { pendingQuestionReviews, reviewKey } from "./practice-change-tracking.ts";
 import type { AppState } from "./store";
 
 export type ManagerAction =
-  | { kind: "publish"; moduleId: string; note?: string; reviewKey?: string }
+  | { kind: "publish"; moduleId: string; reviewKey?: string }
   | { kind: "delete-draft"; moduleId: string }
-  | { kind: "confirm-review"; moduleId: string; note: string; reviewKey: string }
   | { kind: "merge"; moduleId: string; moduleIds: string[]; title: string }
   | { kind: "assign" | "reassign"; moduleId: string; traineeId: string };
 export const managerActionKey = (action: ManagerAction) =>
@@ -59,39 +58,36 @@ export function managerActionPatch(
       currentDraftId: action.moduleId,
     };
   }
+  if ((action as { kind: string }).kind === "confirm-review")
+    throw new Error("Review the questions and publish the reviewed module.");
   const module = state.modules.find((m) => m.id === action.moduleId);
   if (!module) {
     if (confirmedFrom) return {};
     throw new Error("Module not found. Reload your practice and try again.");
   }
-  if (action.kind === "publish" || action.kind === "confirm-review") {
+  if (action.kind === "publish") {
     const reviewed = confirmedFrom?.modules.find((m) => m.id === module.id) ?? module;
     const practice = confirmedFrom?.practiceData ?? state.practiceData;
     if (
       !confirmedFrom &&
       (!module.scenarios.length || module.scenarios.some((s) => s.status !== "approved"))
     )
-      throw new Error("Approve every scenario before publishing or confirming existing training.");
-    if (action.kind === "confirm-review" && (!reviewed.needsReview || !reviewed.published))
-      throw new Error(
-        "This module no longer requires a review decision. Reopen its review screen.",
-      );
+      throw new Error("Approve every scenario before publishing.");
     if (reviewed.needsReview) {
       if (
-        !action.note?.trim() ||
-        action.note.length > 1000 ||
-        action.reviewKey !== reviewKey(reviewed, practice)
+        (!confirmedFrom && pendingQuestionReviews(reviewed, practice).length > 0) ||
+        (action.reviewKey !== undefined && action.reviewKey !== reviewKey(reviewed, practice))
       )
         throw new Error(
-          "Review the current practice information and record a decision before confirming.",
+          "Approve the questions requiring review against the current practice information before republishing.",
         );
       const changed = reviewKey(module, state.practiceData) !== reviewKey(reviewed, practice);
       const actor = confirmedFrom?.account ?? state.account;
       const record = {
         id: identity.id,
-        decision: action.kind === "confirm-review" ? ("unchanged" as const) : ("updated" as const),
-        note: action.note.trim(),
-        reviewKey: action.reviewKey,
+        decision: "updated" as const,
+        note: "",
+        reviewKey: reviewKey(reviewed, practice),
         by: actor?.id ?? "",
         name: actor?.name ?? "",
         at: new Date(identity.at).toISOString(),

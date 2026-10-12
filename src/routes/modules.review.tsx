@@ -1,4 +1,9 @@
-import { recordedSourceChanges, reviewKey } from "@/lib/practice-change-tracking";
+import {
+  pendingQuestionReviews,
+  questionReviewScope,
+  recordedSourceChanges,
+  reviewKey,
+} from "@/lib/practice-change-tracking";
 import { useManagerAction } from "@/hooks/use-manager-action";
 import { readProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { orderKey, orderLabels } from "@/lib/sequence";
@@ -18,9 +23,6 @@ function Review() {
   const { id } = Route.useSearch();
   const nav = useNavigate();
   const action = useManagerAction();
-  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
-  const [reviewNote, setReviewNote] = useState("");
-  const [acknowledgedKey, setAcknowledgedKey] = useState("");
   const module = useApp((s) => s.modules.find((m) => m.id === id));
   const { practiceData, approveScenario, deleteScenario, regenerateScenario, updateScenario } =
     useApp();
@@ -52,17 +54,15 @@ function Review() {
     module.scenarios.length > 0 && module.scenarios.every((s) => s.status === "approved");
 
   const currentReviewKey = reviewKey(module, practiceData);
-  const decisionReady =
-    reviewAcknowledged &&
-    acknowledgedKey === currentReviewKey &&
-    !!reviewNote.trim() &&
-    reviewNote.length <= 1000;
+  const pendingReviews = pendingQuestionReviews(module, practiceData);
+  const reviewScope = questionReviewScope(module);
+  const decisionReady = pendingReviews.length === 0;
   const publish = () =>
     void action.run(
       {
         kind: "publish",
         moduleId: module.id,
-        ...(module.needsReview ? { note: reviewNote.trim(), reviewKey: currentReviewKey } : {}),
+        ...(module.needsReview ? { reviewKey: currentReviewKey } : {}),
       },
       () => nav({ to: "/dashboard" }),
     );
@@ -100,7 +100,7 @@ function Review() {
               {action.pending?.kind === "publish"
                 ? "Publishing…"
                 : module.needsReview
-                  ? "Publish reviewed training"
+                  ? "Publish reviewed module"
                   : "Publish module"}
             </button>
             <button
@@ -128,11 +128,12 @@ function Review() {
                 "This training changed or may contain outdated practice information."}
             </p>
             <p className="mt-3 text-sm">
-              Review the questions below against your current practice information. Update or
-              regenerate them as needed, then approve and publish the reviewed training. You can
-              also explicitly confirm that the existing training remains correct. Source highlights
-              use recorded links only; review all questions, including those without a source
-              highlight.
+              {reviewScope.broad
+                ? "We cannot reliably identify every affected question. Review and approve all questions before republishing this module. Highlights show recorded source links only."
+                : "We’ve flagged the questions that may be affected below. Review and approve these questions before republishing the module."}
+            </p>
+            <p className="mt-2 text-sm">
+              {pendingReviews.length} questions awaiting review approval.
             </p>
             <p className="mt-3 text-sm">
               Existing attempts keep their original questions. Reassign corrected training to staff
@@ -141,46 +142,6 @@ function Review() {
             <Link to="/data-hub" className="mt-3 inline-block text-sm text-primary underline">
               View current practice information
             </Link>
-            <label className="mt-4 block text-sm">
-              Review decision notes
-              <textarea
-                value={reviewNote}
-                maxLength={1000}
-                onChange={(e) => setReviewNote(e.target.value)}
-                className="mt-2 block w-full rounded-xl border bg-background p-3"
-                placeholder="Explain what you checked, changed, or why the existing training is still correct."
-              />
-            </label>
-            <label className="mt-3 flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={reviewAcknowledged && acknowledgedKey === currentReviewKey}
-                onChange={(e) => {
-                  setReviewAcknowledged(e.target.checked);
-                  setAcknowledgedKey(currentReviewKey);
-                }}
-              />
-              I have reviewed these questions against the current practice information.
-            </label>
-            <button
-              disabled={action.saving || !module.published || !allApproved || !decisionReady}
-              onClick={() =>
-                void action.run(
-                  {
-                    kind: "confirm-review",
-                    moduleId: module.id,
-                    note: reviewNote.trim(),
-                    reviewKey: currentReviewKey,
-                  },
-                  () => nav({ to: "/dashboard" }),
-                )
-              }
-              className="mt-4 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-40"
-            >
-              {action.pending?.kind === "confirm-review"
-                ? "Saving confirmation…"
-                : "Confirm existing training is still correct"}
-            </button>
           </Card>
         )}
         {!!module.reviewConfirmations?.length && (
@@ -252,6 +213,8 @@ function Review() {
               appointmentBooking={module.topicKey === "appointment-booking"}
               key={s.id}
               scenario={s}
+              reviewRequired={pendingReviews.includes(s.id)}
+              reviewingChanges={!!module.needsReview}
               sourceChanges={
                 module.needsReview
                   ? recordedSourceChanges(s, module.reviewChanges ?? []).map(
@@ -269,9 +232,11 @@ function Review() {
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
           <div className="text-sm text-muted-foreground">
-            {allApproved
-              ? "All scenarios approved — ready to publish to staff."
-              : "Approve every scenario above before publishing."}
+            {pendingReviews.length
+              ? "Review and approve the required questions before republishing."
+              : allApproved
+                ? "All scenarios approved — ready to publish to staff."
+                : "Approve every scenario above before publishing."}
           </div>
           <button
             onClick={publish}
@@ -281,7 +246,7 @@ function Review() {
             {action.pending?.kind === "publish"
               ? "Publishing…"
               : module.needsReview
-                ? "Publish reviewed training"
+                ? "Publish reviewed module"
                 : "Publish module"}
           </button>
         </div>
@@ -292,6 +257,8 @@ function Review() {
 
 function ScenarioCard({
   sourceChanges = [],
+  reviewRequired = false,
+  reviewingChanges = false,
   appointmentBooking,
   scenario,
   onApprove,
@@ -300,6 +267,8 @@ function ScenarioCard({
   onSave,
 }: {
   sourceChanges?: string[];
+  reviewRequired?: boolean;
+  reviewingChanges?: boolean;
   appointmentBooking?: boolean;
   scenario: Scenario;
   onApprove: () => void;
@@ -308,6 +277,7 @@ function ScenarioCard({
   onSave: (s: Scenario) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [regenerationError, setRegenerationError] = useState("");
   const [draft, setDraft] = useState<Scenario>(scenario);
   const solution =
     scenario.kind === "matching" && scenario.pairingMode === "one_to_one"
@@ -322,7 +292,10 @@ function ScenarioCard({
     <Card>
       {sourceChanges.length > 0 && (
         <div className="mb-3 rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
-          <p className="font-semibold">Recorded source changed — check this question</p>
+          <p className="font-semibold">
+            {reviewRequired ? "Needs review" : "Reviewed"} — Practice information used by this
+            question has changed.
+          </p>
           <ul className="mt-1 list-disc pl-5">
             {sourceChanges.map((reason) => (
               <li key={reason}>{reason}</li>
@@ -351,8 +324,10 @@ function ScenarioCard({
             <h3 className="mt-1 font-display text-lg font-semibold">{scenario.title}</h3>
           )}
         </div>
-        <Badge tone={scenario.status === "approved" ? "approved" : "draft"}>
-          {scenario.status === "approved" ? "Approved" : "Requires manager review"}
+        <Badge tone={scenario.status === "approved" && !reviewRequired ? "approved" : "draft"}>
+          {scenario.status === "approved" && !reviewRequired
+            ? "Approved"
+            : "Requires manager review"}
         </Badge>
       </div>
 
@@ -467,8 +442,8 @@ function ScenarioCard({
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
-            Mappings are retained from generation. To use changed role responsibilities, generate a
-            new module.
+            Mappings are retained from generation. During a practice-change review, Regenerate uses
+            the current confirmed role responsibilities.
           </p>
         </div>
       )}
@@ -487,8 +462,8 @@ function ScenarioCard({
             </p>
           )}
           <p className="text-muted-foreground">
-            Updated procedure information is used when a new module is generated. This exercise
-            retains its saved procedure.
+            This exercise retains its saved procedure. During a practice-change review, Regenerate
+            uses the current confirmed procedure if it is eligible.
           </p>
         </div>
       )}
@@ -560,6 +535,11 @@ function ScenarioCard({
         />
       </div>
 
+      {regenerationError && (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          {regenerationError}
+        </p>
+      )}
       <div className="mt-5 flex flex-wrap gap-2">
         {editing ? (
           <>
@@ -586,7 +566,7 @@ function ScenarioCard({
           <>
             <button
               onClick={onApprove}
-              disabled={scenario.status === "approved"}
+              disabled={scenario.status === "approved" && !reviewRequired}
               className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-40"
             >
               Approve
@@ -601,13 +581,24 @@ function ScenarioCard({
               Edit
             </button>
             <button
-              disabled={scenario.provenance?.kind === "sequence"}
+              disabled={scenario.provenance?.kind === "sequence" && !reviewingChanges}
               title={
                 scenario.provenance?.kind === "sequence"
-                  ? "Generate a new module to use updated procedure information."
+                  ? reviewingChanges
+                    ? "Regenerate from the current confirmed procedure."
+                    : "Generate a new module to use updated procedure information."
                   : undefined
               }
-              onClick={onRegenerate}
+              onClick={() => {
+                setRegenerationError("");
+                try {
+                  onRegenerate();
+                } catch (error) {
+                  setRegenerationError(
+                    error instanceof Error ? error.message : "Could not regenerate this question.",
+                  );
+                }
+              }}
               className="rounded-lg border border-border px-3 py-2 text-sm"
             >
               Regenerate
@@ -616,7 +607,7 @@ function ScenarioCard({
               onClick={onDelete}
               className="ml-auto rounded-lg border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/5"
             >
-              Delete draft
+              Delete
             </button>
           </>
         )}

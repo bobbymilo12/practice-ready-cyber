@@ -140,6 +140,7 @@ export interface Module {
   needsReview?: boolean;
   reviewReason?: string;
   reviewChanges?: ReviewChange[];
+  reviewedQuestions?: Record<string, string>;
   reviewConfirmations?: ReviewConfirmation[];
   packageId?: string;
 }

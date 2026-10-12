@@ -170,7 +170,12 @@ Deno.serve(async (request) => {
               modules: modules
                 .filter((m) => m.published && mine.some((a) => a.moduleId === m.id))
                 .map(
-                  ({ reviewConfirmations: _history, reviewChanges: _changes, ...module }) => module,
+                  ({
+                    reviewConfirmations: _history,
+                    reviewChanges: _changes,
+                    reviewedQuestions: _approvals,
+                    ...module
+                  }) => module,
                 ),
               packages: (state.packages ?? []).filter((p: { moduleIds?: string[] }) =>
                 (p.moduleIds ?? []).some((moduleId) => mine.some((a) => a.moduleId === moduleId)),

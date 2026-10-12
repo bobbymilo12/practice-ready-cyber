@@ -248,11 +248,57 @@ test("manager review shows source/version/context, suppresses empty quotes and d
   const source = readFileSync(new URL("../src/routes/modules.review.tsx", import.meta.url), "utf8");
   assert.ok(source.includes("Manager-confirmed practice procedure"));
   assert.ok(source.includes("scenario.provenance.snapshot.localProcedure.appliesWhen"));
-  assert.ok(source.includes('disabled={scenario.provenance?.kind === "sequence"}'));
+  assert.ok(
+    source.includes('disabled={scenario.provenance?.kind === "sequence" && !reviewingChanges}'),
+  );
   const editor = readFileSync(
     new URL("../src/components/LocalProcedures.tsx", import.meta.url),
     "utf8",
   );
   assert.ok(editor.includes('<option value="unassessed">Not sure / not specified</option>'));
   assert.ok(editor.includes('<option value="required_linear">'));
+});
+
+test("review regeneration uses the exact current procedure and leaves existing attempts untouched", () => {
+  const { p, record, target } = fixture();
+  const scenario = { ...localProcedureSequence(p)!, status: "approved" as const };
+  const module: Module = {
+    id: "review-module",
+    title: "Booking",
+    type: "Booking",
+    topicKey: "appointment-booking",
+    published: true,
+    createdAt: 1,
+    scenarios: [scenario],
+  };
+  const session = startSession(
+    module,
+    {
+      id: "assignment",
+      moduleId: module.id,
+      traineeId: "trainee",
+      assignedAt: 1,
+      status: "assigned",
+    },
+    "existing-attempt",
+  );
+  const frozen = JSON.stringify(session);
+  const draft = procedureDraft(record);
+  draft.steps[0].text = "Open the updated reception form.";
+  p.localProcedures![target.id] = confirmProcedure(target, record, draft, "manager");
+  const regenerated = regenerateConfiguredScenario(
+    { ...module, needsReview: true },
+    scenario.id,
+    p,
+  );
+  assert.equal(regenerated.scenarios[0].status, "draft");
+  assert.equal(regenerated.scenarios[0].id, scenario.id);
+  assert.equal(regenerated.scenarios[0].provenance?.kind, "sequence");
+  assert.equal(regenerated.scenarios[0].provenance?.sourceVersion, record.version + 1);
+  assert.equal(JSON.stringify(session), frozen);
+  delete p.localProcedures![target.id];
+  assert.throws(
+    () => regenerateConfiguredScenario({ ...module, needsReview: true }, scenario.id, p),
+    /No eligible/,
+  );
 });

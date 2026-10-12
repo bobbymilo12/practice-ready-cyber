@@ -253,7 +253,12 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
               modules: state.modules
                 .filter((m) => assignments.some((a) => a.moduleId === m.id))
                 .map(
-                  ({ reviewConfirmations: _history, reviewChanges: _changes, ...module }) => module,
+                  ({
+                    reviewConfirmations: _history,
+                    reviewChanges: _changes,
+                    reviewedQuestions: _approvals,
+                    ...module
+                  }) => module,
                 ),
               packages: state.packages,
               assignments,

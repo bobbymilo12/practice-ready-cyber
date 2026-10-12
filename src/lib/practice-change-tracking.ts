@@ -235,6 +235,74 @@ export function recordedSourceChanges(scenario: Scenario, changes: ReviewChange[
     ),
   );
 }
+/** Missing links require review of the whole module, never a guessed question dependency. */
+export function questionReviewScope(module: Module) {
+  const changes = module.reviewChanges ?? [];
+  const broad =
+    !!module.needsReview &&
+    (!changes.length ||
+      changes.some(
+        (change) =>
+          !module.scenarios.length ||
+          module.scenarios.some(
+            (scenario) =>
+              usesChange(scenario, change) && !recordedSourceChanges(scenario, [change]).length,
+          ),
+      ));
+  const ids = module.needsReview
+    ? module.scenarios
+        .filter((s) => broad || recordedSourceChanges(s, changes).length)
+        .map((s) => s.id)
+    : [];
+  return { broad, ids };
+}
+export function questionReviewKey(module: Module, scenario: Scenario, practice: PracticeData) {
+  return reviewKey(
+    {
+      ...module,
+      title: stableValue({
+        title: module.title,
+        changes: module.reviewChanges,
+        reason: module.reviewReason,
+      }),
+      scenarios: [{ ...scenario, status: "draft" }],
+    },
+    practice,
+  );
+}
+export function pendingQuestionReviews(module: Module, practice: PracticeData): string[] {
+  const { ids } = questionReviewScope(module);
+  return module.scenarios
+    .filter(
+      (s) =>
+        ids.includes(s.id) &&
+        (s.status !== "approved" ||
+          module.reviewedQuestions?.[s.id] !== questionReviewKey(module, s, practice)),
+    )
+    .map((s) => s.id);
+}
+export function approveReviewedQuestion(
+  module: Module,
+  scenarioId: string,
+  practice: PracticeData,
+): Module {
+  const scenario = module.scenarios.find((s) => s.id === scenarioId);
+  if (!scenario) return module;
+  return {
+    ...module,
+    scenarios: module.scenarios.map((s) =>
+      s.id === scenarioId ? { ...s, status: "approved" } : s,
+    ),
+    ...(module.needsReview
+      ? {
+          reviewedQuestions: {
+            ...module.reviewedQuestions,
+            [scenarioId]: questionReviewKey(module, scenario, practice),
+          },
+        }
+      : {}),
+  };
+}
 export function flagPracticeChanges(
   before: PracticeData | undefined,
   after: PracticeData,
@@ -267,12 +335,19 @@ export function flagPracticeChanges(
     const reviewReason = reviewChanges.map((change) => change.reason).join("\n");
     if (
       module.needsReview &&
+      !Object.keys(module.reviewedQuestions ?? {}).length &&
       stableValue(module.reviewChanges) === stableValue(reviewChanges) &&
       module.reviewReason === reviewReason
     )
       return module;
     changed = true;
-    return { ...module, needsReview: true, reviewChanges, reviewReason };
+    return {
+      ...module,
+      needsReview: true,
+      reviewChanges,
+      reviewReason,
+      reviewedQuestions: undefined,
+    };
   });
   return changed ? result : modules;
 }
@@ -298,13 +373,26 @@ export function enforceReviewDecisions(
     if (!old?.needsReview || added.length !== 1) throw new Error("Invalid review confirmation.");
     if (previousPractice && practiceChanges(previousPractice, practice).length)
       throw new Error("Save practice changes before reviewing and confirming affected training.");
+    if (
+      pendingQuestionReviews(
+        {
+          ...module,
+          needsReview: true,
+          reviewChanges: old.reviewChanges,
+          reviewReason: old.reviewReason,
+        },
+        practice,
+      ).length ||
+      module.scenarios.some((s) => s.status !== "approved") ||
+      !module.scenarios.length
+    )
+      throw new Error("Approve the questions requiring review before republishing.");
     const decision = added[0];
     if (
       !["unchanged", "updated"].includes(decision.decision) ||
       typeof decision.id !== "string" ||
       !decision.id ||
       typeof decision.note !== "string" ||
-      !decision.note.trim() ||
       decision.note.length > 1000 ||
       decision.reviewKey !== reviewKey(old, practice)
     )

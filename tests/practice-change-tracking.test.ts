@@ -236,12 +236,15 @@ test("review flags block new and resumed training until a recorded explicit deci
         { kind: "publish", moduleId: module.id },
         { id: "decision", at: 1 },
       ),
-    /record a decision/,
+    /Approve/,
+  );
+  state.modules[0] = module.scenarios.reduce(
+    (m, q) => tracking.approveReviewedQuestion(m, q.id, next),
+    module,
   );
   const action = {
-    kind: "confirm-review" as const,
+    kind: "publish" as const,
     moduleId: module.id,
-    note: "Checked the saved questions: no turnaround is promised.",
     reviewKey: tracking.reviewKey(module, next),
   };
   const patch = managerActionPatch(state, action, { id: "decision", at: 1 });
@@ -277,13 +280,16 @@ test("the server refuses boolean dismissal, authenticates decisions and retains 
       ),
     /decision/,
   );
-  const state = stateFor(next, [module]);
+  const reviewed = module.scenarios.reduce(
+    (m, q) => tracking.approveReviewedQuestion(m, q.id, next),
+    module,
+  );
+  const state = stateFor(next, [reviewed]);
   const candidate = managerActionPatch(
     state,
     {
-      kind: "confirm-review",
+      kind: "publish",
       moduleId: module.id,
-      note: "All questions checked.",
       reviewKey: tracking.reviewKey(module, next),
     },
     { id: "decision", at: 1 },
@@ -348,6 +354,17 @@ test("actual store setters cover staff overrides, roles, bookings and prescripti
   assert.equal(store.getState().modules[0].needsReview, true);
   store.setState({ modules: [legacy()] });
   store.getState().removeStaff(employee.id);
+  assert.equal(store.getState().modules[0].needsReview, true);
+  const required = tracking.pendingQuestionReviews(
+    store.getState().modules[0],
+    store.getState().practiceData,
+  );
+  assert.ok(required.length);
+  required.forEach((id) => store.getState().approveScenario("standalone", id));
+  assert.deepEqual(
+    tracking.pendingQuestionReviews(store.getState().modules[0], store.getState().practiceData),
+    [],
+  );
   assert.equal(store.getState().modules[0].needsReview, true);
   assert.throws(() => store.getState().clearReviewFlag("standalone"), /decision/);
   store.getState().publishModule("standalone");
@@ -452,4 +469,73 @@ test("question review highlights require recorded source links; unknown dependen
     },
   ];
   assert.deepEqual(tracking.recordedSourceChanges(matching, roleChanges), roleChanges);
+});
+
+test("reliable source links require targeted approval; missing provenance requires broader review", () => {
+  const practice = withProcedure();
+  const sequence = { ...localProcedureSequence(practice)!, status: "approved" as const };
+  const core = appointmentCorePool({
+    topicKey: "appointment-booking",
+    practice,
+    settings: defaultModuleSettings(),
+  })[0];
+  core.status = "approved";
+  const original = { ...legacy(), scenarios: [sequence, core] };
+  const next = structuredClone(practice);
+  if (next.localProcedures!.utis.status !== "configured") throw Error("fixture");
+  next.localProcedures!.utis.steps[0].text = "Open the updated form.";
+  let flagged = tracking.flagPracticeChanges(practice, next, [original])[0];
+  assert.deepEqual(tracking.questionReviewScope(flagged), { broad: false, ids: [sequence.id] });
+  assert.deepEqual(tracking.pendingQuestionReviews(flagged, next), [sequence.id]);
+  flagged = tracking.approveReviewedQuestion(flagged, sequence.id, next);
+  assert.deepEqual(tracking.pendingQuestionReviews(flagged, next), []);
+  assert.equal(flagged.needsReview, true, "approval alone does not resume training");
+  const edited = {
+    ...flagged,
+    scenarios: flagged.scenarios.map((q) =>
+      q.id === sequence.id ? { ...q, question: "Edited question" } : q,
+    ),
+  };
+  assert.deepEqual(tracking.pendingQuestionReviews(edited, next), [sequence.id]);
+  const anotherChange = { ...next, hours: "Changed hours" };
+  assert.ok(tracking.pendingQuestionReviews(flagged, anotherChange).length);
+  const removed = { ...flagged, scenarios: [core] };
+  assert.deepEqual(tracking.pendingQuestionReviews(removed, next), []);
+  const broader = { ...flagged, scenarios: [...flagged.scenarios, ...legacy("unknown").scenarios] };
+  assert.equal(tracking.questionReviewScope(broader).broad, true);
+  assert.ok(tracking.pendingQuestionReviews(broader, next).includes(core.id));
+  const repeated = tracking.flagPracticeChanges(practice, next, [flagged])[0];
+  assert.equal(
+    repeated.reviewedQuestions,
+    undefined,
+    "a fresh source change cannot reuse old approvals",
+  );
+  assert.throws(
+    () =>
+      tracking.enforceReviewDecisions(
+        [broader],
+        [
+          {
+            ...broader,
+            needsReview: false,
+            reviewConfirmations: [
+              {
+                id: "bypass",
+                decision: "updated",
+                note: "",
+                reviewKey: tracking.reviewKey(broader, next),
+                by: "manager",
+                name: "Manager",
+                at: "",
+                reasons: [],
+              },
+            ],
+          },
+        ],
+        next,
+        { id: "manager", name: "Manager" },
+        new Date().toISOString(),
+      ),
+    /Approve/,
+  );
 });

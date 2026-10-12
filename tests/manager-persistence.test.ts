@@ -97,6 +97,14 @@ async function harness(assigned = false, published = assigned) {
   const useApp = require("zustand").create(() => ({
     ...state,
     account: null,
+    approveScenario: (moduleId: string, scenarioId: string) =>
+      useApp.setState((s: any) => ({
+        modules: s.modules.map((m: any) =>
+          m.id === moduleId
+            ? changeTracking.approveReviewedQuestion(m, scenarioId, s.practiceData)
+            : m,
+        ),
+      })),
     trainees: [],
     results: [],
   }));
@@ -449,48 +457,25 @@ test("ordinary debounced saving stays functional during and after a confirmed ac
   assert.equal(h.stored.practiceData.hours, "09:00–17:00");
 });
 
-for (const kind of ["delete-draft", "confirm-review"] as const)
-  test(`${kind} remains unchanged after failure and applies only after a successful retry`, async () => {
-    const h = await harness();
-    if (kind === "confirm-review") {
-      h.useApp.setState((s: any) => ({
-        modules: s.modules.map((m: any) => ({ ...m, published: true, needsReview: true })),
-      }));
-      const save = h.backend.flushPractice();
-      await spin(() => h.requests.length === 1);
-      h.succeed(0);
-      await save;
-    }
-    const offset = h.requests.length;
-    const action =
-      kind === "confirm-review"
-        ? {
-            kind,
-            moduleId: "draft",
-            note: "Checked the current practice rules; this module remains correct.",
-            reviewKey: changeTracking.reviewKey(
-              h.useApp.getState().modules[0],
-              h.useApp.getState().practiceData,
-            ),
-          }
-        : { kind, moduleId: "draft" };
-    const original = JSON.stringify(h.useApp.getState().modules);
-    const failed = h.backend.confirmManagerAction(action);
-    await spin(() => h.requests.length === offset + 1);
-    assert.equal(JSON.stringify(h.useApp.getState().modules), original);
-    h.fail(offset);
-    await assert.rejects(failed, /Save rejected/);
-    assert.equal(JSON.stringify(h.useApp.getState().modules), original);
-    const retried = h.backend.confirmManagerAction(action);
-    await spin(() => h.requests.length === offset + 2);
-    h.succeed(offset + 1);
-    await retried;
-    if (kind === "delete-draft") {
-      assert.equal(h.useApp.getState().modules.length, 0);
-      assert.deepEqual(h.useApp.getState().packages[0].moduleIds, []);
-      assert.equal(h.useApp.getState().currentDraftId, null);
-    } else assert.equal(h.useApp.getState().modules[0].needsReview, false);
-  });
+test("delete-draft remains unchanged after failure and applies only after a successful retry", async () => {
+  const h = await harness();
+  const offset = h.requests.length;
+  const action = { kind: "delete-draft", moduleId: "draft" };
+  const original = JSON.stringify(h.useApp.getState().modules);
+  const failed = h.backend.confirmManagerAction(action);
+  await spin(() => h.requests.length === offset + 1);
+  assert.equal(JSON.stringify(h.useApp.getState().modules), original);
+  h.fail(offset);
+  await assert.rejects(failed, /Save rejected/);
+  assert.equal(JSON.stringify(h.useApp.getState().modules), original);
+  const retried = h.backend.confirmManagerAction(action);
+  await spin(() => h.requests.length === offset + 2);
+  h.succeed(offset + 1);
+  await retried;
+  assert.equal(h.useApp.getState().modules.length, 0);
+  assert.deepEqual(h.useApp.getState().packages[0].moduleIds, []);
+  assert.equal(h.useApp.getState().currentDraftId, null);
+});
 
 test("a failure while flushing ordinary edits never sends the consequential action", async () => {
   const h = await harness();
@@ -607,146 +592,106 @@ for (const succeeds of [true, false])
     }
   });
 
-test("review UI requires an explicit decision and saves authenticated confirmation before clearing the flag", async () => {
-  const h = await harness(true);
-  h.useApp.setState((s: any) => ({
-    practiceData: { ...s.practiceData, repeatTurnaround: "72 working hours" },
-  }));
+async function flushReview(h: Awaited<ReturnType<typeof harness>>) {
+  const index = h.requests.length;
   const save = h.backend.flushPractice();
-  await spin(() => h.requests.length === 1);
-  h.succeed(0);
+  await spin(() => h.requests.length === index + 1);
+  h.succeed(index);
   await save;
-  assert.equal(h.useApp.getState().modules[0].needsReview, true);
-  const dashboard = h.ui("dashboard");
-  assert.equal(dashboard.buttons("Dismiss").length, 0);
-  const ui = h.ui("review");
-  const button = "Confirm existing training is still correct";
-  assert.equal(ui.button(button).props.disabled, true);
-  ui.render()
-    .find((node) => node.type === "textarea")
-    .props.onChange({ target: { value: "Checked each question: no old turnaround is promised." } });
-  ui.render()
-    .find((node) => node.type === "input" && node.props.type === "checkbox")
-    .props.onChange({ target: { checked: true } });
-  const confirm = ui.button(button);
-  assert.equal(confirm.props.disabled, false);
-  confirm.props.onClick();
-  confirm.props.onClick();
-  await spin(() => h.requests.length === 2);
-  assert.equal(h.useApp.getState().modules[0].needsReview, true);
-  assert.equal(h.useApp.getState().modules[0].reviewConfirmations, undefined);
-  assert.equal(ui.navigation.length, 0);
-  h.requests[1].body.state.modules[0].reviewConfirmations[0].by = "forged";
-  h.succeed(1);
-  await spin(() => ui.navigation.length === 1);
-  const confirmed = h.useApp.getState().modules[0];
-  assert.equal(confirmed.needsReview, false);
-  assert.equal(confirmed.reviewConfirmations[0].by, "manager");
-  assert.equal(confirmed.reviewConfirmations[0].decision, "unchanged");
-  assert.ok(
-    confirmed.reviewConfirmations[0].reasons.some((reason: string) =>
-      reason.includes("Prescription turnaround"),
+}
+function approveAll(h: Awaited<ReturnType<typeof harness>>) {
+  h.useApp.setState((s: any) => ({
+    modules: s.modules.map((m: any) =>
+      m.scenarios.reduce(
+        (module: any, q: any) =>
+          changeTracking.approveReviewedQuestion(module, q.id, s.practiceData),
+        m,
+      ),
     ),
-  );
-});
-
-test("failed review confirmation retains the warning and never adds a local confirmation record", async () => {
+  }));
+}
+async function flaggedReview() {
   const h = await harness(true);
   h.useApp.setState((s: any) => ({
     practiceData: { ...s.practiceData, repeatTurnaround: "72 working hours" },
   }));
-  const save = h.backend.flushPractice();
-  await spin(() => h.requests.length === 1);
-  h.succeed(0);
-  await save;
+  await flushReview(h);
+  return h;
+}
+test("review UI requires question approval, not notes or checkboxes, and waits for publication", async () => {
+  const h = await flaggedReview();
+  const ui = h.ui("review");
+  assert.equal(ui.buttons("Confirm existing training is still correct").length, 0);
+  assert.ok(!ui.render().some((n) => n.type === "input" && n.props.type === "checkbox"));
+  assert.ok(!ui.render().some((n) => n.type === "textarea"));
+  assert.equal(ui.button("Publish reviewed module").props.disabled, true);
+  await assert.rejects(
+    h.backend.confirmManagerAction({ kind: "publish", moduleId: "draft" }),
+    /Approve/,
+  );
+  const card = ui.render().find((n) => typeof n.type === "function" && n.props.scenario);
+  assert.equal(card.props.reviewRequired, true);
+  const approve = elements(card.type(card.props)).find(
+    (n) => n.type === "button" && n.props.children === "Approve",
+  );
+  assert.equal(approve.props.disabled, false);
+  approve.props.onClick();
+  await flushReview(h);
+  assert.equal(ui.button("Publish reviewed module").props.disabled, false);
+  const index = h.requests.length;
+  const publish = ui.button("Publish reviewed module");
+  publish.props.onClick();
+  publish.props.onClick();
+  await spin(() => h.requests.length === index + 1);
+  assert.equal(h.useApp.getState().modules[0].needsReview, true);
+  assert.equal(ui.navigation.length, 0);
+  h.requests[index].body.state.modules[0].reviewConfirmations[0].by = "forged";
+  h.succeed(index);
+  await spin(() => ui.navigation.length === 1);
   const module = h.useApp.getState().modules[0];
-  const action = {
-    kind: "confirm-review",
-    moduleId: module.id,
-    note: "Checked all questions.",
-    reviewKey: changeTracking.reviewKey(module, h.useApp.getState().practiceData),
-  };
+  assert.equal(module.needsReview, false);
+  assert.equal(module.reviewConfirmations[0].by, "manager");
+  assert.equal(module.reviewConfirmations[0].decision, "updated");
+  assert.equal(module.reviewConfirmations[0].note, "");
+});
+test("failed reviewed publication preserves pause and approvals for retry", async () => {
+  const h = await flaggedReview();
+  approveAll(h);
+  await flushReview(h);
+  const action = { kind: "publish", moduleId: "draft" };
+  let index = h.requests.length;
   const failed = h.backend.confirmManagerAction(action);
-  await spin(() => h.requests.length === 2);
-  h.fail(1);
+  await spin(() => h.requests.length === index + 1);
+  h.fail(index);
   await assert.rejects(failed, /Save rejected/);
   assert.equal(h.useApp.getState().modules[0].needsReview, true);
   assert.equal(h.useApp.getState().modules[0].reviewConfirmations, undefined);
-  const retried = h.backend.confirmManagerAction(action);
-  await spin(() => h.requests.length === 3);
-  h.succeed(2);
-  await retried;
-  assert.equal(h.useApp.getState().modules[0].reviewConfirmations.length, 1);
+  index = h.requests.length;
+  const retry = h.backend.confirmManagerAction(action);
+  await spin(() => h.requests.length === index + 1);
+  h.succeed(index);
+  await retry;
+  assert.equal(h.useApp.getState().modules[0].needsReview, false);
 });
-
-test("a new configuration change during confirmation keeps training blocked and retains the earlier decision", async () => {
-  const h = await harness(true);
-  h.useApp.setState((s: any) => ({
-    practiceData: { ...s.practiceData, repeatTurnaround: "72 working hours" },
-  }));
-  const save = h.backend.flushPractice();
-  await spin(() => h.requests.length === 1);
-  h.succeed(0);
-  await save;
-  const module = h.useApp.getState().modules[0];
-  const action = {
-    kind: "confirm-review",
-    moduleId: module.id,
-    note: "Checked this configuration.",
-    reviewKey: changeTracking.reviewKey(module, h.useApp.getState().practiceData),
-  };
-  const operation = h.backend.confirmManagerAction(action);
-  await spin(() => h.requests.length === 2);
+test("practice changes during reviewed publication keep the module paused and invalidate approvals", async () => {
+  const h = await flaggedReview();
+  approveAll(h);
+  await flushReview(h);
+  const index = h.requests.length;
+  const operation = h.backend.confirmManagerAction({ kind: "publish", moduleId: "draft" });
+  await spin(() => h.requests.length === index + 1);
   h.useApp.setState((s: any) => ({
     practiceData: { ...s.practiceData, repeatTurnaround: "96 working hours" },
   }));
-  h.succeed(1);
+  h.succeed(index);
   await operation;
-  assert.equal(h.useApp.getState().modules[0].needsReview, true);
-  assert.equal(h.useApp.getState().modules[0].reviewConfirmations.length, 1);
-  await spin(() => h.requests.length === 3);
-  h.succeed(2);
+  const state = h.useApp.getState();
+  assert.equal(state.modules[0].needsReview, true);
+  assert.ok(changeTracking.pendingQuestionReviews(state.modules[0], state.practiceData).length);
+  await spin(() => h.requests.length === index + 2);
+  h.succeed(index + 1);
   await spin(() => !h.backend.useConnection.getState().saving);
   assert.equal(h.stored.modules[0].needsReview, true);
-});
-
-test("reviewed or updated training records its decision and waits for confirmed publication", async () => {
-  const h = await harness(true);
-  h.useApp.setState((s: any) => ({
-    practiceData: { ...s.practiceData, repeatTurnaround: "72 working hours" },
-  }));
-  let save = h.backend.flushPractice();
-  await spin(() => h.requests.length === 1);
-  h.succeed(0);
-  await save;
-  h.useApp.setState((s: any) => ({
-    modules: s.modules.map((m: any) => ({
-      ...m,
-      scenarios: m.scenarios.map((q: any) => ({
-        ...q,
-        learningPoint: "Use the newly confirmed turnaround.",
-      })),
-    })),
-  }));
-  save = h.backend.flushPractice();
-  await spin(() => h.requests.length === 2);
-  h.succeed(1);
-  await save;
-  const ui = h.ui("review");
-  ui.render()
-    .find((node) => node.type === "textarea")
-    .props.onChange({ target: { value: "Reviewed the updated turnaround question." } });
-  ui.render()
-    .find((node) => node.type === "input" && node.props.type === "checkbox")
-    .props.onChange({ target: { checked: true } });
-  ui.button("Publish reviewed training").props.onClick();
-  await spin(() => h.requests.length === 3);
-  assert.equal(h.useApp.getState().modules[0].needsReview, true);
-  assert.equal(ui.navigation.length, 0);
-  h.succeed(2);
-  await spin(() => ui.navigation.length === 1);
-  assert.equal(h.useApp.getState().modules[0].needsReview, false);
-  assert.equal(h.useApp.getState().modules[0].reviewConfirmations[0].decision, "updated");
 });
 
 test("dashboard opens published modules in scrollable manager review without attempts or progress writes", async () => {
@@ -787,11 +732,8 @@ test("dashboard opens published modules in scrollable manager review without att
       assert.match(text, /Needs review — training paused/);
       assert.match(text, /UTI Local Procedure changed/);
       assert.match(text, /Booking instructions changed/);
-      assert.equal(
-        review.button("Confirm existing training is still correct").props.disabled,
-        true,
-      );
-      assert.ok(review.buttons("Publish reviewed training").length);
+      assert.equal(review.buttons("Confirm existing training is still correct").length, 0);
+      assert.ok(review.buttons("Publish reviewed module").length);
     }
     assert.equal(JSON.stringify(h.useApp.getState()), before);
     assert.equal(JSON.stringify(h.backend.useConnection.getState().sessions), sessions);

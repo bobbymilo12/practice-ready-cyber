@@ -1,4 +1,4 @@
-import { flagPracticeChanges } from "./practice-change-tracking";
+import { approveReviewedQuestion, flagPracticeChanges } from "./practice-change-tracking";
 import type { PracticeRoleRequests } from "./role-requests";
 import type { SafeguardingRoute } from "./practice-config";
 import type { BookingConfig, PrescriptionConfig } from "./practice-config";
@@ -1599,14 +1599,7 @@ export const useApp = create<AppState>()((set, get) => ({
   approveScenario: (moduleId, scenarioId) =>
     set((state) => ({
       modules: state.modules.map((m) =>
-        m.id === moduleId
-          ? {
-              ...m,
-              scenarios: m.scenarios.map((x) =>
-                x.id === scenarioId ? { ...x, status: "approved" } : x,
-              ),
-            }
-          : m,
+        m.id === moduleId ? approveReviewedQuestion(m, scenarioId, state.practiceData) : m,
       ),
     })),
 
@@ -1614,7 +1607,14 @@ export const useApp = create<AppState>()((set, get) => ({
     set((state) => {
       const mod = state.modules.find((m) => m.id === moduleId);
       if (!mod) return state;
-      if (mod.settings)
+      if (
+        mod.settings ||
+        (mod.needsReview &&
+          mod.scenarios.some(
+            (s) =>
+              s.id === scenarioId && (s.provenance?.kind === "sequence" || s.kind === "matching"),
+          ))
+      )
         return {
           modules: state.modules.map((m) =>
             m.id === moduleId ? regenerateConfiguredScenario(m, scenarioId, state.practiceData) : m,
