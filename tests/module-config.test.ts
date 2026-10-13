@@ -123,18 +123,23 @@ test("confirmed responsibilities include individual additions, exclude removals 
         trainingLevel,
         difficulty,
       });
-      const route = questions.find((s) => s.title === "Routing: Vaccinations");
+      const route = questions.find((s) => s.localRoleRequestId === "vaccinations");
       assert.ok(route?.kind === "mcq");
-      assert.match(route.options[route.correctIndex], /Robin/);
+      assert.match(
+        route.options[route.correctIndex],
+        trainingLevel === "learn" ? /Nurse/ : /Robin/,
+      );
+      if (trainingLevel === "learn")
+        assert.doesNotMatch(route.options[route.correctIndex], /Robin/);
       assert.doesNotMatch(route.options[route.correctIndex], /Sam/);
-      const exception = questions.find((s) => s.title.startsWith("Individual exception: Sam"));
+      const exception = questions.find((s) => s.title.startsWith("Responsibilities for Sam"));
       assert.ok(exception?.kind === "mcq");
       assert.match(exception.options[exception.correctIndex], /excluded/);
       const added = generateConfiguredModule("fit-notes", "Fit notes", p, {
         ...settings,
         trainingLevel,
         difficulty,
-      }).find((s) => s.title.startsWith("Routing:"));
+      }).find((s) => !!s.localRoleRequestId);
       assert.ok(added?.kind === "mcq");
       assert.match(added.options[added.correctIndex], /Sam/);
     }
@@ -248,12 +253,12 @@ test("multi-select preserves legacy answers, has exclusive exclusion and never m
   assert.deepEqual(selectedValues(f, settings), ["NHS App"]);
   settings = selectAnswer(settings, f, "Telephone");
   const question = configuredScenarios("prescriptions", "Prescriptions", p, settings).find(
-    (s) => s.title === `${f.label}: NHS App`,
+    (s) => s.title === "Submitting a non-repeat prescription request through the NHS App",
   )!;
   assert.ok(question.kind === "mcq");
   assert.equal(
     question.options[question.correctIndex],
-    "Explain how to submit the request using NHS App",
+    "Yes, this practice accepts these requests through the NHS App.",
   );
   assert.ok(!question.options.slice(1).includes("Telephone"));
   settings = selectAnswer(settings, f, EXCLUDE_QUESTION);

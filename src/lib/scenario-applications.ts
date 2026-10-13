@@ -1,3 +1,10 @@
+import {
+  methodApplication,
+  submissionChannel,
+  readableList,
+  readableGuidance,
+  configuredAnswer,
+} from "./training-copy.ts";
 /** Small application layer: configuration supplies facts; frames supply only situations. */
 export interface ScenarioFact {
   label: string;
@@ -6,6 +13,7 @@ export interface ScenarioFact {
   condition?: string;
 }
 export interface Application extends ScenarioFact {
+  copyKind?: "allowed-channel";
   validActions?: string[];
   feedback: string;
   followUpSituation?: string;
@@ -252,34 +260,23 @@ export function applications(fact: ScenarioFact): Application[] {
     .map((item) => item.trim())
     .filter(Boolean);
   const channels = /request methods|repeat requests|submitted|requests submitted/i.test(fact.label);
-  if (
-    channels &&
-    items.length &&
-    items.every((item) =>
-      /^(NHS App|Telephone|At reception|Paper request at reception|Nominated pharmacy|Practice website \/ online form)$/.test(
-        item,
-      ),
-    )
-  )
-    return items.map((method) => ({
-      label: items.length > 1 ? `${fact.label}: ${method}` : fact.label,
-      rule: `Explain how to submit the request using ${method}`,
-      situation: `A patient wants to submit ${/prescription|repeat/i.test(fact.label + fact.situation) ? "a prescription" : /fit note/i.test(fact.label) ? "a fit note" : "an appointment"} request and asks whether they can use ${method}. What would you tell them?`,
-      feedback: `${method} is an accepted way to submit this request at this practice. Submitting a request does not confirm its outcome.`,
-    }));
+  if (channels && items.length && items.every((item) => submissionChannel(item)))
+    return items.map((method) => methodApplication(fact.label, fact.situation, method)!);
   if (/which details|activities.*shadow/i.test(fact.label) && items.length > 1)
     return items.map((item) => ({
-      label: `${fact.label}: ${item}`,
+      label: `Including ${item.charAt(0).toLowerCase()}${item.slice(1)}`,
       rule: `Include ${item.toLowerCase()}`,
-      situation: `${naturalSituation(fact.situation)} A colleague has included ${items.filter((other) => other !== item).join("; ")}, but left out ${item.toLowerCase()}. What needs changing?`,
+      situation: `${naturalSituation(fact.situation)} A colleague has included ${readableList(items.filter((other) => other !== item))}, but left out ${item.toLowerCase()}. What needs changing?`,
       feedback: `${item} is part of this practice's requirements for this task. A partial handover or plan misses this requirement.`,
     }));
   return [
     {
       ...fact,
-      rule: action(fact.rule),
+      rule: configuredAnswer(fact.label, action(fact.rule)),
       situation: naturalSituation(fact.situation),
-      feedback: `Apply this step to this type of request: ${fact.rule.replace(/[.]$/, "")}. Do not assume that a different request follows the same process.`,
+      feedback:
+        "Your practice’s guidance for this request: " +
+        readableGuidance(configuredAnswer(fact.label, fact.rule)),
     },
   ];
 }

@@ -1,3 +1,4 @@
+import { ConfirmedItems } from "./ConfirmedItems";
 import { SameDayRequests } from "./SameDayRequests";
 import { EscalationContacts } from "./EscalationContacts";
 import { useId } from "react";
@@ -6,6 +7,7 @@ import { useApp, type PracticeData } from "@/lib/store";
 import {
   bookingFor,
   prescriptionsFor,
+  prescriptionInstructions,
   sameDayProcesses,
   routineProcesses,
   prescriptionMethods,
@@ -244,10 +246,13 @@ export function ContactFields({
             </select>
           </label>
           {c.kind === "other" && (
-            <Text
+            <ConfirmedItems
               label="Other contact"
-              value={c.text}
-              onChange={(text) => onChange({ ...value, contact: { kind: "other", text } })}
+              single
+              items={c.text.trim() ? [c.text] : []}
+              onChange={(items) =>
+                onChange({ ...value, contact: { kind: "other", text: items[0] ?? "" } })
+              }
             />
           )}
         </>
@@ -375,10 +380,12 @@ export function PrescriptionFields() {
           onChange={(otherMethod) => set({ ...c, otherMethod })}
         />
       )}
-      <Instruction
-        label="Ordering instructions (including existing guidance)"
-        value={c.orderingInstruction}
-        onChange={(orderingInstruction) => set({ ...c, orderingInstruction })}
+      <ConfirmedItems
+        label="Practice-specific prescription instructions"
+        items={prescriptionInstructions(c)}
+        onChange={(orderingInstructions) =>
+          set({ ...c, orderingInstructions, orderingInstruction: orderingInstructions.join("\n") })
+        }
       />
       <SelectChoice
         radio

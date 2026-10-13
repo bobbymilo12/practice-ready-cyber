@@ -139,6 +139,7 @@ export interface PrescriptionConfig {
   methods: string[];
   otherMethod: string;
   orderingInstruction: string;
+  orderingInstructions?: string[];
   turnaround: Choice;
   turnaroundInstruction: string;
   weekends: Choice;
@@ -175,6 +176,10 @@ export function bookingFor(p: PracticeData): BookingConfig {
     routineProcess: choice(),
     routineInstruction: p.rolePolicies.gpsRoutine,
   };
+}
+export function prescriptionInstructions(c: PrescriptionConfig): string[] {
+  // An existing text block is one confirmed item, never split into inferred steps.
+  return c.orderingInstructions ?? (c.orderingInstruction.trim() ? [c.orderingInstruction] : []);
 }
 export function prescriptionsFor(p: PracticeData): PrescriptionConfig {
   if (p.prescriptionConfig) return p.prescriptionConfig;
@@ -315,7 +320,7 @@ export function practiceSummary(p: PracticeData): PracticeData {
         )
         .filter(Boolean)
         .join("; "),
-      c.orderingInstruction,
+      ...prescriptionInstructions(c),
     );
     result = {
       ...result,
@@ -381,7 +386,7 @@ export function configMissing(p: PracticeData): { booking: string[]; prescriptio
       contactMissing(b.escalation, p) ? "Escalation contact and method" : "",
     ].filter(Boolean),
     prescription: [
-      (!c.methods.length && !c.orderingInstruction.trim()) ||
+      (!c.methods.length && !prescriptionInstructions(c).length) ||
       (c.methods.includes("other") && !c.otherMethod.trim())
         ? "Prescription ordering"
         : "",
@@ -467,7 +472,7 @@ export function configReview(p: PracticeData): {
     prescription,
     "Prescription ordering",
     !!c.methods.length && (!c.methods.includes("other") || !!c.otherMethod.trim()),
-    c.orderingInstruction,
+    prescriptionInstructions(c).join("\n"),
   );
   inspect(prescription, "Prescription turnaround", chosen(c.turnaround), c.turnaroundInstruction);
   if (!chosen(c.weekends)) prescription.unconfirmed.push("Weekend turnaround rules");

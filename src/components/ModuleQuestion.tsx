@@ -18,7 +18,9 @@ export function ModuleQuestion({
   practice,
   settings,
   onChange,
+  shared = false,
 }: {
+  shared?: boolean;
   field: TopicField;
   practice: PracticeData;
   settings: ModuleSettings;
@@ -73,33 +75,37 @@ export function ModuleQuestion({
         {field.multiple ? "Select all that apply." : "Select one option."} Suggestions are not
         confirmed until selected.
       </p>
-      {[...options, { value: EXCLUDE_QUESTION, label: "Don't include this in the module" }].map(
-        (option) => (
-          <label
-            key={option.value}
-            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${selected.includes(option.value) ? "border-primary bg-primary/5" : "border-border"}`}
-          >
-            <input
-              type={field.multiple ? "checkbox" : "radio"}
-              name={id}
-              value={option.value}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-              checked={selected.includes(option.value)}
-              onChange={(e) =>
-                onChange(selectAnswer(settings, field, option.value, e.target.checked))
-              }
-            />
-            <span>
-              {option.label}
-              {option.value.startsWith("custom:") && (
-                <span aria-hidden="true" className="ml-2 text-xs text-muted-foreground">
-                  Your option
-                </span>
-              )}
-            </span>
-          </label>
-        ),
-      )}
+      {[
+        ...options,
+        {
+          value: EXCLUDE_QUESTION,
+          label: shared ? "Not configured" : "Don't include this in the module",
+        },
+      ].map((option) => (
+        <label
+          key={option.value}
+          className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${selected.includes(option.value) ? "border-primary bg-primary/5" : "border-border"}`}
+        >
+          <input
+            type={field.multiple ? "checkbox" : "radio"}
+            name={id}
+            value={option.value}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+            checked={selected.includes(option.value)}
+            onChange={(e) =>
+              onChange(selectAnswer(settings, field, option.value, e.target.checked))
+            }
+          />
+          <span>
+            {option.label}
+            {option.value.startsWith("custom:") && (
+              <span aria-hidden="true" className="ml-2 text-xs text-muted-foreground">
+                Your option
+              </span>
+            )}
+          </span>
+        </label>
+      ))}
       {legacySelectedOptions(field, settings).length > 0 && (
         <p className="text-xs text-muted-foreground">
           Your previous answer is retained. Please review it and specify any people or processes

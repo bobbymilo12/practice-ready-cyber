@@ -1,3 +1,4 @@
+import { roleDestination } from "./training-copy.ts";
 import type { PracticeData } from "./store";
 import type { PracticeRoleRequests } from "./role-requests";
 import { practiceRequestChoices } from "./practice-requests.ts";
@@ -48,6 +49,7 @@ export function roleAnswerChoices(
   id: string,
   label: string,
   valid: PracticeRoleRequests[],
+  asAction = false,
 ): string[] {
   const correctNames = new Set(valid.map((r) => r.label.trim().toLowerCase()));
   const alternatives = Object.values(p.roleRequests ?? {})
@@ -63,13 +65,17 @@ export function roleAnswerChoices(
         ),
     )
     .map((r) => r.label);
-  const correct = roleList([...new Set(valid.map((r) => `${r.label} appointment`))]);
+  const appointment = (names: string[]) =>
+    asAction
+      ? "Book an appointment with " + roleList(names.map(roleDestination)) + "."
+      : roleList(names.map((name) => name + " appointment"));
+  const correct = appointment([...new Set(valid.map((r) => r.label))]);
   const distinct = [...new Set(alternatives)];
   // A binary recognition question is safer than fabricated destinations or filler.
   return [
     correct,
     ...(distinct.length
-      ? distinct.slice(0, 3).map((name) => `${name} appointment`)
+      ? distinct.slice(0, 3).map((name) => appointment([name]))
       : ["None of these practice roles handles this request."]),
   ];
 }

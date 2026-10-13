@@ -1,4 +1,3 @@
-import { difficultyOptions } from "@/lib/module-presentation";
 import { captureProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -32,13 +31,16 @@ export function PredefinedModuleSetup({
 }) {
   const { practiceData, modules, createDraftModule, configureModule } = useApp();
   const existing = modules.find((m) => m.id === id);
-  const [settings, setSettings] = useState<ModuleSettings>(
-    () =>
-      existing?.settings ?? {
-        ...defaultModuleSettings(),
-        trainingLevel: "learn" as const,
-        difficulty: "easy" as const,
-      },
+  const [settings, setSettings] = useState<ModuleSettings>(() =>
+    existing?.settings
+      ? (({ difficulty: _legacy, ...rest }) => ({
+          ...rest,
+          trainingLevel: rest.trainingLevel ?? ("learn" as const),
+        }))(existing.settings)
+      : {
+          ...defaultModuleSettings(),
+          trainingLevel: "learn" as const,
+        },
   );
   const [phase, setPhase] = useState<"questions" | "length">("questions");
   const [saving, setSaving] = useState(false);
@@ -57,7 +59,8 @@ export function PredefinedModuleSetup({
     (s) =>
       (s.kind === "mcq" && !!s.localRoleRequestId) ||
       s.title.startsWith("Routing:") ||
-      s.title.startsWith("Individual exception:"),
+      s.title.startsWith("Individual exception:") ||
+      s.title.startsWith("Responsibilities for "),
   );
   const validCount =
     Number.isInteger(settings.count) && settings.count >= 1 && settings.count <= 100;
@@ -80,7 +83,7 @@ export function PredefinedModuleSetup({
             `${title} — draft`,
             topic,
             scenarios,
-            settings.difficulty ?? "easy",
+            undefined,
             undefined,
             settings,
           );
@@ -106,10 +109,10 @@ export function PredefinedModuleSetup({
     <Shell>
       <div className="mx-auto max-w-3xl">
         <p className="text-sm text-muted-foreground">Module setup · {title}</p>
-        <h1 className="mt-1 font-display text-3xl font-bold">Confirm how your practice works</h1>
+        <h1 className="mt-1 font-display text-3xl font-bold">Create your training module</h1>
         <p className="mt-2 text-muted-foreground">
-          We use saved practice information to create scenarios. Confirm only the additional
-          procedures you want this module to cover.
+          Training uses your saved practice information. Review it below, then choose the training
+          type and length.
         </p>
         {id && !existing ? (
           <p role="alert">Module not found.</p>
@@ -205,53 +208,93 @@ export function PredefinedModuleSetup({
                     </Card>
                   )}
                   <Card className="mt-6 space-y-6">
-                    <h2 className="font-display text-xl font-semibold">
-                      Additional {title.toLowerCase()} procedures
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Select only options that match your practice. Leave a procedure unconfirmed to
-                      exclude it from training. These are choices for your review, not recommended
-                      clinical policies.
-                    </p>
-                    {fields.map((f) => (
-                      <ModuleQuestion
-                        key={f.key}
-                        field={f}
-                        practice={practiceData}
-                        settings={settings}
-                        onChange={setSettings}
-                      />
-                    ))}
-                    <details open={settings.extra ? true : undefined}>
-                      <summary className="cursor-pointer text-primary">
-                        + Add practice-specific {extraRuleLabels[topic] ?? "local"} rule
-                      </summary>
-                      <label className="mt-3 block text-sm">
-                        Additional {extraRuleLabels[topic] ?? "local"} rule or procedure
-                        <textarea
-                          className={input}
-                          rows={3}
-                          value={settings.extra}
-                          onChange={(e) => setSettings((s) => ({ ...s, extra: e.target.value }))}
-                        />
-                      </label>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Include the situation and the action staff should take. We preserve your
-                        wording for review.
-                      </p>
-                    </details>
+                    {topic === "custom" ? (
+                      <>
+                        <h2 className="font-display text-xl font-semibold">
+                          Additional {title.toLowerCase()} procedures
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Select only options that match your practice. Leave a procedure
+                          unconfirmed to exclude it from training. These are choices for your
+                          review, not recommended clinical policies.
+                        </p>
+                        {fields.map((f) => (
+                          <ModuleQuestion
+                            key={f.key}
+                            field={f}
+                            practice={practiceData}
+                            settings={settings}
+                            onChange={setSettings}
+                          />
+                        ))}
+                        <details open={settings.extra ? true : undefined}>
+                          <summary className="cursor-pointer text-primary">
+                            + Add practice-specific {extraRuleLabels[topic] ?? "local"} rule
+                          </summary>
+                          <label className="mt-3 block text-sm">
+                            Additional {extraRuleLabels[topic] ?? "local"} rule or procedure
+                            <textarea
+                              className={input}
+                              rows={3}
+                              value={settings.extra}
+                              onChange={(e) =>
+                                setSettings((s) => ({ ...s, extra: e.target.value }))
+                              }
+                            />
+                          </label>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Include the situation and the action staff should take. We preserve your
+                            wording for review.
+                          </p>
+                        </details>
+                      </>
+                    ) : (
+                      <>
+                        <h2 className="font-display text-xl font-semibold">
+                          Practice information for this topic
+                        </h2>
+                        <p className="text-sm">
+                          Training uses the shared information saved in Practice Setup. Complete any
+                          missing processes there, then return to create your module.
+                        </p>
+                        <Link
+                          to="/practice/setup"
+                          search={{
+                            step:
+                              topic === "prescriptions"
+                                ? 5
+                                : topic === "appointment-booking"
+                                  ? 3
+                                  : 6,
+                          }}
+                          className="text-primary underline"
+                        >
+                          Complete missing {topic === "prescriptions" ? "prescription" : "topic"}{" "}
+                          information in Practice Setup
+                        </Link>
+                        {topic === "prescriptions" && (
+                          <Link
+                            to="/practice/setup"
+                            search={{ step: 1 }}
+                            className="block text-primary underline"
+                          >
+                            Review prescription responsibilities in Roles
+                          </Link>
+                        )}
+                      </>
+                    )}
                     <button
                       className="rounded-xl bg-primary px-5 py-3 text-primary-foreground"
                       onClick={() => setPhase("length")}
                     >
-                      Choose module length + difficulty
+                      Choose training type + length
                     </button>
                   </Card>
                 </>
               ) : (
                 <Card className="mt-6 space-y-5">
                   <fieldset>
-                    <legend className="font-display text-xl font-semibold">Training Level</legend>
+                    <legend className="font-display text-xl font-semibold">Training Type</legend>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       {trainingLevelOptions.map((level) => (
                         <label
@@ -285,31 +328,6 @@ export function PredefinedModuleSetup({
                         regeneration.
                       </p>
                     )}
-                  </fieldset>
-                  <fieldset>
-                    <legend className="font-display text-xl font-semibold">Difficulty</legend>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                      {difficultyOptions.map((option) => (
-                        <label
-                          key={option.value}
-                          className={`rounded-xl border p-4 ${settings.difficulty === option.value ? "border-primary bg-primary/5" : "border-border"}`}
-                        >
-                          <input
-                            type="radio"
-                            name="module-difficulty"
-                            value={option.value}
-                            checked={settings.difficulty === option.value}
-                            onChange={() =>
-                              setSettings((s) => ({ ...s, difficulty: option.value }))
-                            }
-                          />
-                          <span className="ml-2 font-semibold">{option.label}</span>
-                          <span className="mt-1 block text-sm text-muted-foreground">
-                            {option.description}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
                   </fieldset>
                   <h2 className="font-display text-xl font-semibold">
                     How long should this module be?

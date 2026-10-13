@@ -1,3 +1,4 @@
+import { TopicPracticeFields } from "@/components/TopicPracticeFields";
 import { LocalProcedures } from "@/components/LocalProcedures";
 import { RolesStep } from "@/components/RolesStep";
 import { SafeguardingFields } from "@/components/SafeguardingFields";
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/practice/setup")({
 const field = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm";
 type TextField = keyof Omit<
   PracticeData,
+  | "topicSettings"
   | "staff"
   | "rolePolicies"
   | "sameDayReasons"
@@ -172,11 +174,17 @@ function PracticeSetup() {
             )}
             {step === 1 && <RolesStep initialRole={role} />}
             {step === 2 && <TeamFields />}
-            {step === 3 && <BookingFields />}
+            {step === 3 && (
+              <>
+                <BookingFields />
+                <TopicPracticeFields topic="appointment-booking" />
+              </>
+            )}
             {step === 4 && <LocalProcedures />}
             {step === 5 && (
               <>
                 <PrescriptionFields />
+                <TopicPracticeFields topic="prescriptions" />
                 <details>
                   <summary className="cursor-pointer text-sm">
                     More prescription details (optional)
@@ -192,6 +200,7 @@ function PracticeSetup() {
             {step === 6 && (
               <>
                 <SafeguardingFields />
+                <TopicPracticeFields />
                 <h2 className="font-semibold">Confidentiality</h2>
                 <Instruction
                   label="Local confidentiality instructions"

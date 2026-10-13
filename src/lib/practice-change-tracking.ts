@@ -60,6 +60,7 @@ const labels: Record<string, string> = {
   safeguardingRoute: "Safeguarding contacts and process",
   rolePolicies: "Role-specific booking policies",
   practiceRequests: "Practice request catalogue",
+  topicSettings: "Shared reception procedures",
 };
 const scalar = (v: unknown) =>
   (typeof v === "string" || typeof v === "number") && String(v).length <= 500

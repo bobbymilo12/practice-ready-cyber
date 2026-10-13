@@ -81,7 +81,6 @@ function Review() {
               {module.settings?.trainingLevel
                 ? ` · ${module.settings.trainingLevel === "learn" ? "Learn" : "Apply"}`
                 : ""}
-              {module.settings?.difficulty ? " · " + module.settings.difficulty : ""}
             </p>
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
               {module.published ? "Review training" : "Review draft scenarios"}

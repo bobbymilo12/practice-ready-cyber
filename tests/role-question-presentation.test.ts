@@ -62,8 +62,14 @@ test("new Learn role questions use request wording, role choices and structured 
   assert.equal(uti.title, "A patient contacts the practice about a UTI");
   assert.ok(uti.patientQuote.includes("booking process has confirmed an appointment is needed"));
   assert.equal(uti.question, "Who should you book the patient an appointment with?");
-  assert.equal(uti.options[uti.correctIndex], "Test role 1 appointment or Test role 2 appointment");
-  assert.deepEqual(uti.options.slice(1), ["Test role 3 appointment", "Test role 4 appointment"]);
+  assert.equal(
+    uti.options[uti.correctIndex],
+    "Book an appointment with the Test role 1 or the Test role 2.",
+  );
+  assert.deepEqual(uti.options.slice(1), [
+    "Book an appointment with the Test role 3.",
+    "Book an appointment with the Test role 4.",
+  ]);
   assert.ok(uti.learningPoint.includes("Test role 1 or Test role 2 can handle this request"));
   assert.ok(!JSON.stringify(uti).includes("Routing:"));
   const apply = configuredScenarios("appointment-booking", "Booking", p, {

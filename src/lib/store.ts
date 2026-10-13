@@ -148,6 +148,7 @@ export interface RolePolicies {
 }
 
 export interface PracticeData {
+  topicSettings?: Record<string, import("./module-config").PracticeTopicSettings>;
   practiceRequests?: Record<string, import("./practice-requests").PracticeRequest>;
   localProcedures?: import("./local-procedures").LocalProcedures;
   roleRequests?: Record<string, PracticeRoleRequests>;
@@ -354,9 +355,14 @@ export interface AppState {
   setSafeguardingRoute: (route: SafeguardingRoute) => void;
   setBookingConfig: (config: BookingConfig) => void;
   setPrescriptionConfig: (config: PrescriptionConfig) => void;
+  setTopicSettings: (
+    topic: string,
+    settings: import("./module-config").PracticeTopicSettings,
+  ) => void;
   setPracticeField: (
     field: keyof Omit<
       PracticeData,
+      | "topicSettings"
       | "staff"
       | "rolePolicies"
       | "sameDayReasons"
@@ -1560,7 +1566,7 @@ export const useApp = create<AppState>()((set, get) => ({
           ? {
               ...m,
               settings,
-              difficulty: settings.difficulty ?? m.difficulty,
+              difficulty: undefined,
               scenarios,
               needsReview: m.published || m.needsReview,
             }
@@ -1891,6 +1897,13 @@ export const useApp = create<AppState>()((set, get) => ({
     set((s) => practiceChangePatch(s, { ...s.practiceData, safeguardingRoute })),
   setBookingConfig: (bookingConfig) =>
     set((s) => practiceChangePatch(s, { ...s.practiceData, bookingConfig })),
+  setTopicSettings: (topic, settings) =>
+    set((s) =>
+      practiceChangePatch(s, {
+        ...s.practiceData,
+        topicSettings: { ...s.practiceData.topicSettings, [topic]: settings },
+      }),
+    ),
   setPrescriptionConfig: (prescriptionConfig) =>
     set((s) => practiceChangePatch(s, { ...s.practiceData, prescriptionConfig })),
   setPracticeField: (field, value) =>

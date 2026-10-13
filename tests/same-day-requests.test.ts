@@ -139,7 +139,7 @@ test("compact escalation picker offers Reception Manager, configured roles, peop
   p.staff = [{ id: "staff-1", name: "Alex Example", role: role.label, clinics: "" }];
   const { escalationChoices, EscalationContacts } = component(
     "../src/components/EscalationContacts.tsx",
-    { "@/lib/practice-config": config },
+    { "@/lib/practice-config": config, "./ConfirmedItems": { ConfirmedItems: () => null } },
   );
   const choices = escalationChoices(p);
   assert.ok(choices.some((c: any) => c.role === "Reception Manager"));

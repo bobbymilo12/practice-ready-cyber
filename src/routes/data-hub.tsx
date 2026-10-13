@@ -94,6 +94,7 @@ const RULE_GROUPS: {
 
 type PracticeTextKey = keyof Omit<
   PracticeData,
+  | "topicSettings"
   | "staff"
   | "rolePolicies"
   | "sameDayReasons"

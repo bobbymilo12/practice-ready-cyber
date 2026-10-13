@@ -13,7 +13,6 @@ function settingsFor(topic: string) {
   const settings = {
     ...config.defaultModuleSettings(),
     trainingLevel: "learn" as const,
-    difficulty: "easy" as const,
     customOptions: {} as Record<string, { id: string; label: string }[]>,
   };
   config.topicFields[topic]
@@ -32,7 +31,7 @@ function settingsFor(topic: string) {
 for (const topic of topics.filter((t) => t !== "appointment-booking")) {
   test(
     topic +
-      ": Learn/Apply, difficulty and finite length affect actual generation without importing booking procedures",
+      ": Learn/Apply, training type and finite length affect actual generation without importing booking procedures",
     () => {
       const p = empty();
       const settings = settingsFor(topic);
@@ -43,10 +42,25 @@ for (const topic of topics.filter((t) => t !== "appointment-booking")) {
         trainingLevel: "apply",
       });
       assert.ok(easy.length && hard.length, topic);
-      assert.ok(easy.every((s) => s.kind === "mcq" && s.options.length === 2));
+      assert.ok(easy.every((s) => s.kind === "mcq" && s.options.length === 3));
       assert.ok(hard.every((s) => s.kind === "mcq" && s.options.length === 4));
       assert.notEqual(easy[0].patientQuote, hard[0].patientQuote);
-      assert.notEqual(easy[0].question, hard[0].question);
+      assert.ok(easy.every((s) => s.question.endsWith("?")));
+      assert.doesNotMatch(
+        JSON.stringify([...easy, ...hard]),
+        /checking the practice guidance|Routing:|Approach Doctor|Apply this step to this type|Which response best reflects/,
+      );
+      // Retired difficulty must not influence content, even on older saved settings.
+      for (const difficulty of ["easy", "intermediate", "advanced"] as const) {
+        const legacy = config.generateConfiguredModule(topic, topic, p, {
+          ...settings,
+          difficulty,
+        });
+        assert.deepEqual(
+          legacy.map(({ id, ...s }) => s),
+          easy.map(({ id, ...s }) => s),
+        );
+      }
       for (const question of [...easy, ...hard]) {
         assert.equal(question.status, "draft");
         assert.equal(question.followUpFor, undefined);
@@ -91,7 +105,7 @@ for (const topic of topics.filter((t) => t !== "appointment-booking")) {
         topicKey: topic,
         published: false,
         createdAt: 1,
-        settings: { ...settings, difficulty: "advanced" as const },
+        settings: { ...settings, trainingLevel: "apply" as const, difficulty: "advanced" as const },
         scenarios: hard,
       };
       const regenerated = config.regenerateConfiguredScenario(module, hard[0].id, p);
@@ -185,11 +199,10 @@ test("every topic uses the real shared creation controls and saves the selected 
       "@/lib/backend": { flushPractice: async () => {} },
       "@/lib/practice-config": practiceConfig,
       "@/lib/module-config": config,
-      "@/lib/module-presentation": presentation,
       "@/lib/store": {
         useApp: () => ({
           practiceData: topic === "appointment-booking" ? practice() : empty(),
-          modules: [{ id: "draft", settings: settingsFor(topic) }],
+          modules: [{ id: "draft", settings: { ...settingsFor(topic), difficulty: "advanced" } }],
           configureModule: (_id: string, settings: any, questions: any) => {
             saved = { settings, questions };
           },
@@ -203,7 +216,7 @@ test("every topic uses the real shared creation controls and saves the selected 
       return elements(exports.PredefinedModuleSetup({ topic, title: topic, id: "draft" }));
     };
     render()
-      .find((n) => n.type === "button" && n.props.children === "Choose module length + difficulty")
+      .find((n) => n.type === "button" && n.props.children === "Choose training type + length")
       .props.onClick();
     const select = (name: string, value: string) => {
       const radio = render().find(
@@ -213,7 +226,11 @@ test("every topic uses the real shared creation controls and saves the selected 
       radio.props.onChange();
     };
     select("training-level", "apply");
-    select("module-difficulty", "advanced");
+    assert.ok(!render().some((n) => n.props?.name === "module-difficulty"));
+    const handle = render().find(
+      (n) => n.props?.name === "training-level" && n.props.value === "handle",
+    );
+    assert.ok(handle?.props.disabled);
     select("module-length", "custom");
     render()
       .find((n) => n.type === "input" && n.props.type === "number")
@@ -222,7 +239,75 @@ test("every topic uses the real shared creation controls and saves the selected 
       .find((n) => n.type === "button" && n.props.children === "Save settings and regenerate")
       .props.onClick();
     assert.equal(saved.settings.trainingLevel, "apply");
-    assert.equal(saved.settings.difficulty, "advanced");
+    assert.equal(saved.settings.difficulty, undefined);
     assert.equal(saved.questions.length, 1);
   }
+});
+
+test("factual questions retain the decision and exact saved answer with retired difficulty metadata ignored", () => {
+  const p = empty();
+  p.repeatTurnaround = "72 working hours";
+  for (const trainingLevel of ["learn", "apply"] as const) {
+    for (const difficulty of ["easy", "intermediate", "advanced"] as const) {
+      const questions = config.generateConfiguredModule("prescriptions", "Prescriptions", p, {
+        ...config.defaultModuleSettings(),
+        trainingLevel,
+        difficulty,
+      });
+      const question = questions.find((s) => s.title === "Prescription turnaround");
+      assert.ok(question?.kind === "mcq");
+      assert.match(question.question, /information|tell|ready|turnaround/i);
+      assert.ok(question.options[question.correctIndex].includes("72 working hours"));
+      assert.ok(
+        question.options
+          .filter((_, i) => i !== question.correctIndex)
+          .every((option) => !/\d|same.day|routine|clinical/i.test(option)),
+      );
+      assert.doesNotMatch(question.patientQuote, /instructions for .*\?\./);
+    }
+  }
+});
+
+test("difficult-call responses use plausible communication choices and the configured best response", () => {
+  const p = empty();
+  p.rolePolicies.phrasesUse = "Acknowledge the concern and explain what can happen next";
+  const questions = config.generateConfiguredModule("difficult", "Difficult calls", p, {
+    ...config.defaultModuleSettings(),
+    trainingLevel: "apply",
+    difficulty: "advanced",
+  });
+  const question = questions.find((s) => s.title === "Supportive language");
+  assert.ok(question?.kind === "mcq");
+  assert.equal(question.question, "What would be the best way to respond?");
+  assert.equal(
+    question.options[question.correctIndex],
+    presentation.readableGuidance(p.rolePolicies.phrasesUse),
+  );
+  assert.ok(question.options.some((option) => option.includes("more slowly")));
+  assert.ok(question.options.some((option) => option.includes("colleague")));
+  assert.doesNotMatch(
+    JSON.stringify(question),
+    /Press the patient|correcting.*tone|good care navigation/,
+  );
+});
+
+test("topic decision frames do not reuse identical alternatives across every topic", () => {
+  const alternatives = [
+    "prescriptions",
+    "results",
+    "vaccines",
+    "fit-notes",
+    "home-visits",
+    "first-week",
+  ].map((topic) => {
+    const settings = {
+      ...settingsFor(topic),
+      trainingLevel: "apply" as const,
+      difficulty: "advanced" as const,
+    };
+    const question = config.generateConfiguredModule(topic, topic, empty(), settings)[0];
+    assert.ok(question.kind === "mcq");
+    return question.options.filter((_, i) => i !== question.correctIndex).join("|");
+  });
+  assert.equal(new Set(alternatives).size, alternatives.length);
 });

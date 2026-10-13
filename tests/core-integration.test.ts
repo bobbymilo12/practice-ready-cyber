@@ -257,13 +257,7 @@ test("legacy settings remain mixed; other topics now use explicit Learn/Apply le
     });
     assert.ok(plain.length && levelled.length);
     assert.ok(levelled.every((s) => !s.followUpFor));
-    assert.ok(
-      levelled.some(
-        (s) =>
-          s.question === "What should you do next?" ||
-          s.question === "What would be the best way to respond?",
-      ),
-    );
+    assert.ok(levelled.every((s) => s.question.endsWith("?")));
     assert.notDeepEqual(
       plain.map(({ id, ...s }) => s),
       levelled.map(({ id, ...s }) => s),

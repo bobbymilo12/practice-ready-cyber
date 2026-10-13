@@ -90,16 +90,38 @@ practice edits, and the current order-answer button label.
 
 ## Shared creation controls
 
-All ten Create Module topics use the same Learn/Apply, Easy/Intermediate/Advanced and
-Quick/Standard/Thorough/Custom controls. Learn asks directly about saved instructions;
-Apply uses the relevant reception situation. Advanced presentations add a competing
-handover expectation. Easy presents fewer alternatives; intermediate and advanced add
-plausible but less appropriate response strategies. Correct practice facts and staff
-exceptions are preserved. No alternative clinical timings or procedures are fabricated.
+All ten Create Module topics use Training Type (Learn, Apply, Handle — Coming soon)
+and Length (Quick, Standard, Thorough, Custom). Separate difficulty has been retired:
+legacy values remain readable but do not affect configured generation or regeneration.
+Learn introduces the relevant practice rule directly; Apply adds competing patient or
+colleague expectations with plausible administrative response choices. Neither invents
+clinical rules. Appointment Booking retains its Core, matching and Local Procedure
+allocation and sequence safeguards.
 
-These controls apply when generating or regenerating content, never retrospectively
-to saved trainee attempts. Legacy settings remain valid. Structured matching/sequence
-answers retain their safety restrictions regardless of difficulty. Other topics do not
-yet have Appointment Booking's authored Core library or procedure-sequence coverage;
-they depend on the available confirmed topic information. Exact question-level source
-links are not invented; existing conservative change-review rules still apply.
+Reusable topic processes are configured in Practice Setup (Booking, Prescriptions, or
+shared reception procedures under safety/policies), not re-entered for every module.
+Prescription query responsibilities come from Roles and individual staff exceptions.
+Custom training retains module-specific instructions. Older module-specific answers are
+retained as a compatibility fallback until shared topic configuration is explicitly saved;
+they are not automatically promoted to practice-wide policy.
+
+Prescription ordering instructions use an explicit Add/Edit/Remove list. Old text is one
+confirmed item, preserving its order and wording. The structured list is authoritative,
+with a derived legacy string for older readers. Single and multiple custom contacts use
+the same confirmed-item editor; unsaved text never enters practice state.
+
+The shared presentation layer uses natural role questions and plain role/person choices.
+Structured ordering methods become a readable sentence followed by confirmed instructions.
+Non-booking guidance separators become sentences without changing facts or order.
+Local Procedure sequences remain untouched. Saved trainee attempts and published content
+are never rewritten automatically; changes apply to generation/regeneration.
+
+Apply migration 202610130001_shared_topic_settings.sql before deploying shared topic
+configuration. It extends practice_settings and the existing secured read/write RPCs;
+there is no authentication or RLS change. Prescription item arrays fit the existing JSON
+prescription_config column. Topic changes use conservative module review when no reliable
+question-level provenance exists.
+
+The finite generator still depends on confirmed practice information and may produce a
+shorter module than requested. Other topics do not yet have Appointment Booking's authored
+Core library or sequence coverage. Arbitrary free-text instructions need manager review.

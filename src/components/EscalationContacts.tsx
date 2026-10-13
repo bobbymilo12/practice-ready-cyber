@@ -1,3 +1,4 @@
+import { ConfirmedItems } from "./ConfirmedItems";
 import type { PracticeData } from "@/lib/store";
 import {
   contactText,
@@ -82,16 +83,18 @@ export function EscalationContacts({
         </div>
       </details>
       {selected.some((c) => c.kind === "other") && (
-        <label className="mt-3 block text-sm">
-          Other contact
-          <input
-            className="mt-1 w-full rounded-xl border border-border bg-background p-3"
-            value={selected.find((c) => c.kind === "other")?.text ?? ""}
-            onChange={(e) =>
-              change(selected.map((c) => (c.kind === "other" ? { ...c, text: e.target.value } : c)))
-            }
-          />
-        </label>
+        <ConfirmedItems
+          label="Other contacts"
+          items={selected
+            .filter((c) => c.kind === "other" && c.text.trim())
+            .map((c) => (c.kind === "other" ? c.text : ""))}
+          onChange={(items) =>
+            change([
+              ...selected.filter((c) => c.kind !== "other"),
+              ...(items.length ? items : [""]).map((text): Entry => ({ kind: "other", text })),
+            ])
+          }
+        />
       )}
       <p className="mt-2 text-xs text-muted-foreground">
         Select the contacts your practice uses. Use the instructions below if different methods

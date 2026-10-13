@@ -1,4 +1,12 @@
-import { applyQuestionDifficulty, practiceQuestionPresentation } from "./module-presentation.ts";
+import {
+  submissionChannel,
+  readableList,
+  roleDestination,
+  routingAction,
+  hasFinishedCopy,
+  contactRouteCopy,
+} from "./training-copy.ts";
+import { practiceQuestionPresentation } from "./module-presentation.ts";
 import {
   inspectLocalProcedureSequences,
   localProcedureApplication,
@@ -31,6 +39,8 @@ import {
 import type { Module, PracticeData, Scenario } from "./store";
 import {
   practiceSummary,
+  prescriptionInstructions,
+  prescriptionMethods,
   configMissing,
   safeguardingMissing,
   sameDayGroups,
@@ -63,6 +73,7 @@ export const trainingLevelOptions = [
 export interface ModuleSettings {
   // Optional on legacy modules.
   trainingLevel?: "learn" | "apply";
+  /** Legacy metadata only; ignored by generation. */
   difficulty?: import("./training-types").Difficulty;
   version: 1;
   answers: Record<string, string>;
@@ -73,6 +84,19 @@ export interface ModuleSettings {
   extra: string;
   length: "quick" | "standard" | "thorough" | "custom";
   count: number;
+}
+export type PracticeTopicSettings = Pick<
+  ModuleSettings,
+  "answers" | "selections" | "customOptions" | "answerDetails" | "extra"
+>;
+export function effectiveTopicSettings(
+  topic: string,
+  p: PracticeData,
+  settings: ModuleSettings,
+): ModuleSettings {
+  return topic !== "custom" && p.topicSettings?.[topic]
+    ? { ...settings, ...p.topicSettings[topic] }
+    : settings;
 }
 export interface TopicField {
   key: string;
@@ -552,6 +576,7 @@ export function fieldsForTopic(
   const summary = practiceSummary(p);
   return (topicFields[topic] ?? []).filter(
     (f) =>
+      !(topic === "prescriptions" && f.key === "queries") &&
       (!f.legacyOnly || selectedValues(f, settings).some((v) => v !== EXCLUDE_QUESTION)) &&
       (!f.showWhen || f.showWhen(p, settings)) &&
       !f.known?.(summary)?.trim(),
@@ -584,6 +609,7 @@ interface Fact {
   situation: string;
 }
 export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSettings): Fact[] {
+  settings = effectiveTopicSettings(topic, p, settings);
   const s = practiceSummary(p),
     facts: Fact[] = [];
   const add = (label: string, rule: string | undefined, situation: string, condition?: string) => {
@@ -638,7 +664,34 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
   if (["prescriptions", "first-week"].includes(topic)) {
     add(
       "Repeat requests",
-      s.prescriptionOrdering || s.repeatOrderMethods,
+      p.prescriptionConfig
+        ? [
+            (() => {
+              const methods = p
+                .prescriptionConfig!.methods.map((id) =>
+                  id === "other"
+                    ? p.prescriptionConfig!.otherMethod
+                    : (prescriptionMethods.find((m) => m.id === id)?.label ?? ""),
+                )
+                .filter(Boolean);
+              return methods.length
+                ? "Patients can order repeat prescriptions " +
+                    readableList(
+                      methods.map(
+                        (method) =>
+                          submissionChannel(method)?.phrase ??
+                          "using this method: “" + method + "”",
+                      ),
+                      "disjunction",
+                    ) +
+                    "."
+                : "";
+            })(),
+            ...prescriptionInstructions(p.prescriptionConfig),
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : s.prescriptionOrdering || s.repeatOrderMethods,
       "A patient needs to order their next repeat prescription. How should they submit it?",
     );
     if (!configMissing(p).prescription.includes("Prescription turnaround"))
@@ -684,7 +737,25 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
   )
     add(
       "Safeguarding contact",
-      s.localSafeguarding,
+      p.safeguardingRoute
+        ? contactRouteCopy(
+            {
+              ...p.safeguardingRoute,
+              ...(p.safeguardingRoute.leadIds
+                ? {
+                    contact: {
+                      kind: "multiple",
+                      contacts: p.safeguardingRoute.leadIds.map((staffId) => ({
+                        kind: "staff",
+                        staffId,
+                      })),
+                    } as const,
+                  }
+                : {}),
+            },
+            p,
+          )
+        : s.localSafeguarding,
       "A safeguarding concern has been identified. How should reception raise it locally?",
     );
   if (["results", "first-week", "difficult", "fit-notes"].includes(topic))
@@ -766,7 +837,7 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
   )
     add(
       "Appointment escalation",
-      s.dutyContact,
+      p.bookingConfig ? contactRouteCopy(p.bookingConfig.escalation, p) : s.dutyContact,
       "A request needs the recorded appointment escalation route. Who should reception contact and how?",
     );
   for (const f of topicFields[topic] ?? []) {
@@ -793,7 +864,8 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
           }
           return [option.label];
         });
-    const rule = known || choices.join("; ");
+    const selectedRule = known || choices.join("; ");
+    const rule = selectedRule && !f.options.length ? "Contact " + selectedRule + "." : selectedRule;
     // A conditional branch alone is not an actionable local process.
     if (
       rule === "It depends on the request" ||
@@ -881,6 +953,7 @@ export function configuredScenarios(
   p: PracticeData,
   settings: ModuleSettings,
 ): Scenario[] {
+  settings = effectiveTopicSettings(topic, p, settings);
   if (settings.trainingLevel && !["learn", "apply"].includes(settings.trainingLevel)) return [];
   const structuredActions =
     topic === "appointment-booking" && settings.trainingLevel
@@ -964,6 +1037,21 @@ export function configuredScenarios(
           application.condition ?? f.condition,
           application.validActions,
         ),
+        ...(application.copyKind === "allowed-channel"
+          ? {
+              title: application.label,
+              question: "What should you tell them?",
+              ...(topic === "appointment-booking"
+                ? {
+                    patientQuote: application.situation.replace(
+                      / What should you tell them\?$/,
+                      "",
+                    ),
+                  }
+                : {}),
+            }
+          : {}),
+        learningPoint: application.feedback,
         followUpSituation: application.followUpSituation,
       })),
   );
@@ -1026,7 +1114,13 @@ export function configuredScenarios(
           : "The practice’s booking process has confirmed an appointment is needed."
       }`;
       roleQuestion.question = "Who should you book the patient an appointment with?";
-      roleQuestion.options = roleAnswerChoices(p, id, label, roles);
+      roleQuestion.options = roleAnswerChoices(
+        p,
+        id,
+        label,
+        roles,
+        settings.trainingLevel === "learn",
+      );
       if (apply && explicitSameDayBooking(p, id, label)) {
         const choices = roleQuestion.options;
         const timed = (choice: string, timing: string) =>
@@ -1049,6 +1143,58 @@ export function configuredScenarios(
       if (apply && explicitSameDayBooking(p, id, label))
         roleQuestion.learningPoint +=
           " Your practice explicitly lists this request for same-day direct booking.";
+    }
+    if (topic !== "appointment-booking" && settings.trainingLevel && roleQuestion.kind === "mcq") {
+      roleQuestion.localRoleRequestId = id;
+      roleQuestion.title = label;
+      roleQuestion.patientQuote =
+        roleRequestSituation(label) +
+        (settings.trainingLevel === "apply"
+          ? " They ask for the person they saw last time. You need to check who handles this request."
+          : "");
+      roleQuestion.question = "Who should you direct the patient to?";
+      const foundational = settings.trainingLevel === "learn" && roles.length > 0;
+      const destinations = foundational
+        ? [
+            ...roles.map((r) => roleDestination(r.label)),
+            ...eligible
+              .filter((s) => s.individualException)
+              .map((s) => s.employee.name + " (" + s.role + ")"),
+          ]
+        : eligible.length
+          ? eligible.map((s) => s.employee.name + " (" + s.role + ")")
+          : roles.map((r) => roleDestination(r.label));
+      const correct = routingAction(destinations, /quer/i.test(label));
+      const wrongPeople = (foundational ? [] : staff)
+        .filter((s) => !s.canHandle)
+        .map((s) => s.employee.name + " (" + s.role + ")");
+      const wrongRoles =
+        eligible.length && !foundational
+          ? []
+          : Object.values(p.roleRequests ?? {})
+              .filter(
+                (r) =>
+                  r.confirmed && !r.archived && !roles.some((valid) => valid.roleId === r.roleId),
+              )
+              .map((r) => r.label);
+      roleQuestion.options = [
+        correct,
+        ...[
+          ...wrongPeople.map((name) => routingAction([name], /quer/i.test(label))),
+          ...wrongRoles.map((name) => routingAction([roleDestination(name)], /quer/i.test(label))),
+          "The person who handled the patient's previous request.",
+          "The first available person in the team.",
+          "The person the patient prefers, with responsibilities checked afterwards.",
+        ]
+          .filter((text) => text !== correct)
+          .slice(0, settings.trainingLevel === "learn" ? 2 : 3),
+      ];
+      roleQuestion.correctIndex = 0;
+      roleQuestion.learningPoint =
+        readableList(destinations, "disjunction") +
+        " can help with " +
+        label.toLowerCase() +
+        ". Check individual responsibilities before directing the patient.";
     }
     routing.push(roleQuestion);
     for (const exception of staff.filter((s) => s.individualException))
@@ -1120,11 +1266,13 @@ export function selectedModuleScenarios(
   p: PracticeData,
   settings: ModuleSettings,
 ): Scenario[] {
+  settings = effectiveTopicSettings(topic, p, settings);
   if (settings.trainingLevel && !["learn", "apply"].includes(settings.trainingLevel)) return [];
   const count = Number.isInteger(settings.count) ? Math.min(100, Math.max(1, settings.count)) : 12;
-  const local = configuredScenarios(topic, title, p, settings);
-  if (topic !== "appointment-booking")
-    return local.slice(0, count).map((s) => applyQuestionDifficulty(s, settings.difficulty));
+  const local = configuredScenarios(topic, title, p, settings).filter(
+    (s) => !settings.trainingLevel || hasFinishedCopy(s),
+  );
+  if (topic !== "appointment-booking") return local.slice(0, count);
   const core = appointmentCorePool({ topicKey: topic, practice: p, settings });
   const selectedCore = core.slice(0, Math.round(count * 0.3));
   const selectedLocal = local.slice(0, count - selectedCore.length);
@@ -1177,7 +1325,7 @@ export function selectedModuleScenarios(
     if (c < selectedCore.length) result.push(selectedCore[c++]);
     for (let i = 0; i < 2 && l < selectedLocal.length; i++) result.push(selectedLocal[l++]);
   }
-  return result.map((s) => applyQuestionDifficulty(s, settings.difficulty));
+  return result;
 }
 
 export function generateConfiguredModule(
@@ -1334,9 +1482,7 @@ export function regenerateConfiguredScenario(
     return {
       ...module,
       needsReview: module.published || module.needsReview,
-      scenarios: module.scenarios.map((s) =>
-        s.id === scenarioId ? applyQuestionDifficulty(replacement, module.settings?.difficulty) : s,
-      ),
+      scenarios: module.scenarios.map((s) => (s.id === scenarioId ? replacement : s)),
     };
   }
   if (current.followUpFor) {
@@ -1344,7 +1490,9 @@ export function regenerateConfiguredScenario(
     const follow = primary && configuredFollowUp(primary);
     return follow ? reviseConfiguredScenario(module, { ...follow, id: current.id }) : module;
   }
-  const pool = configuredScenarios(module.topicKey, module.type, practice, module.settings);
+  const pool = configuredScenarios(module.topicKey, module.type, practice, module.settings).filter(
+    (s) => !module.settings?.trainingLevel || hasFinishedCopy(s),
+  );
   const primaryTitle = current.title;
   const used = new Set(
     module.scenarios.filter((s) => s.id !== scenarioId && !s.followUpFor).map((s) => s.title),
@@ -1354,7 +1502,7 @@ export function regenerateConfiguredScenario(
     pool.find((s) => s.title === primaryTitle);
   if (!pick) return module;
   const replacement: Scenario = {
-    ...applyQuestionDifficulty(pick, module.settings.difficulty),
+    ...pick,
     id: current.id,
   };
   const follow =
