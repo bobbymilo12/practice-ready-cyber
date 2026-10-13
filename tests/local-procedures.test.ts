@@ -186,6 +186,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
   let fail = false;
   Object.assign(globalThis, {
     localStorage: {
+      removeItem: () => {},
       getItem: () => stored,
       setItem: (_: string, value: string) => {
         if (fail) throw new Error("Storage unavailable");
@@ -440,7 +441,7 @@ test("eight-step navigation preserves legacy URL destinations and keeps Procedur
   assert.ok(route.includes("validateSearch: setupSearch"));
   assert.ok(route.includes("{step === 4 && <LocalProcedures />}"));
   assert.ok(route.includes("search: { step: next, flow: 2 }"));
-  assert.ok(route.includes("step === 7) store.completeSetup(true)"));
+  assert.ok(route.includes("step === 7) store.completeSetup()"));
 });
 
 test("Appointment Booking has a compact central summary, with no editor or duplicated procedure storage", () => {
@@ -466,6 +467,7 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
   const previousWindow = globalThis.window;
   Object.assign(globalThis, {
     localStorage: {
+      removeItem: () => {},
       getItem: () => {
         reads++;
         return stored;

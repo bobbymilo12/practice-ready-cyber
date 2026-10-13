@@ -82,7 +82,7 @@ function PracticeSetup() {
       if (step === 3 || step === 7) store.setBookingConfig(bookingFor(p));
       if (step === 5 || step === 7) store.setPrescriptionConfig(prescriptionsFor(p));
       if (step === 6 || step === 7) store.setSafeguardingRoute(safeguardingFor(p));
-      if (!exit && step === 7) store.completeSetup(true);
+      if (!exit && step === 7) store.completeSetup();
       await flushPractice();
       if (exit) await nav({ to: "/dashboard" });
       else if (step === 7) setDone(true);

@@ -2,16 +2,9 @@ import { flagPracticeChanges, enforceReviewDecisions } from "./practice-change-t
 import { suggestedRole } from "./role-requests.ts";
 import { confirmProcedure, procedureTargets, validateLocalProcedures } from "./local-procedures.ts";
 // Loaded dynamically only for a local development mock session. No network operations belong here.
-import {
-  defaultPracticeData,
-  type Account,
-  type Module,
-  type Trainee,
-  type TrainingPackage,
-} from "./store";
+import { defaultPracticeData, type Account, type Trainee } from "./store";
 import type { PracticeState, Snapshot } from "./backend";
 import { devRole } from "./dev-mode";
-import { practiceScenarios } from "./practice-scenarios";
 import {
   startSession,
   answerSession,
@@ -21,7 +14,9 @@ import {
   type TrainingSession,
 } from "./training";
 
-const storageKey = "practiceready-dev-workspace-v1";
+// v2: GP demo modules removed. Older local workspaces are discarded on read.
+const storageKey = "practiceready-dev-workspace-v2";
+const staleKeys = ["practiceready-dev-workspace-v1"];
 const traineeId = "dev-trainee-jamie";
 const mockTrainee = (): Trainee => ({
   id: traineeId,
@@ -129,49 +124,12 @@ function seed(): Workspace {
       clinics: "Routine appointments and duty triage",
     },
   ];
-  const modules: Module[] = ["appointment-booking", "prescriptions", "first-week"].map(
-    (topic, i) => ({
-      id: `dev-module-${i}`,
-      type: "Demo training",
-      title: [
-        "Demo appointment booking",
-        "Demo prescription requests",
-        "Demo reception onboarding",
-      ][i],
-      topicKey: topic,
-      published: i < 2,
-      createdAt: Date.now(),
-      scenarios: practiceScenarios(topic, "Demo training", practiceData, {})
-        .slice(0, 4)
-        .map((s) => ({ ...s, status: i < 2 ? "approved" : "draft" })),
-    }),
-  );
-  const induction: TrainingPackage = {
-    id: "dev-induction",
-    title: "Induction Package",
-    description: "Basic local onboarding for new GP reception and administrative starters.",
-    kind: "induction",
-    moduleIds: modules.map((m) => m.id),
-    version: 1,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  modules.forEach((m) => {
-    m.packageId = induction.id;
-  });
   return {
     state: {
       practiceData,
-      modules,
-      packages: [induction],
-      assignments: modules.slice(0, 2).map((m, i) => ({
-        id: `dev-assignment-${i}`,
-        moduleId: m.id,
-        traineeId,
-        assignedAt: Date.now(),
-        status: "assigned",
-        packageId: induction.id,
-      })),
+      modules: [],
+      packages: [],
+      assignments: [],
       setupComplete: true,
       emojiMarks: {},
       answers: {},
@@ -192,6 +150,7 @@ function seed(): Workspace {
   };
 }
 function read(): Workspace {
+  staleKeys.forEach((key) => localStorage.removeItem(key));
   const raw = localStorage.getItem(storageKey);
   if (raw) {
     const workspace = JSON.parse(raw) as Workspace;

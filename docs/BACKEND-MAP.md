@@ -84,6 +84,6 @@ Row counts: 10 practices, 5 profiles (2 managers, 3 trainees), 2 training sessio
 3. **Plain-text temporary password in email.** A Supabase invite/magic link would be better. Probably P1, not pilot-blocking.
 4. **Two migration sources.** `contact_messages` is created in `drizzle/migrations/`, everything else in `supabase/migrations/`, and `drizzle/schema.ts` is blank. The retention purge function references `contact_messages`, so order matters on a fresh database.
 5. **`training_sessions` has no `created_at`.** Timestamps only live inside the JSON (`updatedAt`, `completedAt`). Retention or reporting queries will need to read the JSON.
-6. **Legacy import.** `readLegacyPractice()` in `src/lib/backend.ts` still pulls old `localStorage` data (`practice-ready-store`). Decide whether to keep it for the pilot.
+6. **Legacy import.** Removed. The dashboard deletes the old `practice-ready-store` localStorage entry.
 7. **`purge_expired_personal_data` isn't scheduled** by any migration. It has to be set up by hand with pg_cron. Live, it doesn't even exist yet (see above).
 8. **Repo and live DB have drifted.** Two migrations are missing live, and one live migration plus one Edge Function are missing from the repo. Before Day 9 deploy: `supabase db pull` / `supabase migration list` and get them back in sync.

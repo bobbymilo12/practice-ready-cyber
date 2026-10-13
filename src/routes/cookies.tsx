@@ -61,15 +61,6 @@ function CookiesPage() {
                 <td>Remembers your choice on the cookie banner so we don&apos;t ask every visit</td>
                 <td>Until you clear it</td>
               </tr>
-              <tr>
-                <td>practice-ready-store</td>
-                <td>Local storage</td>
-                <td>
-                  Read only, to move practice data saved by an older version of PracticeReady into
-                  your account
-                </td>
-                <td>Until you clear it</td>
-              </tr>
             </tbody>
           </table>
 

@@ -14,7 +14,7 @@ test("reviewed template selections appear inline and local edits survive restori
   const role = initialiseRoleFromTemplate(template);
   role.archived = true;
   await page.evaluate((role) => {
-    const key = "practiceready-dev-workspace-v1";
+    const key = "practiceready-dev-workspace-v2";
     const workspace = JSON.parse(localStorage.getItem(key)!);
     workspace.state.practiceData.roleRequests = { [role.roleId]: role };
     localStorage.setItem(key, JSON.stringify(workspace));

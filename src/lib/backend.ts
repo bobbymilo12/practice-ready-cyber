@@ -456,35 +456,3 @@ export async function trainingAction(action: string, body: Record<string, unknow
     }));
   return session;
 }
-
-export function readLegacyPractice(): Partial<PracticeState> | null {
-  try {
-    const old = JSON.parse(localStorage.getItem("practice-ready-store") ?? "null")?.state;
-    if (!old?.practiceData || !Array.isArray(old.modules)) return null;
-    return {
-      practiceData: {
-        ...emptyPractice(),
-        ...old.practiceData,
-        rolePolicies: { ...emptyPractice().rolePolicies, ...old.practiceData.rolePolicies },
-      },
-      modules: old.modules.map((m: AppState["modules"][number]) => ({
-        ...m,
-        published: Boolean(
-          m.published && m.scenarios.length && m.scenarios.every((s) => s.status === "approved"),
-        ),
-      })),
-      setupComplete: Boolean(old.setupComplete),
-    };
-  } catch {
-    return null;
-  }
-}
-export async function importLegacyPractice() {
-  const current = useApp.getState();
-  if (current.account?.role !== "manager" || current.modules.length)
-    throw new Error("Import is only available for an empty manager workspace.");
-  const legacy = readLegacyPractice();
-  if (!legacy) throw new Error("No saved demo practice was found on this browser.");
-  useApp.setState(legacy);
-  await flushPractice();
-}
