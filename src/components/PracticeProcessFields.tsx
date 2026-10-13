@@ -427,9 +427,6 @@ export function PrescriptionFields() {
         <p className="whitespace-pre-line text-sm text-muted-foreground">
           {routeText(bookingFor(p).escalation, p) ||
             "Choose the appointment escalation contact and method in Bookings."}
-          <Link to="/practice/setup" search={{ step: 3 }} className="mt-2 block text-primary">
-            Review appointment escalation →
-          </Link>
         </p>
       ) : (
         <ContactFields

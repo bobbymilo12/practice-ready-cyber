@@ -249,7 +249,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
   assert.deepEqual(useApp.getState().practiceData.localProcedures[target.id], revised);
   assert.deepEqual(JSON.parse(stored).sessions, data.sessions);
 });
-test("Practice Setup and Data Hub reuse one central editor; reopening restores compact records without writes", () => {
+test("Data Hub keeps the central editor; reopening restores compact records without writes", () => {
   const data = {
     practiceData: { ...p, localProcedures: { [target.id]: saved() } },
     account: { id: "manager" },
@@ -271,7 +271,7 @@ test("Practice Setup and Data Hub reuse one central editor; reopening restores c
   assert.ok(html.includes("View/Edit"));
   assert.ok(html.includes("Not reviewed"));
   assert.equal(saves, 0);
-  for (const path of ["../src/routes/practice.setup.tsx", "../src/routes/data-hub.tsx"]) {
+  for (const path of ["../src/routes/data-hub.tsx"]) {
     const source = readFileSync(new URL(path, import.meta.url), "utf8");
     assert.ok(source.includes("<LocalProcedures />"));
   }
@@ -414,34 +414,17 @@ test("editor selection/cancellation is draft-only and save feedback waits for pe
   assert.equal(savedRecord.steps[0].text, "Exact manager wording");
 });
 
-test("eight-step navigation preserves legacy URL destinations and keeps Procedures optional", async () => {
+test("setup is limited to Practice, Roles, Team and Review", async () => {
   const { setupSteps, setupSearch, setupMissing } = await import("../src/lib/practice-setup.ts");
-  assert.deepEqual(setupSteps, [
-    "Practice",
-    "Roles",
-    "Team",
-    "Bookings",
-    "Procedures",
-    "Prescriptions",
-    "Safety",
-    "Review",
-  ]);
-  for (let old = 0; old <= 6; old++) {
-    const result = setupSearch({ step: old });
-    assert.equal(result.step, old < 4 ? old : old + 1);
-    assert.deepEqual(setupSearch(result), result, "normalised URLs are idempotent");
-  }
-  for (let step = 0; step < 8; step++) assert.equal(setupSearch({ step, flow: 2 }).step, step);
+  assert.deepEqual(setupSteps, ["Practice", "Roles", "Team", "Review"]);
+  for (let step = 0; step < 4; step++) assert.equal(setupSearch({ step }).step, step);
   assert.equal(setupSearch({ step: -1 }).step, 0);
-  assert.equal(setupSearch({ step: 99, flow: 2 }).step, 7);
-  const before = JSON.stringify(p);
-  assert.deepEqual(setupMissing(p)[4], []);
-  assert.equal(JSON.stringify(p), before);
+  assert.equal(setupSearch({ step: 99 }).step, 3);
+  assert.equal(setupMissing(p).length, 4);
   const route = readFileSync(new URL("../src/routes/practice.setup.tsx", import.meta.url), "utf8");
   assert.ok(route.includes("validateSearch: setupSearch"));
-  assert.ok(route.includes("{step === 4 && <LocalProcedures />}"));
-  assert.ok(route.includes("search: { step: next, flow: 2 }"));
-  assert.ok(route.includes("step === 7) store.completeSetup()"));
+  assert.ok(!route.includes("<LocalProcedures"));
+  assert.ok(route.includes("step === 3) store.completeSetup()"));
 });
 
 test("Appointment Booking has a compact central summary, with no editor or duplicated procedure storage", () => {

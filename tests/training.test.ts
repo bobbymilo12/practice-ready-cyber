@@ -526,18 +526,9 @@ import {
 } from "../src/lib/practice-config.ts";
 import { setupSteps, setupMissing } from "../src/lib/practice-setup.ts";
 import { practiceRoles } from "../src/lib/role-requests.ts";
-test("eight steps retain legacy roles, exceptions and safeguarding contacts without guessing names", () => {
+test("four steps retain legacy roles, exceptions and safeguarding contacts without guessing names", () => {
   const p = blankPractice();
-  assert.deepEqual(setupSteps, [
-    "Practice",
-    "Roles",
-    "Team",
-    "Bookings",
-    "Procedures",
-    "Prescriptions",
-    "Safety",
-    "Review",
-  ]);
+  assert.deepEqual(setupSteps, ["Practice", "Roles", "Team", "Review"]);
   p.safeguardingRoute = {
     contact: { kind: "role", role: "Duty GP" },
     method: { id: "phone", other: "123" },
@@ -546,7 +537,7 @@ test("eight steps retain legacy roles, exceptions and safeguarding contacts with
   const old = JSON.stringify(p);
   assert.deepEqual(safeguardingFor(p).leadIds, []);
   assert.ok(safeguardingMissing(p).some((m) => m.includes("named")));
-  assert.equal(setupMissing(p).length, 8);
+  assert.equal(setupMissing(p).length, 4);
   assert.ok(practiceRoles(p).some((r) => r.roleId === requestRoleId(p.staff[0].role)));
   assert.equal(JSON.stringify(p), old);
   p.safeguardingRoute.contact = { kind: "staff", staffId: p.staff[0].id };

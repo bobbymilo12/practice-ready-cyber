@@ -241,13 +241,6 @@ function DataHub() {
               .filter(Boolean)
               .join("\n\n") || "Not yet configured"}
           </p>
-          <Link
-            className="mt-3 inline-block text-primary"
-            to="/practice/setup"
-            search={{ step: 3 }}
-          >
-            Edit booking configuration →
-          </Link>
         </Card>
         <Card>
           <h2 className="font-semibold">Prescription process</h2>
@@ -264,13 +257,6 @@ function DataHub() {
               .filter(Boolean)
               .join("\n\n") || "Not yet configured"}
           </p>
-          <Link
-            className="mt-3 inline-block text-primary"
-            to="/practice/setup"
-            search={{ step: 5, flow: 2 }}
-          >
-            Edit prescription configuration →
-          </Link>
         </Card>
       </section>
       {/* Practice basics */}

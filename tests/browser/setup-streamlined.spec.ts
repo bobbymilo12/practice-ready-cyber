@@ -81,42 +81,13 @@ for (const mobile of [false, true]) {
     await expect(page).toHaveURL(/step=3/);
     await page.getByRole("button", { name: /^(Back|Back to Practice)$/, exact: true }).click();
     await expect(page).toHaveURL(/step=2/);
-    await page.getByRole("button", { name: "4. Bookings", exact: true }).click();
-    await page.getByLabel("At reception", { exact: true }).check();
-    await page.getByRole("button", { name: "5. Prescriptions", exact: true }).click();
-    await page.getByLabel("Telephone", { exact: true }).check();
-    await page.getByLabel("72 working hours", { exact: true }).check();
-    await expect(
-      page.getByLabel("Ordering instructions (including existing guidance)", { exact: true }),
-    ).not.toBeVisible();
-    await page.locator("summary").filter({ hasText: "Ordering instructions" }).click();
-    await page
-      .getByLabel("Ordering instructions (including existing guidance)", { exact: true })
-      .fill("Our local ordering note");
-    await page.getByRole("button", { name: "6. Safety", exact: true }).click();
-    await page.getByText("Choose safeguarding leads · 0 selected", { exact: true }).click();
-    await page.getByLabel("Catherine Smith — Nurse Practitioner", { exact: true }).check();
-    await page
-      .getByLabel("How should staff raise a concern?", { exact: true })
-      .selectOption("person");
-    await page.locator("summary").filter({ hasText: "Local confidentiality instructions" }).click();
-    await page
-      .getByLabel("Local confidentiality instructions", { exact: true })
-      .fill("Local instruction retained");
     await page
       .getByRole("button", { name: /^(Save and continue|Continue to Team)$/, exact: true })
       .click();
-    await expect(page).toHaveURL(/step=6/);
+    await expect(page).toHaveURL(/step=3/);
     await expect(page.getByRole("heading", { name: "Roles", exact: true })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBeTruthy();
-    await page.reload();
-    await page.getByRole("button", { name: "5. Prescriptions", exact: true }).click();
-    await expect(page.getByLabel("72 working hours", { exact: true })).toBeChecked();
-    await page.locator("summary").filter({ hasText: "Ordering instructions" }).click();
-    await expect(
-      page.getByLabel("Ordering instructions (including existing guidance)", { exact: true }),
-    ).toHaveValue("Our local ordering note");
   });
 }
