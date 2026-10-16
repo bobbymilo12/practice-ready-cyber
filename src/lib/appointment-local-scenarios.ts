@@ -1,3 +1,4 @@
+import { contactSnapshotCopy } from "./training-copy.ts";
 import type { PracticeData } from "./store";
 import type { ModuleSettings } from "./module-config";
 import type { MCQScenario } from "./training-types";
@@ -81,12 +82,17 @@ function baseStructuredBookingExercises(p: PracticeData, settings: ModuleSetting
     settings,
   });
   if (route) {
-    const contact = route.snapshot as { name: string; method: string; phone?: string };
+    const contact = route.snapshot as {
+      name: string;
+      methodId: string;
+      phone?: string;
+      contact?: { kind: string };
+    };
     add(
       "An unclear booking route",
       "When reception is unsure which booking route applies, how should staff seek support?",
       "A patient has explained what they need help with, but you cannot establish which of the practice’s booking routes fits. They ask what will happen next.",
-      `Contact ${contact.name} — ${contact.method}${contact.phone ? `: ${contact.phone}` : ""}.`,
+      contactSnapshotCopy(contact),
       [
         "Use the route from the patient’s previous request while waiting to clarify this one.",
         "Ask the patient to choose a route so you can continue with the booking.",

@@ -1,3 +1,4 @@
+import { contactSnapshotCopy } from "./training-copy.ts";
 import { coreForbiddenInferences } from "./core-appointment-recipes.ts";
 import { coreTrainingLibrary, coreBindingSources } from "./core-training-library.ts";
 import type {
@@ -382,12 +383,17 @@ export function createCoreGenerator(library: readonly CoreTrainingConcept[]) {
         break;
       case "booking_support": {
         const route = eligibility.inputs.find((i) => i.bindingId === "escalation_routes")!
-          .snapshot as { name: string; method: string; phone?: string };
+          .snapshot as {
+          name: string;
+          methodId: string;
+          phone?: string;
+          contact?: { kind: string };
+        };
         patientQuote =
           "You cannot resolve a booking request and need help deciding what to do next.";
         question = "How should you ask for support?";
         options = [
-          `Contact ${route.name} — ${route.method}${route.phone ? `: ${route.phone}` : ""}`,
+          contactSnapshotCopy(route),
           "Choose the route used for the patient's last request",
           "Ask the patient to choose an appointment type before seeking support",
         ];

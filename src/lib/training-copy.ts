@@ -71,7 +71,7 @@ export function readableTitle(label: string): string {
   const clean = label
     .replace(/^Routing:\s*/, "")
     .replace(/^Individual exception:\s*/, "Responsibilities for ");
-  return clean.replace(/\?$/, "");
+  return clean;
 }
 export function roleDestination(role: string): string {
   if (/^(doctor|nurse practitioner|nurse|pharmacist)$/i.test(role.trim())) return "a " + role;
@@ -89,7 +89,15 @@ export function routingAction(destinations: string[], query: boolean): string {
  * Exact local sequences and manager-authored wording are not guessed at or paraphrased.
  */
 export function hasFinishedCopy(scenario: Scenario): boolean {
-  if (scenario.kind !== "mcq" || scenario.provenance) return true;
+  if (scenario.kind !== "mcq" || scenario.provenance?.kind === "sequence") return true;
+  if (
+    !scenario.title.trim() ||
+    !scenario.question.trim() ||
+    scenario.options.some((option) => !option.trim())
+  )
+    return false;
+  if (scenario.options.some((option) => submissionChannel(option.replace(/[.]$/, ""))))
+    return false;
   const copy = [
     scenario.title,
     scenario.patientQuote,
@@ -105,6 +113,8 @@ export function hasFinishedCopy(scenario: Scenario): boolean {
 /** A destination and contact method are rendered from their distinct saved fields. */
 export function contactRouteCopy(route: ContactRoute, practice: PracticeData): string {
   if (contactMissing(route, practice)) return "";
+  // Instruction-only legacy routes have no destination/method to interpolate.
+  if (route.contact.kind === "unconfirmed") return route.instruction.trim();
   const contacts = routeContacts(route).map((c) => {
     if (c.kind === "role")
       return roleDestination(contactText(c, practice.staff, practice.roleRequests));
@@ -114,15 +124,7 @@ export function contactRouteCopy(route: ContactRoute, practice: PracticeData): s
     }
     return c.text;
   });
-  const method = (
-    {
-      phone: "by telephone" + (route.method.other ? " on " + route.method.other : ""),
-      person: "in person",
-      teams: "through Microsoft Teams",
-      system: "through the clinical system",
-      other: "using this contact method: " + route.method.other,
-    } as Record<string, string>
-  )[route.method.id];
+  const method = contactMethodCopy(route.method.id, route.method.other);
   if (!method) return "";
   return (
     "Contact " +
@@ -156,4 +158,76 @@ export function configuredAnswer(label: string, answer: string): string {
     return methods[answer] ?? answer;
   }
   return answer;
+}
+
+/** Preserve acronym/proper-name casing in configured list entries. */
+export function listItemCopy(item: string): string {
+  const editorial: Record<string, string> = {
+    "Patient identifiers": "patient identifiers",
+    "Callback number": "a callback number",
+    "Caller’s own description of the concern": "the caller’s own description of the concern",
+    "Actions already taken and the time of the call":
+      "actions already taken and the time of the call",
+    "Date and time": "the date and time",
+    "Caller’s own words where relevant": "the caller’s own words where relevant",
+    "Actions taken": "actions taken",
+    "Person notified": "the person notified",
+    "Appointment requests": "appointment requests",
+    "Prescription requests": "prescription requests",
+    "Results enquiries": "results enquiries",
+    "Administrative handovers": "administrative handovers",
+  };
+  return editorial[item] ?? item;
+}
+export function contactChoicesCopy(choices: string[]): string {
+  const people = choices.map((choice) => {
+    const split = choice.indexOf(" — ");
+    return split >= 0 ? choice.slice(0, split) + " (" + choice.slice(split + 3) + ")" : choice;
+  });
+  return people.length ? "Contact " + readableList(people, "disjunction") + "." : "";
+}
+/** Only the active configured route and action selections supply prescription guidance. */
+export function urgentPrescriptionCopy(practice: PracticeData): string {
+  const config = practice.prescriptionConfig;
+  if (!config) return practice.repeatEmergency;
+  const route =
+    config.urgentRoute.source === "separate"
+      ? contactRouteCopy(config.urgentRoute.route, practice)
+      : practice.bookingConfig
+        ? contactRouteCopy(practice.bookingConfig.escalation, practice)
+        : practice.dutyContact;
+  const actions: Record<string, string> = {
+    system: "Send an urgent request through the clinical system.",
+    contact: "Contact the responsible clinician.",
+    other: config.otherAction.trim(),
+  };
+  return [route, ...config.urgentActions.map((id) => actions[id] ?? ""), config.urgentInstruction]
+    .filter((text) => text?.trim())
+    .join("\n");
+}
+
+export function contactMethodCopy(id: string, detail = ""): string {
+  return (
+    (
+      {
+        phone: "by telephone" + (detail ? " on " + detail : ""),
+        person: "in person",
+        teams: "through Microsoft Teams",
+        system: "through the clinical system",
+        other: detail ? "using this contact method: " + detail : "",
+      } as Record<string, string>
+    )[id] ?? ""
+  );
+}
+/** Render already-resolved evidence without changing its source snapshot. */
+export function contactSnapshotCopy(route: {
+  name: string;
+  methodId: string;
+  phone?: string;
+  contact?: { kind: string };
+}): string {
+  const method = contactMethodCopy(route.methodId, route.phone);
+  if (!route.name.trim() || !method) return "";
+  const name = route.contact?.kind === "role" ? roleDestination(route.name) : route.name;
+  return "Contact " + name + " " + method + ".";
 }

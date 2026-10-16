@@ -5,6 +5,8 @@ import {
   routingAction,
   hasFinishedCopy,
   contactRouteCopy,
+  contactChoicesCopy,
+  urgentPrescriptionCopy,
 } from "./training-copy.ts";
 import { practiceQuestionPresentation } from "./module-presentation.ts";
 import {
@@ -712,7 +714,7 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
     if (!configMissing(p).prescription.some((x) => x.startsWith("Urgent")))
       add(
         "Urgent prescription request",
-        s.repeatEmergency,
+        urgentPrescriptionCopy(p),
         "A patient says they have run out of medication. Which recorded process applies?",
       );
     add(
@@ -738,23 +740,28 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
     add(
       "Safeguarding contact",
       p.safeguardingRoute
-        ? contactRouteCopy(
-            {
-              ...p.safeguardingRoute,
-              ...(p.safeguardingRoute.leadIds
-                ? {
-                    contact: {
-                      kind: "multiple",
-                      contacts: p.safeguardingRoute.leadIds.map((staffId) => ({
-                        kind: "staff",
-                        staffId,
-                      })),
-                    } as const,
-                  }
-                : {}),
-            },
-            p,
-          )
+        ? [
+            contactRouteCopy(
+              {
+                ...p.safeguardingRoute,
+                ...(p.safeguardingRoute.leadIds
+                  ? {
+                      contact: {
+                        kind: "multiple",
+                        contacts: p.safeguardingRoute.leadIds.map((staffId) => ({
+                          kind: "staff",
+                          staffId,
+                        })),
+                      } as const,
+                    }
+                  : {}),
+              },
+              p,
+            ),
+            p.localSafeguarding,
+          ]
+            .filter(Boolean)
+            .join("\n")
         : s.localSafeguarding,
       "A safeguarding concern has been identified. How should reception raise it locally?",
     );
@@ -843,7 +850,20 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
   for (const f of topicFields[topic] ?? []) {
     if (f.showWhen && !f.showWhen(p, settings)) continue;
     if (f.legacyOnly && !selectedValues(f, settings).some((v) => v !== EXCLUDE_QUESTION)) continue;
-    const known = f.key === "sameDay" ? sameDayProcess : f.known?.(s);
+    // Role-derived query coverage is generated below. Keep explicit legacy contacts,
+    // but never manufacture a second foundational question from arbitrary staff names.
+    if (topic === "prescriptions" && f.key === "queries" && !selectedValues(f, settings).length)
+      continue;
+    const known =
+      f.key === "sameDay"
+        ? sameDayProcess
+        : topic === "prescriptions" && f.key === "queries"
+          ? ""
+          : topic === "prescriptions" &&
+              f.key === "urgentRequest" &&
+              !configMissing(p).prescription.some((item) => item.startsWith("Urgent"))
+            ? urgentPrescriptionCopy(p)
+            : f.known?.(s);
     const selected = selectedValues(f, settings);
     const options = questionOptions(f, p, settings);
     // Exclusion wins over malformed multi-select combinations. Saved setup stays authoritative.
@@ -858,14 +878,22 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
             return details?.instruction?.trim() ? [details.instruction.trim()] : [];
           if (kind === "contact") {
             if (!configuredContacts(p).includes(details?.contact ?? "")) return [];
+            const contact = answerText(details!.contact!, p);
             return [
-              `Ask ${answerText(details!.contact!, p)} for advice${details?.instruction?.trim() ? `. ${details.instruction.trim()}` : ""}`,
+              `Ask ${details!.contact!.startsWith("role:") ? roleDestination(contact) : contact} for advice${details?.instruction?.trim() ? `. ${details.instruction.trim()}` : ""}`,
             ];
           }
-          return [option.label];
+          return [
+            !f.options.length && value.startsWith("role:")
+              ? roleDestination(option.label)
+              : option.label,
+          ];
         });
     const selectedRule = known || choices.join("; ");
-    const rule = selectedRule && !f.options.length ? "Contact " + selectedRule + "." : selectedRule;
+    const rule =
+      selectedRule && !f.options.length
+        ? contactChoicesCopy(known ? known.split("; ").filter(Boolean) : choices)
+        : selectedRule;
     // A conditional branch alone is not an actionable local process.
     if (
       rule === "It depends on the request" ||
@@ -1273,7 +1301,9 @@ export function selectedModuleScenarios(
     (s) => !settings.trainingLevel || hasFinishedCopy(s),
   );
   if (topic !== "appointment-booking") return local.slice(0, count);
-  const core = appointmentCorePool({ topicKey: topic, practice: p, settings });
+  const core = appointmentCorePool({ topicKey: topic, practice: p, settings }).filter(
+    hasFinishedCopy,
+  );
   const selectedCore = core.slice(0, Math.round(count * 0.3));
   const selectedLocal = local.slice(0, count - selectedCore.length);
   // Prefer a procedure for a request already selected for a weaker role-only question.
@@ -1478,7 +1508,7 @@ export function regenerateConfiguredScenario(
         settings: module.settings,
       },
     );
-    if (!replacement) return module;
+    if (!replacement || !hasFinishedCopy(replacement)) return module;
     return {
       ...module,
       needsReview: module.published || module.needsReview,

@@ -4,6 +4,7 @@ import {
   readableList,
   readableGuidance,
   configuredAnswer,
+  listItemCopy,
 } from "./training-copy.ts";
 /** Small application layer: configuration supplies facts; frames supply only situations. */
 export interface ScenarioFact {
@@ -260,13 +261,31 @@ export function applications(fact: ScenarioFact): Application[] {
     .map((item) => item.trim())
     .filter(Boolean);
   const channels = /request methods|repeat requests|submitted|requests submitted/i.test(fact.label);
-  if (channels && items.length && items.every((item) => submissionChannel(item)))
-    return items.map((method) => methodApplication(fact.label, fact.situation, method)!);
+  if (channels && items.some((item) => submissionChannel(item))) {
+    const methods = items.filter((item) => submissionChannel(item));
+    const instructions = items.filter((item) => !submissionChannel(item));
+    return [
+      ...methods.map((method) => methodApplication(fact.label, fact.situation, method)!),
+      ...(instructions.length
+        ? [
+            {
+              label: "Additional submission guidance",
+              situation:
+                "A patient asks about an additional requirement for submitting this request. What should you tell them?",
+              rule: readableGuidance(instructions.join("\n")),
+              feedback: "The practice also specifies: " + readableGuidance(instructions.join("\n")),
+            },
+          ]
+        : []),
+    ];
+  }
   if (/which details|activities.*shadow/i.test(fact.label) && items.length > 1)
     return items.map((item) => ({
-      label: `Including ${item.charAt(0).toLowerCase()}${item.slice(1)}`,
-      rule: `Include ${item.toLowerCase()}`,
-      situation: `${naturalSituation(fact.situation)} A colleague has included ${readableList(items.filter((other) => other !== item))}, but left out ${item.toLowerCase()}. What needs changing?`,
+      label: `Including ${listItemCopy(item)}`,
+      rule: `Include ${listItemCopy(item)}.`,
+      situation: `${naturalSituation(fact.situation)
+        .replace(/(?:^|\s)[^.!?]*\?$/, "")
+        .trim()} A colleague has included ${readableList(items.filter((other) => other !== item).map(listItemCopy))}, but left out ${listItemCopy(item)}. What needs changing?`,
       feedback: `${item} is part of this practice's requirements for this task. A partial handover or plan misses this requirement.`,
     }));
   return [
