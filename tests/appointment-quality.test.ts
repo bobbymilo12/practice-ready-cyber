@@ -156,9 +156,18 @@ test("UTI procedure teaches reception actions without assigning them to the clin
     assert.ok(recognition?.kind === "mcq");
     assert.equal(
       recognition.options[recognition.correctIndex],
-      "Doctor appointment or Practice Nurse appointment",
+      trainingLevel === "learn"
+        ? "Book an appointment with a Doctor or the Practice Nurse."
+        : "Doctor appointment or Practice Nurse appointment",
     );
-    assert.ok(!recognition.options.some((option) => /book|sample/i.test(option)));
+    // Booking wording is intentional; role recognition must not invent procedure actions.
+    assert.ok(!recognition.options.some((option) => /sample|urine-dipping/i.test(option)));
+    assert.match(
+      recognition.patientQuote,
+      trainingLevel === "learn"
+        ? /booking process has confirmed an appointment is needed/
+        : /followed the practice’s booking process/,
+    );
 
     const generated = modules.generateConfiguredModule(
       "appointment-booking",
@@ -221,7 +230,7 @@ test("Apply uses only authored first/later steps and freezes their procedure sna
   assert.equal(JSON.stringify(s), snapshot);
   assert.equal(localProcedureApplication(p), undefined);
 });
-test("eligible roles remain alternatives without contact/booking authority; umbrella queries are omitted", () => {
+test("eligible roles remain alternatives after the booking process; umbrella queries are omitted", () => {
   const { p } = fixture();
   const roles = Object.values(p.roleRequests!);
   roles[0].label = "Doctor";
@@ -240,7 +249,22 @@ test("eligible roles remain alternatives without contact/booking authority; umbr
       (s) => s.kind === "mcq" && s.localRoleRequestId === "medication-reviews",
     )!;
     assert.ok(q.kind === "mcq");
-    assert.equal(q.options[q.correctIndex], "Doctor appointment or Practice Nurse appointment");
+    assert.equal(
+      q.options[q.correctIndex],
+      trainingLevel === "learn"
+        ? "Book an appointment with a Doctor or the Practice Nurse."
+        : "Doctor appointment or Practice Nurse appointment",
+    );
+    assert.match(
+      q.patientQuote,
+      trainingLevel === "learn"
+        ? /booking process has confirmed an appointment is needed/
+        : /followed the practice’s booking process/,
+    );
+    assert.match(
+      q.learningPoint,
+      /Follow the practice’s booking process before arranging the appointment/,
+    );
     const visible = JSON.stringify(
       questions.map((s) => ({
         title: s.title,
@@ -254,7 +278,8 @@ test("eligible roles remain alternatives without contact/booking authority; umbr
         visible,
       ),
     );
-    assert.ok(!q.options.some((o) => /book|contact|approach/i.test(o)));
+    // Role eligibility alone must not add a contact route or infer appointment urgency.
+    assert.ok(!q.options.some((o) => /contact|approach|same-day|routine/i.test(o)));
   }
 });
 
