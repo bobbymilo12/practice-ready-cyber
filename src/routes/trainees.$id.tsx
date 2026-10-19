@@ -50,10 +50,12 @@ function TraineeDetail() {
   }
 
   const myResults = results.filter((r) => r.traineeId === trainee.id);
-  const assigned = assignments.filter((a) => a.traineeId === trainee.id);
-  const assignedModules = assigned
-    .map((a) => modules.find((m) => m.id === a.moduleId))
-    .filter((m): m is NonNullable<typeof m> => Boolean(m));
+  const allAssignments = assignments.filter((a) => a.traineeId === trainee.id);
+  const assigned = allAssignments.filter((a) => !a.withdrawnAt);
+  const assignedModules = modules.filter(
+    (m) =>
+      allAssignments.some((a) => a.moduleId === m.id) || myResults.some((r) => r.moduleId === m.id),
+  );
   const induction = useApp((s) => s.packages.find((p) => p.kind === "induction"));
   const inductionAssignments = induction
     ? assigned.filter((a) => induction.moduleIds.includes(a.moduleId))
@@ -102,7 +104,7 @@ function TraineeDetail() {
     : 0;
 
   const unassigned = modules.filter(
-    (m) => m.published && !assigned.some((a) => a.moduleId === m.id),
+    (m) => !trainee.inactiveAt && m.published && !assigned.some((a) => a.moduleId === m.id),
   );
 
   return (
@@ -121,8 +123,10 @@ function TraineeDetail() {
           <h1 className="font-display text-3xl font-bold tracking-tight">{trainee.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{trainee.email}</p>
         </div>
-        <Badge tone={trainee.status === "active" ? "approved" : "draft"}>
-          {trainee.status === "active" ? "Active" : "Invited"}
+        <Badge
+          tone={trainee.inactiveAt ? "neutral" : trainee.status === "active" ? "approved" : "draft"}
+        >
+          {trainee.inactiveAt ? "Inactive" : trainee.status === "active" ? "Active" : "Invited"}
         </Badge>
       </div>
 
@@ -133,7 +137,7 @@ function TraineeDetail() {
             <p className="mt-1 font-display text-4xl font-bold">{overall}%</p>
           </div>
           <div className="text-sm text-muted-foreground">
-            {perModule.length} assigned · {myResults.length} attempts logged
+            {assigned.length} assigned · {myResults.length} attempts logged
           </div>
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
@@ -183,16 +187,24 @@ function TraineeDetail() {
         )}
         {perModule.map(({ module, attempts, best, failedCount }) => {
           const latest = attempts[0];
-          const assignment = assigned.find((a) => a.moduleId === module.id)!;
+          const assignment = assigned.find((a) => a.moduleId === module.id);
+          const withdrawnIds = new Set(
+            allAssignments
+              .filter((a) => a.moduleId === module.id && a.withdrawnAt)
+              .map((a) => a.id),
+          );
+          const withdrawnUnfinished = sessions.filter(
+            (s) => withdrawnIds.has(s.assignmentId) && !s.result,
+          ).length;
           const historicalOpen = sessions.some(
-            (s) => s.assignmentId === assignment.id && !s.result && !resumableAttempt(s, module),
+            (s) => s.assignmentId === assignment?.id && !s.result && !resumableAttempt(s, module),
           );
           const currentOpen = sessions.some(
-            (s) => s.assignmentId === assignment.id && resumableAttempt(s, module),
+            (s) => s.assignmentId === assignment?.id && resumableAttempt(s, module),
           );
           const currentComplete = sessions.some(
             (s) =>
-              s.assignmentId === assignment.id && s.result && !attemptUsesOlderContent(s, module),
+              s.assignmentId === assignment?.id && s.result && !attemptUsesOlderContent(s, module),
           );
           return (
             <Card key={module.id}>
@@ -203,37 +215,64 @@ function TraineeDetail() {
                   </div>
                   <h3 className="mt-1 font-display text-lg font-semibold">{module.title}</h3>
                   <p className="mt-1 text-sm font-medium">
-                    {
-                      assignmentProgress(
-                        assigned.find((a) => a.moduleId === module.id)!,
-                        sessions,
-                        module,
-                      ).status
-                    }
+                    {assignment
+                      ? assignmentProgress(assignment, sessions, module).status
+                      : "Withdrawn — history retained"}
                   </p>
+                  {withdrawnIds.size > 0 && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {withdrawnIds.size} withdrawn assignment(s) · {withdrawnUnfinished} unfinished
+                      attempt(s) retained in history.
+                    </p>
+                  )}
                   <p className="mt-1 text-sm text-muted-foreground">
                     {attempts.length === 0
-                      ? "Not started"
+                      ? assignment
+                        ? "Not started"
+                        : "No completed attempts"
                       : `Best ${Math.round(best * 100)}% · ${attempts.length} attempt${
                           attempts.length === 1 ? "" : "s"
                         } · last ${new Date(latest.completedAt).toLocaleDateString()}`}
                   </p>
                 </div>
-                <button
-                  disabled={action.saving}
-                  onClick={() =>
-                    void action.run({
-                      kind: "reassign",
-                      traineeId: trainee.id,
-                      moduleId: module.id,
-                    })
-                  }
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface"
-                >
-                  {action.pending?.kind === "reassign" && action.pending.moduleId === module.id
-                    ? "Reassigning…"
-                    : "Redo — reassign module"}
-                </button>
+                {assignment && !trainee.inactiveAt && (
+                  <button
+                    disabled={action.saving}
+                    onClick={() =>
+                      void action.run({
+                        kind: "reassign",
+                        traineeId: trainee.id,
+                        moduleId: module.id,
+                      })
+                    }
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface"
+                  >
+                    {action.pending?.kind === "reassign" && action.pending.moduleId === module.id
+                      ? "Reassigning…"
+                      : "Redo — reassign module"}
+                  </button>
+                )}
+                {assignment && (
+                  <button
+                    disabled={action.saving}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Withdraw this assignment? It will leave current training, but all saved answers and results will be kept.",
+                        )
+                      )
+                        void action.run({
+                          kind: "withdraw",
+                          moduleId: module.id,
+                          traineeId: trainee.id,
+                          assignmentId: assignment.id,
+                        });
+                    }}
+                  >
+                    {action.pending?.kind === "withdraw" ? "Withdrawing…" : "Withdraw assignment"}
+                  </button>
+                )}
               </div>
 
               {historicalOpen && (
@@ -246,7 +285,7 @@ function TraineeDetail() {
                       ? " The updated training has been completed."
                       : currentOpen
                         ? " The trainee has started the updated training."
-                        : assignmentProgress(assignment, sessions, module).completed
+                        : assignment && assignmentProgress(assignment, sessions, module).completed
                           ? " Previous completion is retained; repeating the updated training is optional unless reassigned."
                           : " The trainee needs to start the updated training."}
                 </p>

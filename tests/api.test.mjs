@@ -75,6 +75,27 @@ const mockClient = {
   from: query,
   // Mirrors the SQL functions in 202610090001_practice_tables.sql and 202610100003_practice_modules.sql.
   rpc: async (name, args) => {
+    if (name === "set_staff_active") {
+      const manager = tables.profiles.find(
+        (p) => p.id === args.p_manager && p.role === "manager" && !p.inactive_at,
+      );
+      const member = tables.profiles.find(
+        (p) =>
+          p.id === args.p_trainee && p.practice_id === manager?.practice_id && p.role === "trainee",
+      );
+      const practice = tables.practices.find((p) => p.id === manager?.practice_id);
+      if (!member || !practice) return { data: null, error: { message: "Staff member not found" } };
+      if (practice.version !== args.p_version) return { data: null, error: null };
+      if (args.p_active === !member.inactive_at) return { data: practice.version, error: null };
+      member.inactive_at = args.p_active ? null : new Date().toISOString();
+      if (!args.p_active)
+        practice.state.assignments = practice.state.assignments.map((a) =>
+          a.traineeId === member.id && !a.withdrawnAt
+            ? { ...a, withdrawnAt: Date.now(), withdrawnBy: manager.id }
+            : a,
+        );
+      return { data: ++practice.version, error: null };
+    }
     const practice = tables.practices.find((p) => p.id === args.p_practice);
     if (name === "load_practice_data")
       return { data: tables.practice_data[args.p_practice] ?? null, error: null };
@@ -136,6 +157,10 @@ const js = ts
   .outputText.replace('"npm:@supabase/supabase-js@2.57.4"', JSON.stringify(sdk))
   .replace('"../../../src/lib/local-procedures.ts"', JSON.stringify(proceduresUrl))
   .replace('"../../../src/lib/training.ts"', JSON.stringify(trainingUrl))
+  .replace(
+    '"../../../src/lib/staff-lifecycle.ts"',
+    JSON.stringify(new URL("../src/lib/staff-lifecycle.ts", import.meta.url).href),
+  )
   .replace(
     '"../../../src/lib/practice-change-tracking.ts"',
     JSON.stringify(new URL("../src/lib/practice-change-tracking.ts", import.meta.url).href),
@@ -383,17 +408,12 @@ test("invitation assigns only ready induction modules and resend does not duplic
   assert.equal(assigned.length, 1);
   assert.equal(assigned[0].moduleId, "m1");
 });
-test("removing a trainee also removes their assignments and marks in the same versioned save", async () => {
+test("legacy remove endpoint no longer deletes staff or their history", async () => {
   reset("manager");
+  const before = structuredClone(tables);
   const r = await call({ action: "remove-trainee", id: "bob" });
-  assert.equal(r.status, 200);
-  const state = tables.practices[0].state;
-  assert.deepEqual(
-    state.assignments.map((a) => a.id),
-    ["a1"],
-  );
-  assert.deepEqual(Object.keys(state.emojiMarks), ["alice:m1:1"]);
-  assert.equal(tables.practices[0].version, 2);
+  assert.equal(r.status, 400);
+  assert.deepEqual(tables, before);
 });
 test("delete-practice needs a manager and an explicit confirmation, then removes the practice", async () => {
   reset("manager");
@@ -550,4 +570,97 @@ test("updated modules retain completed results without creating a repeat assignm
   );
   assert.deepEqual(tables.practices[0].state.assignments, assignments);
   assert.equal(tables.training_sessions.filter((s) => s.trainee_id === "alice").length, 1);
+});
+
+test("staff deactivation and reactivation preserve history and do not restore withdrawn workload", async () => {
+  reset("manager");
+  tables.practice_modules.oak[1].scenarios = structuredClone(
+    tables.practice_modules.oak[0].scenarios,
+  );
+  const history = structuredClone(tables.training_sessions);
+  const otherAssignment = structuredClone(tables.practices[0].state.assignments[0]);
+  assert.equal((await call({ action: "set-staff-active", id: "bob", active: false })).status, 200);
+  const inactive = tables.profiles.find((p) => p.id === "bob");
+  assert.ok(inactive.inactive_at);
+  assert.ok(tables.practices[0].state.assignments[1].withdrawnAt);
+  assert.deepEqual(tables.training_sessions, history);
+  assert.deepEqual(tables.practices[0].state.assignments[0], otherAssignment);
+  const loaded = await call({ action: "load" });
+  assert.ok(loaded.data.trainees.find((t) => t.id === "bob").inactiveAt);
+  const next = {
+    ...structuredClone(tables.practices[0].state),
+    modules: tables.practice_modules.oak,
+    practiceData: tables.practice_data.oak,
+  };
+  next.assignments.push({ id: "new", traineeId: "bob", moduleId: "m2" });
+  const rejected = await call({
+    action: "save-practice",
+    state: next,
+    version: tables.practices[0].version,
+  });
+  assert.equal(rejected.status, 400);
+  assert.match(rejected.data.error, /Inactive staff/);
+  user = { id: "bob" };
+  assert.equal((await call({ action: "load" })).status, 403);
+  assert.equal((await call({ action: "start", assignmentId: "a2" })).status, 403);
+  user = { id: "alice" };
+  assert.equal((await call({ action: "set-staff-active", id: "bob", active: true })).status, 200);
+  assert.equal(inactive.inactive_at, null);
+  assert.ok(tables.practices[0].state.assignments[1].withdrawnAt);
+  assert.deepEqual(tables.training_sessions, history);
+  user = { id: "bob" };
+  assert.equal((await call({ action: "start", assignmentId: "a2" })).status, 403);
+});
+
+test("staff lifecycle is restricted to managers and their own practice", async () => {
+  reset();
+  assert.equal((await call({ action: "set-staff-active", id: "bob", active: false })).status, 403);
+  reset("manager");
+  tables.profiles.push({ id: "external", practice_id: "elsewhere", role: "trainee" });
+  assert.equal(
+    (await call({ action: "set-staff-active", id: "external", active: false })).status,
+    400,
+  );
+  assert.equal(
+    (await call({ action: "set-staff-active", id: "alice", active: false })).status,
+    400,
+  );
+  assert.equal(tables.practices[0].version, 1);
+});
+
+test("withdrawn assignments retain attempts, cannot be resumed, and cannot be silently reopened", async () => {
+  reset();
+  tables.practice_modules.oak[1].scenarios = structuredClone(
+    tables.practice_modules.oak[0].scenarios,
+  );
+  const started = await call({ action: "start", assignmentId: "a1" });
+  await call({
+    action: "answer",
+    assignmentId: "a1",
+    sessionId: started.data.session.id,
+    scenarioId: "q1",
+    value: 1,
+  });
+  const history = structuredClone(tables.training_sessions);
+  tables.profiles.push({ id: "manager", practice_id: "oak", role: "manager" });
+  user = { id: "manager" };
+  const next = {
+    ...structuredClone(tables.practices[0].state),
+    modules: tables.practice_modules.oak,
+    practiceData: tables.practice_data.oak,
+  };
+  next.assignments[0].withdrawnAt = Date.now();
+  assert.equal((await call({ action: "save-practice", state: next, version: 1 })).status, 200);
+  assert.deepEqual(tables.training_sessions, history);
+  const reopen = structuredClone(next);
+  delete reopen.assignments[0].withdrawnAt;
+  assert.equal((await call({ action: "save-practice", state: reopen, version: 2 })).status, 400);
+  user = { id: "alice" };
+  assert.equal((await call({ action: "start", assignmentId: "a1" })).status, 403);
+  assert.equal(
+    (await call({ action: "submit", assignmentId: "a1", sessionId: started.data.session.id }))
+      .status,
+    403,
+  );
+  assert.deepEqual(tables.training_sessions, history);
 });

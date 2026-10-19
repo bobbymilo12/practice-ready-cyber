@@ -1,4 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { PasswordRecovery } from "@/components/PasswordRecovery";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { devAuthAvailable, devRole, enterDevSession } from "@/lib/dev-mode";
 import { useEffect, useState } from "react";
 import { Shell, Card } from "@/components/Shell";
@@ -10,8 +11,8 @@ export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Log in — PracticeReady" }] }),
   validateSearch: (
     s: Record<string, unknown>,
-  ): { email?: string; practice?: string; mode?: "login" | "create" } => ({
-    mode: s.mode === "create" ? "create" : "login",
+  ): { email?: string; practice?: string; mode?: "login" | "create" | "forgot" | "recovery" } => ({
+    mode: s.mode === "forgot" || s.mode === "recovery" || s.mode === "create" ? s.mode : "login",
     email: typeof s.email === "string" ? s.email : undefined,
     practice: typeof s.practice === "string" ? s.practice : undefined,
   }),
@@ -105,6 +106,8 @@ function AuthPage() {
       setBusy(false);
     }
   }
+  if (search.mode === "forgot" || search.mode === "recovery")
+    return <PasswordRecovery key={search.mode} reset={search.mode === "recovery"} />;
   return (
     <Shell className="auth-shell">
       <div className="mx-auto max-w-lg">
@@ -272,6 +275,15 @@ function AuthPage() {
                     ? "Create manager account"
                     : "Log in"}
             </button>
+            {!reset && mode === "login" && (
+              <Link
+                to="/auth"
+                search={{ mode: "forgot" }}
+                className="block text-sm text-primary underline"
+              >
+                Forgot password?
+              </Link>
+            )}
             {!reset && mode === "login" && (
               <p className="text-xs text-muted-foreground">
                 Invitation expired or missing? Ask your practice manager to resend it.

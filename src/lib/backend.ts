@@ -37,6 +37,7 @@ export type Snapshot = {
   roleTemplates?: RoleTemplate[];
 };
 export const useConnection = create<{
+  recoveryUserId: string | null;
   ready: boolean;
   loading: boolean;
   saving: boolean;
@@ -44,6 +45,7 @@ export const useConnection = create<{
   error: string;
   sessions: TrainingSession[];
 }>(() => ({
+  recoveryUserId: null,
   ready: false,
   loading: true,
   saving: false,
@@ -51,6 +53,13 @@ export const useConnection = create<{
   error: "",
   sessions: [],
 }));
+// Capture verified recovery events immediately, including before the auth screen mounts.
+// This flag is UI state only; Supabase verifies the recovery token and password update.
+supabase?.auth.onAuthStateChange((event, session) => {
+  if (event === "PASSWORD_RECOVERY")
+    useConnection.setState({ recoveryUserId: session?.user.id ?? null });
+  if (event === "SIGNED_OUT") useConnection.setState({ recoveryUserId: null });
+});
 let managerOperation: { key: string; promise: Promise<void> } | null = null;
 let version = 0;
 let applying = false;
@@ -487,4 +496,15 @@ export async function importLegacyPractice() {
   if (!legacy) throw new Error("No saved demo practice was found on this browser.");
   useApp.setState(legacy);
   await flushPractice();
+}
+
+/** Confirm membership changes before replacing the visible workspace. */
+export async function setStaffActive(id: string, active: boolean) {
+  await flushPractice();
+  await api("set-staff-active", { id, active });
+  try {
+    await loadWorkspace();
+  } catch {
+    throw new Error("The staff change was saved. Reload to see the updated team.");
+  }
 }

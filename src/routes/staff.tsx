@@ -12,7 +12,10 @@ export const Route = createFileRoute("/staff")({
 function Staff() {
   const state = useApp();
   const sessions = useConnection((s) => s.sessions);
-  const mine = state.assignments.filter((a) => a.traineeId === state.account?.id);
+  const mine = state.assignments.filter((a) => a.traineeId === state.account?.id && !a.withdrawnAt);
+  const withdrawn = state.assignments.filter(
+    (a) => a.traineeId === state.account?.id && a.withdrawnAt,
+  );
   const rows = mine.map((a) => ({
     assignment: a,
     module: state.modules.find((m) => m.id === a.moduleId),
@@ -244,6 +247,35 @@ function Staff() {
           );
         })}
       </div>
+      {withdrawn.length > 0 && (
+        <Card className="mt-8">
+          <h2 className="text-lg font-semibold">Withdrawn training</h2>
+          <p className="mt-2 text-sm">
+            These assignments no longer count towards your current training. Your saved answers and
+            completed results are kept.
+          </p>
+          {withdrawn.map((a) => (
+            <div key={a.id} className="mt-3 border-t border-border pt-3 text-sm">
+              <p>
+                {state.modules.find((m) => m.id === a.moduleId)?.title ?? "Training module"} ·
+                Withdrawn
+              </p>
+              {sessions
+                .filter((s) => s.assignmentId === a.id && s.result)
+                .map((s) => (
+                  <Link
+                    key={s.id}
+                    to="/results"
+                    onClick={() => useApp.setState({ lastResult: s.result! })}
+                    className="mr-4 inline-block text-primary underline"
+                  >
+                    View completed result ({s.result!.correct}/{s.result!.total})
+                  </Link>
+                ))}
+            </div>
+          ))}
+        </Card>
+      )}
       {latestResults.length > 0 && (
         <section className="mt-10 grid gap-4 md:grid-cols-2">
           <Card>

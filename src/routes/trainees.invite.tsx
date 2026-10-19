@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
-import { api, flushPractice, loadWorkspace } from "@/lib/backend";
+import { api, flushPractice, loadWorkspace, setStaffActive } from "@/lib/backend";
 import { devRole } from "@/lib/dev-mode";
 import { useApp, TRAINEE_ROLE_OPTIONS } from "@/lib/store";
 
@@ -29,6 +29,7 @@ export const Route = createFileRoute("/trainees/invite")({
 function InvitePage() {
   const trainees = useApp((s) => s.trainees);
   const [busy, setBusy] = useState(false);
+  const [pendingMember, setPendingMember] = useState<string | null>(null);
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -66,20 +67,30 @@ function InvitePage() {
     }
     void invite(email.trim(), name.trim(), role);
   }
-  async function remove(id: string) {
+  const lifecycleLock = useRef(false);
+  async function changeActive(id: string, active: boolean) {
+    if (lifecycleLock.current || busy) return;
     if (
-      !window.confirm("Remove this trainee's account and training history? This cannot be undone.")
+      !window.confirm(
+        active
+          ? "Reactivate this staff member? Previous training history stays available. Withdrawn assignments will not be restored."
+          : "Deactivate this staff member and withdraw their current assignments? Their training history will be kept.",
+      )
     )
       return;
+    lifecycleLock.current = true;
+    setPendingMember(id);
     setBusy(true);
     setError("");
     try {
-      await flushPractice();
-      await api("remove-trainee", { id });
-      await loadWorkspace();
+      await setStaffActive(id, active);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove trainee.");
+      setError(
+        err instanceof Error ? err.message : "Could not update this staff member. Please retry.",
+      );
     } finally {
+      lifecycleLock.current = false;
+      setPendingMember(null);
       setBusy(false);
     }
   }
@@ -141,7 +152,7 @@ function InvitePage() {
               type="submit"
               className="w-full rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90"
             >
-              {busy ? "Sending…" : "Invite employee"}
+              {busy ? (pendingMember ? "Please wait…" : "Sending…") : "Invite employee"}
             </button>
           </form>
 
@@ -166,6 +177,11 @@ function InvitePage() {
 
         <Card className="mt-6">
           <h2 className="font-display text-lg font-semibold">Your team</h2>
+          {error && (
+            <p role="alert" className="mt-2 text-sm text-destructive">
+              {error}
+            </p>
+          )}
           {trainees.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">
               No trainees yet. Invite your first new starter above.
@@ -182,14 +198,18 @@ function InvitePage() {
                     <div className="text-xs text-muted-foreground">{t.email}</div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge tone={t.status === "active" ? "approved" : "draft"}>
-                      {t.status === "active"
-                        ? "Active"
-                        : t.inviteStatus === "failed"
-                          ? "Email failed"
-                          : "Invited"}
+                    <Badge
+                      tone={t.inactiveAt ? "neutral" : t.status === "active" ? "approved" : "draft"}
+                    >
+                      {t.inactiveAt
+                        ? "Inactive"
+                        : t.status === "active"
+                          ? "Active"
+                          : t.inviteStatus === "failed"
+                            ? "Email failed"
+                            : "Invited"}
                     </Badge>
-                    {t.status === "invited" && (
+                    {!t.inactiveAt && t.status === "invited" && (
                       <button
                         disabled={busy}
                         onClick={() => void invite(t.email, t.name, t.role)}
@@ -207,10 +227,16 @@ function InvitePage() {
                     </Link>
                     <button
                       disabled={busy}
-                      onClick={() => void remove(t.id)}
+                      onClick={() => void changeActive(t.id, !!t.inactiveAt)}
                       className="text-xs text-destructive hover:underline"
                     >
-                      Remove
+                      {pendingMember === t.id
+                        ? t.inactiveAt
+                          ? "Reactivating…"
+                          : "Deactivating…"
+                        : t.inactiveAt
+                          ? "Reactivate"
+                          : "Deactivate"}
                     </button>
                   </div>
                 </li>

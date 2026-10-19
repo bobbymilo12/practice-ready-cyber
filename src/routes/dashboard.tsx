@@ -298,7 +298,7 @@ function Dashboard() {
               </p>
             )}
             {trainees.map((t) => {
-              const mine = assignments.filter((a) => a.traineeId === t.id);
+              const mine = assignments.filter((a) => a.traineeId === t.id && !a.withdrawnAt);
               const done = new Set(
                 results.filter((r) => r.traineeId === t.id).map((r) => r.moduleId),
               );
@@ -329,7 +329,8 @@ function Dashboard() {
                   <div>
                     <div className="text-sm font-medium">{t.name || t.email}</div>
                     <div className="text-xs text-muted-foreground">
-                      {t.status === "invited" ? "Invited" : "Active"} · {mine.length} assigned
+                      {t.inactiveAt ? "Inactive" : t.status === "invited" ? "Invited" : "Active"} ·{" "}
+                      {mine.length} assigned
                     </div>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -399,7 +400,7 @@ function Stat({
 }
 
 function AssignControl({ moduleId }: { moduleId: string }) {
-  const trainees = useApp((s) => s.trainees);
+  const trainees = useApp((s) => s.trainees).filter((t) => !t.inactiveAt);
   const assignments = useApp((s) => s.assignments);
   const action = useManagerAction();
   const [open, setOpen] = useState(false);
@@ -423,7 +424,7 @@ function AssignControl({ moduleId }: { moduleId: string }) {
         <div className="mt-2 space-y-1">
           {trainees.map((t) => {
             const assigned = assignments.some(
-              (a) => a.traineeId === t.id && a.moduleId === moduleId,
+              (a) => a.traineeId === t.id && a.moduleId === moduleId && !a.withdrawnAt,
             );
             return (
               <div key={t.id} className="flex items-center justify-between gap-2 text-xs">

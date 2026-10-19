@@ -4,6 +4,7 @@ import { pendingQuestionReviews, reviewKey } from "./practice-change-tracking.ts
 import type { AppState } from "./store";
 
 export type ManagerAction =
+  | { kind: "withdraw"; moduleId: string; traineeId: string; assignmentId: string }
   | { kind: "publish"; moduleId: string; reviewKey?: string }
   | { kind: "delete-draft"; moduleId: string }
   | { kind: "merge"; moduleId: string; moduleIds: string[]; title: string }
@@ -160,10 +161,26 @@ export function managerActionPatch(
       currentDraftId: state.currentDraftId === module.id ? null : state.currentDraftId,
     };
   }
-  if (!state.trainees.some((t) => t.id === action.traineeId) || !module.published)
+  if (action.kind === "withdraw") {
+    const target = state.assignments.find(
+      (a) =>
+        a.id === action.assignmentId &&
+        a.moduleId === module.id &&
+        a.traineeId === action.traineeId,
+    );
+    if (!target) throw new Error("Assignment not found. Reload and try again.");
+    return {
+      assignments: state.assignments.map((a) =>
+        a === target && !a.withdrawnAt
+          ? { ...a, withdrawnAt: identity.at, withdrawnBy: state.account?.id ?? "" }
+          : a,
+      ),
+    };
+  }
+  if (!state.trainees.some((t) => t.id === action.traineeId && !t.inactiveAt) || !module.published)
     throw new Error("Choose a trainee and a published module in this practice.");
   const existing = state.assignments.find(
-    (a) => a.traineeId === action.traineeId && a.moduleId === module.id,
+    (a) => a.traineeId === action.traineeId && a.moduleId === module.id && !a.withdrawnAt,
   );
   if (action.kind === "assign") {
     if (existing) return {};

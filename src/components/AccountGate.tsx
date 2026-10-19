@@ -55,6 +55,9 @@ export function AccountGate({ children }: { children: ReactNode }) {
         <button className="mt-3 underline" onClick={() => void loadWorkspace().catch(() => {})}>
           Retry
         </button>
+        <Link to="/auth" className="ml-4 underline">
+          Back to sign in
+        </Link>
       </div>
     );
   if (!publicPage && !account) return <Navigate to="/auth" />;

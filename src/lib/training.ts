@@ -239,6 +239,8 @@ export function assignmentProgress(
   sessions: TrainingSession[],
   module?: Module,
 ) {
+  if (assignment.withdrawnAt)
+    return { latest: undefined, completed: false, fraction: 0, status: "Withdrawn" };
   const mine = sessions.filter(
     (s) =>
       s.assignmentId === assignment.id &&

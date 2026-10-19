@@ -1,3 +1,4 @@
+import { withdrawAssignments, validateAssignmentLifecycle } from "./staff-lifecycle.ts";
 import { flagPracticeChanges, enforceReviewDecisions } from "./practice-change-tracking.ts";
 import { suggestedRole } from "./role-requests.ts";
 import { confirmProcedure, procedureTargets, validateLocalProcedures } from "./local-procedures.ts";
@@ -222,6 +223,9 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
     role,
     mustResetPassword: false,
   };
+  if (role === "trainee" && workspace.trainees.find((t) => t.id === account.id)?.inactiveAt)
+    throw new Error("Your practice access is inactive. Contact your practice manager.");
+  if (action === "remove-trainee") throw new Error("Use Deactivate. No history was deleted.");
   if (action === "load") {
     // Explicit opt-in only, inside the existing localhost development mock boundary.
     if (
@@ -270,13 +274,18 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
     } satisfies Snapshot;
   }
   let result: unknown = { ok: true };
-  if (["save-practice", "invite", "remove-trainee"].includes(action)) {
+  if (["save-practice", "invite", "set-staff-active"].includes(action)) {
     if (role !== "manager") throw new Error("Manager access required.");
     if (action === "save-practice") {
       validateLocalProcedures((body.state as PracticeState)?.practiceData?.localProcedures);
       if (body.version !== workspace.version)
         throw new Error("Mock practice changed. Reload and try again.");
       const next = body.state as PracticeState;
+      validateAssignmentLifecycle(
+        state.assignments,
+        next.assignments,
+        new Set(workspace.trainees.filter((t) => t.inactiveAt).map((t) => t.id)),
+      );
       next.modules = enforceReviewDecisions(
         workspace.state.modules,
         next.modules,
@@ -302,6 +311,7 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
     } else if (action === "invite") {
       const email = String(body.email ?? "").trim();
       const existing = workspace.trainees.find((t) => t.email === email);
+      if (existing?.inactiveAt) throw new Error("Reactivate this staff member first.");
       if (existing?.status === "active")
         throw new Error("This mock trainee already has an active account.");
       if (!existing)
@@ -336,18 +346,23 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
         }
       }
     } else {
-      if (body.id === traineeId)
-        throw new Error(
-          "Keep the built-in Mock Trainee to test role switching. Other mock trainees can be removed.",
+      const trainee = workspace.trainees.find((t) => t.id === body.id);
+      if (!trainee || typeof body.active !== "boolean") throw new Error("Staff member not found.");
+      if (!body.active) {
+        trainee.inactiveAt = trainee.inactiveAt ?? new Date().toISOString();
+        state.assignments = withdrawAssignments(
+          state.assignments,
+          trainee.id,
+          Date.now(),
+          account.id!,
         );
-      workspace.trainees = workspace.trainees.filter((t) => t.id !== body.id);
-      state.assignments = state.assignments.filter((a) => a.traineeId !== body.id);
-      workspace.sessions = workspace.sessions.filter((s) => s.traineeId !== body.id);
+      } else delete trainee.inactiveAt;
+      workspace.version++;
     }
   } else {
     if (role !== "trainee") throw new Error("Switch to Mock Trainee to record training.");
     const assignment = state.assignments.find(
-      (a) => a.id === body.assignmentId && a.traineeId === account.id,
+      (a) => a.id === body.assignmentId && a.traineeId === account.id && !a.withdrawnAt,
     );
     const module = state.modules.find(
       (m) => m.id === assignment?.moduleId && m.published && !m.needsReview,

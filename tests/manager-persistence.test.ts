@@ -922,3 +922,58 @@ test("manager trainee page distinguishes replaced unfinished training from retai
   assert.match(output, /no repeat has been assigned automatically/);
   assert.doesNotMatch(output, /trainee needs to start/);
 });
+
+test("assignment choices exclude inactive staff and withdrawn work is shown only as trainee history", async () => {
+  const training = await import("../src/lib/training.ts");
+  const assignment: any = {
+    id: "a",
+    moduleId: "m",
+    traineeId: "t",
+    withdrawnAt: 123,
+    status: "assigned",
+  };
+  const state: any = {
+    account: { id: "t" },
+    practiceData: { practiceName: "Test" },
+    trainees: [
+      { id: "active", name: "Active person" },
+      { id: "inactive", name: "Inactive person", inactiveAt: "2026-10-19" },
+    ],
+    assignments: [assignment],
+    modules: [{ id: "m", title: "Historical module", published: true, scenarios: [] }],
+    packages: [],
+    emojiMarks: {},
+  };
+  const connection: any = {
+    sessions: [
+      {
+        id: "attempt",
+        assignmentId: "a",
+        traineeId: "t",
+        result: { moduleId: "m", moduleTitle: "Historical module", total: 1, correct: 1 },
+      },
+    ],
+  };
+  const imports: any = {
+    react: { useState: () => [true, () => {}] },
+    "@/hooks/use-manager-action": { useManagerAction: () => ({ saving: false }) },
+    "@tanstack/react-router": { createFileRoute: () => () => ({}), Link: "a" },
+    "@/components/Shell": { Shell: "main", Card: "section", Badge: "span" },
+    "@/lib/backend": { useConnection: (select: any) => select(connection) },
+    "@/lib/training": training,
+    "@/lib/store": { useApp: (select?: any) => (select ? select(state) : state) },
+  };
+  const dashboard = compile(
+    "../src/routes/dashboard.tsx",
+    imports,
+    "\nexports.AssignControl = AssignControl;",
+  );
+  const choices = JSON.stringify(dashboard.AssignControl({ moduleId: "m" }));
+  assert.match(choices, /Active person/);
+  assert.doesNotMatch(choices, /Inactive person/);
+  const staff = compile("../src/routes/staff.tsx", imports, "\nexports.Staff = Staff;");
+  const screen = JSON.stringify(staff.Staff());
+  assert.match(screen, /Withdrawn training/);
+  assert.match(screen, /View completed result/);
+  assert.doesNotMatch(screen, /Start module|Continue module|Practise again/);
+});

@@ -163,6 +163,8 @@ export interface TrainingResult {
 }
 
 export interface Assignment {
+  withdrawnAt?: number;
+  withdrawnBy?: string;
   id: string;
   traineeId: string;
   moduleId: string;

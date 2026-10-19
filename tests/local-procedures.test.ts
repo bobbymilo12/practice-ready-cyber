@@ -1,3 +1,4 @@
+import * as staffLifecycle from "../src/lib/staff-lifecycle.ts";
 import * as training from "../src/lib/training.ts";
 import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import * as managerActions from "../src/lib/manager-actions.ts";
@@ -200,6 +201,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
   const dev = compile("../src/lib/dev-backend.ts", {
     "./role-requests.ts": { suggestedRole },
     "./practice-change-tracking.ts": changeTracking,
+    "./staff-lifecycle.ts": staffLifecycle,
     "./store": store,
     "./dev-mode": { devRole: () => "manager" },
     "./local-procedures.ts": procedures,
@@ -479,6 +481,7 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
   try {
     const { devApi } = compile("../src/lib/dev-backend.ts", {
       "./practice-change-tracking.ts": changeTracking,
+      "./staff-lifecycle.ts": staffLifecycle,
       "./role-requests.ts": { suggestedRole },
       "./store": { defaultPracticeData: empty() },
       "./dev-mode": { devRole: () => role },
@@ -610,6 +613,63 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
     await assert.rejects(devApi("load", {}), /No local mock session/);
     assert.equal(reads, previousReads);
     assert.equal(stored, null);
+  } finally {
+    Object.assign(globalThis, { localStorage: previousStorage, window: previousWindow });
+  }
+});
+
+test("mock membership deactivation retains attempts and reactivation leaves historical assignments withdrawn", async () => {
+  let role = "manager";
+  let stored: string | null = null;
+  const previousStorage = globalThis.localStorage;
+  const previousWindow = globalThis.window;
+  Object.assign(globalThis, {
+    localStorage: {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => {
+        stored = value;
+      },
+    },
+    window: { location: { search: "" } },
+  });
+  try {
+    const { devApi } = compile("../src/lib/dev-backend.ts", {
+      "./staff-lifecycle.ts": staffLifecycle,
+      "./practice-change-tracking.ts": changeTracking,
+      "./role-requests.ts": { suggestedRole },
+      "./store": { defaultPracticeData: empty() },
+      "./dev-mode": { devRole: () => role },
+      "./local-procedures.ts": procedures,
+      "./practice-scenarios": {},
+      "./training": training,
+    });
+    await devApi("load", {});
+    const workspace = JSON.parse(stored!);
+    workspace.state.assignments = [
+      { id: "test-assignment", moduleId: "test", traineeId: "dev-trainee-jamie" },
+    ];
+    workspace.sessions = [
+      {
+        id: "saved-history",
+        traineeId: "dev-trainee-jamie",
+        assignmentId: "test-assignment",
+        answers: [{ scenarioId: "q", value: 0 }],
+      },
+    ];
+    stored = JSON.stringify(workspace);
+    await devApi("set-staff-active", { id: "dev-trainee-jamie", active: false });
+    let loaded = await devApi("load", {});
+    assert.ok(loaded.trainees[0].inactiveAt);
+    assert.ok(loaded.state.assignments[0].withdrawnAt);
+    assert.deepEqual(loaded.sessions, workspace.sessions);
+    role = "trainee";
+    await assert.rejects(devApi("load", {}), /inactive/);
+    role = "manager";
+    await devApi("set-staff-active", { id: "dev-trainee-jamie", active: true });
+    loaded = await devApi("load", {});
+    assert.equal(loaded.trainees[0].inactiveAt, undefined);
+    assert.ok(loaded.state.assignments[0].withdrawnAt);
+    assert.deepEqual(loaded.sessions, workspace.sessions);
   } finally {
     Object.assign(globalThis, { localStorage: previousStorage, window: previousWindow });
   }

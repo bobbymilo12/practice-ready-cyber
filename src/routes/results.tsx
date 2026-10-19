@@ -15,7 +15,9 @@ function Results() {
   const account = useApp((s) => s.account);
   const stored = useApp((s) => s.lastResult);
   const r = stored?.traineeId === account?.id ? stored : null;
-  const assignments = useApp((s) => s.assignments).filter((a) => a.traineeId === account?.id);
+  const assignments = useApp((s) => s.assignments).filter(
+    (a) => a.traineeId === account?.id && !a.withdrawnAt,
+  );
   const modules = useApp((s) => s.modules);
   const sessions = useConnection((s) => s.sessions);
   const attempt = sessions.find((s) => s.id === r?.attemptId);
@@ -292,13 +294,15 @@ function Results() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            to="/train"
-            search={{ id: r.moduleId }}
-            className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold"
-          >
-            Retake module
-          </Link>
+          {assignments.some((a) => a.moduleId === r.moduleId) && (
+            <Link
+              to="/train"
+              search={{ id: r.moduleId }}
+              className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold"
+            >
+              Retake module
+            </Link>
+          )}
           <Link
             to="/staff"
             className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"

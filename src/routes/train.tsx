@@ -40,7 +40,7 @@ function Training({ id }: { id: string }) {
   const sessions = useConnection((s) => s.sessions);
   const module = state.modules.find((m) => m.id === id);
   const assignment = state.assignments.find(
-    (a) => a.moduleId === id && a.traineeId === state.account?.id,
+    (a) => a.moduleId === id && a.traineeId === state.account?.id && !a.withdrawnAt,
   );
   const open = sessions.find(
     (s) => s.assignmentId === assignment?.id && module && resumableAttempt(s, module),

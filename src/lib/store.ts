@@ -54,6 +54,7 @@ export interface Account {
 export type TraineeStatus = "invited" | "active";
 
 export interface Trainee {
+  inactiveAt?: string;
   id: string;
   name: string;
   email: string;
@@ -1753,11 +1754,9 @@ export const useApp = create<AppState>()((set, get) => ({
     return id;
   },
 
-  removeTrainee: (id) =>
-    set((state) => ({
-      trainees: state.trainees.filter((t) => t.id !== id),
-      assignments: state.assignments.filter((a) => a.traineeId !== id),
-    })),
+  removeTrainee: () => {
+    throw new Error("Use the confirmed Deactivate action to preserve staff history.");
+  },
 
   activateTrainee: (id) =>
     set((state) => ({
@@ -1794,12 +1793,9 @@ export const useApp = create<AppState>()((set, get) => ({
       ),
     })),
 
-  unassignModule: (traineeId, moduleId) =>
-    set((state) => ({
-      assignments: state.assignments.filter(
-        (a) => !(a.traineeId === traineeId && a.moduleId === moduleId),
-      ),
-    })),
+  unassignModule: () => {
+    throw new Error("Use the confirmed Withdraw assignment action to preserve history.");
+  },
 
   markResult: (traineeId, moduleId, completedAt, emoji) =>
     set((state) => ({

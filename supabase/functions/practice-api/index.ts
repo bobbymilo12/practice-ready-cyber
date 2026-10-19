@@ -1,3 +1,4 @@
+import { validateAssignmentLifecycle } from "../../../src/lib/staff-lifecycle.ts";
 import {
   flagPracticeChanges,
   enforceReviewDecisions,
@@ -68,6 +69,11 @@ Deno.serve(async (request) => {
       .single();
     check(profileError);
     if (!profile) return reply({ error: "Your account is not linked to a practice." }, 403);
+    if (profile.inactive_at)
+      return reply(
+        { error: "Your practice access is inactive. Contact your practice manager." },
+        403,
+      );
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") fail("Invalid request.");
     const action = body.action;
@@ -158,7 +164,7 @@ Deno.serve(async (request) => {
       check(error);
       const { data: people, error: peopleError } = await admin
         .from("profiles")
-        .select("id,name,email,job_role,must_reset_password,invited_at,invite_status")
+        .select("id,name,email,job_role,must_reset_password,invited_at,invite_status,inactive_at")
         .eq("practice_id", profile.practice_id)
         .eq("role", "trainee");
       check(peopleError);
@@ -203,6 +209,7 @@ Deno.serve(async (request) => {
             invitedAt: Date.parse(t.invited_at),
             status: t.must_reset_password ? "invited" : "active",
             inviteStatus: t.invite_status,
+            inactiveAt: t.inactive_at ?? undefined,
           })),
         sessions: (rows ?? []).map((r) => r.data),
       });
@@ -222,15 +229,24 @@ Deno.serve(async (request) => {
       if (JSON.stringify(next).length > 2000000) fail("Practice data is too large.");
       const { data: people, error: peopleError } = await admin
         .from("profiles")
-        .select("id")
+        .select("id,inactive_at")
         .eq("practice_id", profile.practice_id)
         .eq("role", "trainee");
       check(peopleError);
       const ids = new Set((people ?? []).map((p) => p.id));
+      try {
+        validateAssignmentLifecycle(
+          assignments,
+          next.assignments,
+          new Set((people ?? []).filter((p) => p.inactive_at).map((p) => p.id)),
+        );
+      } catch (error) {
+        fail(error instanceof Error ? error.message : "Invalid assignments.");
+      }
       for (const a of next.assignments) {
         if (
           !ids.has(a.traineeId) ||
-          !next.modules.some((m: Module) => m.id === a.moduleId && m.published)
+          (!a.withdrawnAt && !next.modules.some((m: Module) => m.id === a.moduleId && m.published))
         )
           fail("Assignments must refer to a trainee and published module in this practice.");
       }
@@ -318,6 +334,8 @@ Deno.serve(async (request) => {
           !existing.must_reset_password)
       )
         fail("This email is already in use and has an account.");
+      if (existing?.inactive_at)
+        fail("Reactivate this staff member before resending an invitation.");
       if (existing?.last_invite_at && Date.now() - Date.parse(existing.last_invite_at) < 60000)
         fail("Please wait one minute before resending this invitation.");
       const password = `Pr!${crypto.randomUUID()}${crypto.randomUUID().slice(0, 8)}`;
@@ -354,7 +372,7 @@ Deno.serve(async (request) => {
         traineeId = data.user!.id;
       }
       const now = new Date().toISOString();
-      const { error: insertError } = await admin.from("profiles").upsert({
+      const invitedProfile = {
         id: traineeId,
         practice_id: profile.practice_id,
         role: "trainee",
@@ -365,7 +383,11 @@ Deno.serve(async (request) => {
         invited_at: now,
         last_invite_at: now,
         invite_status: "pending",
-      });
+      };
+      // Updating an existing invitation must never clear a concurrent deactivation.
+      const { error: insertError } = existing
+        ? await admin.from("profiles").update(invitedProfile).eq("id", traineeId)
+        : await admin.from("profiles").upsert(invitedProfile);
       if (insertError) {
         if (!existing) await admin.auth.admin.deleteUser(traineeId);
         fail("Could not save the invitation. Please try again.");
@@ -448,36 +470,33 @@ Deno.serve(async (request) => {
 
     if (action === "remove-trainee") {
       if (!manager) return reply({ error: "Manager access required." }, 403);
-      const { data: trainee } = await admin
+      return reply(
+        { error: "Staff removal has been replaced by Deactivate. No history was deleted." },
+        400,
+      );
+    }
+    if (action === "set-staff-active") {
+      if (!manager) return reply({ error: "Manager access required." }, 403);
+      if (typeof body.active !== "boolean" || typeof body.id !== "string")
+        fail("Choose a staff member and action.");
+      const { data: member, error: memberError } = await admin
         .from("profiles")
         .select("id")
         .eq("id", body.id)
         .eq("practice_id", profile.practice_id)
         .eq("role", "trainee")
         .maybeSingle();
-      if (!trainee) fail("Trainee not found.");
-      // Strip their assignments first (version-guarded): a failure here deletes nothing, and a
-      // failure after deletion cannot leave orphan assignments that block every later save.
-      const nextState = {
-        ...state,
-        assignments: assignments.filter((a) => a.traineeId !== trainee.id),
-        emojiMarks: Object.fromEntries(
-          Object.entries(state.emojiMarks ?? {}).filter(
-            ([key]) => !key.startsWith(`${trainee.id}:`),
-          ),
-        ),
-      };
-      const { data: cleaned, error: cleanError } = await admin
-        .from("practices")
-        .update({ state: nextState, version: practice.version + 1 })
-        .eq("id", practice.id)
-        .eq("version", practice.version)
-        .select("version")
-        .maybeSingle();
-      check(cleanError);
-      if (!cleaned) fail("The practice changed while removing this trainee. Reload and try again.");
-      const { error } = await admin.auth.admin.deleteUser(trainee.id);
+      check(memberError);
+      if (!member) fail("Staff member not found.");
+      const { data: saved, error } = await admin.rpc("set_staff_active", {
+        p_manager: profile.id,
+        p_trainee: body.id,
+        p_active: body.active,
+        p_version: practice.version,
+      });
       check(error);
+      if (saved === null)
+        return reply({ error: "The practice changed. Reload and try again." }, 409);
       return reply({ ok: true });
     }
 
@@ -497,7 +516,7 @@ Deno.serve(async (request) => {
 
     if (manager) return reply({ error: "Use a trainee account to record training." }, 403);
     const assignment = assignments.find(
-      (a) => a.id === body.assignmentId && a.traineeId === profile.id,
+      (a) => a.id === body.assignmentId && a.traineeId === profile.id && !a.withdrawnAt,
     );
     if (!assignment) return reply({ error: "This module is not assigned to you." }, 403);
     const module = modules.find(
