@@ -14,6 +14,7 @@ import { devRole } from "./dev-mode";
 import { practiceScenarios } from "./practice-scenarios";
 import {
   startSession,
+  resumableAttempt,
   answerSession,
   advanceSession,
   previousSession,
@@ -353,9 +354,18 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
     );
     if (!assignment || !module) throw new Error("Assigned module is unavailable.");
     if (action === "start") {
+      workspace.sessions = workspace.sessions.map((s) =>
+        s.assignmentId === assignment.id &&
+        !s.result &&
+        !s.supersededAt &&
+        !resumableAttempt(s, module)
+          ? { ...s, supersededAt: Date.now() }
+          : s,
+      );
       const session =
-        workspace.sessions.find((s) => s.assignmentId === assignment.id && !s.result) ??
-        startSession(module, assignment, `dev-session-${crypto.randomUUID()}`);
+        workspace.sessions.find(
+          (s) => s.assignmentId === assignment.id && resumableAttempt(s, module),
+        ) ?? startSession(module, assignment, `dev-session-${crypto.randomUUID()}`);
       if (!workspace.sessions.some((s) => s.id === session.id)) workspace.sessions.push(session);
       result = { session };
     } else {
@@ -365,6 +375,10 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
       );
       if (index < 0) throw new Error("Mock training attempt not found.");
       let session = workspace.sessions[index];
+      if (!session.result && !resumableAttempt(session, module))
+        throw new Error(
+          "Your training has been updated. Return to your training and start the updated module. Your earlier answers are kept.",
+        );
       if (
         action === "answer" ||
         action === "continue" ||

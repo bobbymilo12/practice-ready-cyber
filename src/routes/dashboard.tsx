@@ -306,7 +306,16 @@ function Dashboard() {
                 mine.length === 0
                   ? 0
                   : Math.round(
-                      (mine.reduce((sum, a) => sum + assignmentProgress(a, sessions).fraction, 0) /
+                      (mine.reduce(
+                        (sum, a) =>
+                          sum +
+                          assignmentProgress(
+                            a,
+                            sessions,
+                            modules.find((m) => m.id === a.moduleId),
+                          ).fraction,
+                        0,
+                      ) /
                         mine.length) *
                         100,
                     );

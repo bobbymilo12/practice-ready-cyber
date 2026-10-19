@@ -497,3 +497,57 @@ test("trainees receive availability flags but not manager review notes or audit 
   assert.equal(response.data.state.modules[0].reviewChanges, undefined);
   assert.equal(response.data.state.modules[0].reviewConfirmations, undefined);
 });
+
+test("API retains superseded answers, blocks stale actions, and starts current training idempotently", async () => {
+  reset();
+  const started = await call({ action: "start", assignmentId: "a1" });
+  const id = started.data.session.id;
+  await call({ action: "answer", assignmentId: "a1", sessionId: id, scenarioId: "q1", value: 0 });
+  const before = structuredClone(tables.training_sessions.find((s) => s.id === id).data);
+  await call({ action: "load" });
+  assert.equal((await call({ action: "start", assignmentId: "a1" })).data.session.id, id);
+  tables.practice_modules.oak[0].scenarios[0].learningPoint = "Updated local guidance";
+  for (const action of ["answer", "continue", "previous", "submit"]) {
+    const blocked = await call({
+      action,
+      assignmentId: "a1",
+      sessionId: id,
+      scenarioId: "q1",
+      value: 1,
+    });
+    assert.equal(blocked.status, 400);
+    assert.match(blocked.data.error, /training has been updated/);
+  }
+  const fresh = await call({ action: "start", assignmentId: "a1" });
+  assert.equal(fresh.status, 200);
+  assert.notEqual(fresh.data.session.id, id);
+  assert.equal(fresh.data.session.scenarios[0].learningPoint, "Updated local guidance");
+  const archived = tables.training_sessions.find((s) => s.id === id).data;
+  assert.ok(archived.supersededAt);
+  const { supersededAt, ...history } = archived;
+  assert.deepEqual(history, before);
+  assert.equal(
+    (await call({ action: "start", assignmentId: "a1" })).data.session.id,
+    fresh.data.session.id,
+  );
+});
+
+test("updated modules retain completed results without creating a repeat assignment", async () => {
+  reset();
+  const started = await call({ action: "start", assignmentId: "a1" });
+  const args = { assignmentId: "a1", sessionId: started.data.session.id, scenarioId: "q1" };
+  await call({ ...args, action: "answer", value: 1 });
+  await call({ ...args, action: "continue" });
+  await call({ ...args, action: "submit" });
+  const historical = structuredClone(tables.training_sessions.find((s) => s.id === args.sessionId));
+  const assignments = structuredClone(tables.practices[0].state.assignments);
+  tables.practice_modules.oak[0].scenarios[0].learningPoint = "Updated content";
+  const loaded = await call({ action: "load" });
+  assert.equal(loaded.status, 200);
+  assert.deepEqual(
+    tables.training_sessions.find((s) => s.id === args.sessionId),
+    historical,
+  );
+  assert.deepEqual(tables.practices[0].state.assignments, assignments);
+  assert.equal(tables.training_sessions.filter((s) => s.trainee_id === "alice").length, 1);
+});

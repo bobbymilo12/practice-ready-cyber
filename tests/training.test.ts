@@ -678,3 +678,63 @@ test("previous navigation retains immutable committed MCQ and ordering answers t
   assert.equal(previousSession(s), s);
   assert.throws(() => answerSession(s, 0), /complete/);
 });
+
+test("content comparison preserves normal resume and ignores unrelated persistence metadata", async () => {
+  const { resumableAttempt, attemptUsesOlderContent } = await import("../src/lib/training.ts");
+  const session = answerSession(startSession(module, assignment, "old"), 0);
+  const reloaded = JSON.parse(JSON.stringify(session));
+  const saved = {
+    ...module,
+    title: "Renamed module",
+    createdAt: 999,
+    reviewReason: "Reviewed",
+    scenarios: module.scenarios.map((s) => ({
+      ...s,
+      id: "new-" + s.id,
+      followUpFor: s.followUpFor ? "new-" + s.followUpFor : undefined,
+    })),
+  };
+  assert.equal(resumableAttempt(reloaded, saved), true);
+  assert.equal(attemptUsesOlderContent(reloaded, saved), false);
+  assert.equal(assignmentProgress(assignment, [reloaded], saved).latest?.id, "old");
+  const changed = structuredClone(saved);
+  changed.scenarios[0].learningPoint = "Corrected saved practice guidance";
+  assert.equal(resumableAttempt(reloaded, changed), false);
+  assert.equal(assignmentProgress(assignment, [reloaded], changed).latest, undefined);
+  const fresh = startSession(changed, assignment, "fresh");
+  assert.equal(fresh.scenarios[0].learningPoint, "Corrected saved practice guidance");
+  assert.deepEqual(reloaded, JSON.parse(JSON.stringify(session)));
+  assert.equal(resumableAttempt({ ...reloaded, supersededAt: 123 }, module), false);
+});
+
+test("completed history remains complete when teaching content changes", async () => {
+  const { attemptUsesOlderContent } = await import("../src/lib/training.ts");
+  const one = { ...module, scenarios: [question] };
+  const completed = submitSession(
+    advanceSession(answerSession(startSession(one, assignment, "done"), 1), one.title),
+    one.title,
+  );
+  const before = structuredClone(completed);
+  const updated = { ...one, scenarios: [{ ...question, managerNote: "New guidance" }] };
+  assert.equal(attemptUsesOlderContent(completed, updated), true);
+  assert.equal(assignmentProgress(assignment, [completed], updated).completed, true);
+  assert.deepEqual(completed, before);
+});
+
+test("presentation shuffles do not supersede teaching, but changes to correct answers and recovery do", async () => {
+  const { attemptUsesOlderContent } = await import("../src/lib/training.ts");
+  const session = startSession(module, assignment, "original");
+  const reordered = structuredClone(module);
+  reordered.scenarios = [...module.scenarios].reverse().map((s) => structuredClone(s));
+  const mcq = reordered.scenarios.find((s) => s.id === question.id)!;
+  if (mcq.kind !== "mcq") throw new Error("Expected MCQ");
+  mcq.options.reverse();
+  mcq.correctIndex = 0;
+  assert.equal(attemptUsesOlderContent(session, reordered), false);
+  mcq.correctIndex = 1;
+  assert.equal(attemptUsesOlderContent(session, reordered), true);
+  const recoveryChange = structuredClone(module);
+  recoveryChange.scenarios.find((s) => s.id === followup.id)!.learningPoint =
+    "Changed recovery guidance";
+  assert.equal(attemptUsesOlderContent(session, recoveryChange), true);
+});

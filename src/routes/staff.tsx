@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp } from "@/lib/store";
 import { useConnection, loadWorkspace } from "@/lib/backend";
-import { assignmentProgress, primaryScenarios } from "@/lib/training";
+import { assignmentProgress, primaryScenarios, resumableAttempt } from "@/lib/training";
 
 export const Route = createFileRoute("/staff")({
   head: () => ({ meta: [{ title: "Your training — PracticeReady" }] }),
@@ -16,7 +16,11 @@ function Staff() {
   const rows = mine.map((a) => ({
     assignment: a,
     module: state.modules.find((m) => m.id === a.moduleId),
-    ...assignmentProgress(a, sessions),
+    ...assignmentProgress(
+      a,
+      sessions,
+      state.modules.find((m) => m.id === a.moduleId),
+    ),
   }));
   const induction = state.packages.find((p) => p.kind === "induction");
   const inductionRows = induction
@@ -178,6 +182,18 @@ function Staff() {
                 {m ? `${primaryScenarios(m).length} scenarios` : "Waiting for your manager"}
                 {row.assignment.dueDate ? ` · Due ${row.assignment.dueDate}` : ""}
               </p>
+              {!row.completed &&
+                available &&
+                m &&
+                !row.latest &&
+                sessions.some(
+                  (s) =>
+                    s.assignmentId === row.assignment.id && !s.result && !resumableAttempt(s, m),
+                ) && (
+                  <p className="mt-2 text-sm">
+                    Training updated — start the updated module. Your earlier answers are kept.
+                  </p>
+                )}
               {row.latest && !row.completed && (
                 <p className="mt-2 text-sm">
                   {row.latest.answers.length} of {row.latest.queue.length} answers saved

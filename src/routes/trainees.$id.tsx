@@ -2,7 +2,7 @@ import { useManagerAction } from "@/hooks/use-manager-action";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { useConnection } from "@/lib/backend";
-import { assignmentProgress } from "@/lib/training";
+import { assignmentProgress, attemptUsesOlderContent, resumableAttempt } from "@/lib/training";
 import { useApp, RESULT_EMOJIS } from "@/lib/store";
 
 export const Route = createFileRoute("/trainees/$id")({
@@ -61,7 +61,13 @@ function TraineeDetail() {
   const inductionProgress = inductionAssignments.length
     ? Math.round(
         (inductionAssignments.reduce(
-          (sum, assignment) => sum + assignmentProgress(assignment, sessions).fraction,
+          (sum, assignment) =>
+            sum +
+            assignmentProgress(
+              assignment,
+              sessions,
+              modules.find((m) => m.id === assignment.moduleId),
+            ).fraction,
           0,
         ) /
           inductionAssignments.length) *
@@ -80,7 +86,16 @@ function TraineeDetail() {
 
   const overall = assigned.length
     ? Math.round(
-        (assigned.reduce((sum, a) => sum + assignmentProgress(a, sessions).fraction, 0) /
+        (assigned.reduce(
+          (sum, a) =>
+            sum +
+            assignmentProgress(
+              a,
+              sessions,
+              modules.find((m) => m.id === a.moduleId),
+            ).fraction,
+          0,
+        ) /
           assigned.length) *
           100,
       )
@@ -142,7 +157,16 @@ function TraineeDetail() {
             className="mt-4 h-2 w-full accent-primary"
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            {inductionAssignments.filter((a) => assignmentProgress(a, sessions).completed).length}{" "}
+            {
+              inductionAssignments.filter(
+                (a) =>
+                  assignmentProgress(
+                    a,
+                    sessions,
+                    modules.find((m) => m.id === a.moduleId),
+                  ).completed,
+              ).length
+            }{" "}
             of {inductionAssignments.length} modules complete
           </p>
         </Card>
@@ -159,6 +183,17 @@ function TraineeDetail() {
         )}
         {perModule.map(({ module, attempts, best, failedCount }) => {
           const latest = attempts[0];
+          const assignment = assigned.find((a) => a.moduleId === module.id)!;
+          const historicalOpen = sessions.some(
+            (s) => s.assignmentId === assignment.id && !s.result && !resumableAttempt(s, module),
+          );
+          const currentOpen = sessions.some(
+            (s) => s.assignmentId === assignment.id && resumableAttempt(s, module),
+          );
+          const currentComplete = sessions.some(
+            (s) =>
+              s.assignmentId === assignment.id && s.result && !attemptUsesOlderContent(s, module),
+          );
           return (
             <Card key={module.id}>
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -172,6 +207,7 @@ function TraineeDetail() {
                       assignmentProgress(
                         assigned.find((a) => a.moduleId === module.id)!,
                         sessions,
+                        module,
                       ).status
                     }
                   </p>
@@ -200,6 +236,21 @@ function TraineeDetail() {
                 </button>
               </div>
 
+              {historicalOpen && (
+                <p className="mt-3 text-sm">
+                  An earlier unfinished attempt used training that has since changed. Its answers
+                  are kept.
+                  {module.needsReview || !module.published
+                    ? " Training is paused for manager review."
+                    : currentComplete
+                      ? " The updated training has been completed."
+                      : currentOpen
+                        ? " The trainee has started the updated training."
+                        : assignmentProgress(assignment, sessions, module).completed
+                          ? " Previous completion is retained; repeating the updated training is optional unless reassigned."
+                          : " The trainee needs to start the updated training."}
+                </p>
+              )}
               {failedCount >= 3 && (
                 <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                   Flagged: scored below 70% on this module {failedCount} times. Worth a conversation
@@ -222,6 +273,14 @@ function TraineeDetail() {
                           {new Date(r.completedAt).toLocaleString()}
                           {r.confidence ? ` · confidence ${r.confidence}/5` : ""}
                         </span>
+                        {sessions.some(
+                          (s) => s.id === r.attemptId && attemptUsesOlderContent(s, module),
+                        ) && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Completed before the training was updated. Completion is retained; no
+                            repeat has been assigned automatically.
+                          </p>
+                        )}
                         {r.wrongTitles.length > 0 && (
                           <div className="mt-1 text-xs text-muted-foreground">
                             To review: {r.wrongTitles.join(", ")}

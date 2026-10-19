@@ -6,6 +6,7 @@ import { validateLocalProcedures } from "../../../src/lib/local-procedures.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
   advanceSession,
+  resumableAttempt,
   previousSession,
   answerSession,
   startSession,
@@ -511,8 +512,20 @@ Deno.serve(async (request) => {
       .eq("assignment_id", assignment.id);
     check(rowsError);
     if (action === "start") {
-      const open = rows?.find((r) => !r.data.result);
+      const open = rows?.find((r) => resumableAttempt(r.data, module));
       if (open) return reply({ session: open.data });
+      for (const old of rows ?? []) {
+        if (old.data.result || old.data.supersededAt) continue;
+        const { data: archived, error: archiveError } = await admin
+          .from("training_sessions")
+          .update({ data: { ...old.data, supersededAt: Date.now() }, version: old.version + 1 })
+          .eq("id", old.id)
+          .eq("version", old.version)
+          .select("id")
+          .maybeSingle();
+        check(archiveError);
+        if (!archived) fail("Your progress changed on another device. Reload to continue.");
+      }
       const session = startSession(module, assignment, crypto.randomUUID());
       const { error } = await admin.from("training_sessions").insert({
         id: session.id,
@@ -529,6 +542,10 @@ Deno.serve(async (request) => {
     const row = rows?.find((r) => r.id === body.sessionId);
     if (!row) fail("Training attempt not found. Reload your training.");
     let session = row.data as TrainingSession;
+    if (!session.result && !resumableAttempt(session, module))
+      fail(
+        "Your training has been updated. Return to your training and start the updated module. Your earlier answers are kept.",
+      );
     if (action === "answer") {
       if (session.queue[session.index] !== body.scenarioId)
         fail("Your progress changed on another device. Reload to continue.");

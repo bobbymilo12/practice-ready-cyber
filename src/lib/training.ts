@@ -1,3 +1,4 @@
+import { trainingContent } from "./training-content.ts";
 import { isStepPermutation, orderKey } from "./sequence.ts";
 import type {
   Assignment,
@@ -57,6 +58,15 @@ export interface TrainingSession {
   result?: TrainingResult;
   // Missing on legacy attempts: their overwritten first responses cannot be reconstructed.
   answerFlow?: "check";
+  supersededAt?: number;
+}
+
+/** Compare legacy and new attempts directly, without changing their historical snapshots. */
+export function attemptUsesOlderContent(session: TrainingSession, module: Module): boolean {
+  return trainingContent(session.scenarios) !== trainingContent(module.scenarios);
+}
+export function resumableAttempt(session: TrainingSession, module: Module): boolean {
+  return !session.result && !session.supersededAt && !attemptUsesOlderContent(session, module);
 }
 
 export const primaryScenarios = (module: Module) =>
@@ -224,9 +234,16 @@ export function submitSession(session: TrainingSession, moduleTitle: string): Tr
   };
 }
 
-export function assignmentProgress(assignment: Assignment, sessions: TrainingSession[]) {
+export function assignmentProgress(
+  assignment: Assignment,
+  sessions: TrainingSession[],
+  module?: Module,
+) {
   const mine = sessions.filter(
-    (s) => s.assignmentId === assignment.id && s.traineeId === assignment.traineeId,
+    (s) =>
+      s.assignmentId === assignment.id &&
+      s.traineeId === assignment.traineeId &&
+      (s.result || (!s.supersededAt && (!module || !attemptUsesOlderContent(s, module)))),
   );
   const latest = [...mine].sort((a, b) => b.updatedAt - a.updatedAt)[0];
   const completed = mine.some((s) => s.result);

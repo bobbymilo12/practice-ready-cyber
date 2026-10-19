@@ -5,8 +5,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { useApp, type Scenario } from "@/lib/store";
-import { trainingAction, useConnection } from "@/lib/backend";
+import { trainingAction, useConnection, loadWorkspace } from "@/lib/backend";
 import {
+  resumableAttempt,
+  attemptUsesOlderContent,
   type SavedAnswer,
   type TrainingSession,
   type AnswerValue,
@@ -40,8 +42,15 @@ function Training({ id }: { id: string }) {
   const assignment = state.assignments.find(
     (a) => a.moduleId === id && a.traineeId === state.account?.id,
   );
-  const open = sessions.find((s) => s.assignmentId === assignment?.id && !s.result);
-  const [session, setSession] = useState<TrainingSession | undefined>(open);
+  const open = sessions.find(
+    (s) => s.assignmentId === assignment?.id && module && resumableAttempt(s, module),
+  );
+  const updatedTraining = sessions.some(
+    (s) => s.assignmentId === assignment?.id && !s.result && module && !resumableAttempt(s, module),
+  );
+  const [savedSession, setSession] = useState<TrainingSession | undefined>(open);
+  const session =
+    savedSession && module && resumableAttempt(savedSession, module) ? savedSession : undefined;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const preview = state.account?.role === "manager";
@@ -63,6 +72,10 @@ function Training({ id }: { id: string }) {
         scenarioId: scenario?.id,
         value,
       });
+      // A manager may have republished while this tab was open. Refresh the module
+      // alongside the server-selected attempt before rendering its current questions.
+      if (action === "start" && module && attemptUsesOlderContent(next, module))
+        await loadWorkspace();
       setSession(next);
       if (next.result) await nav({ to: "/results" });
     } catch (err) {
@@ -101,6 +114,8 @@ function Training({ id }: { id: string }) {
         <Card>
           <h1 className="font-display text-2xl font-bold">{module.title}</h1>
           <p className="mt-3 text-sm text-muted-foreground">
+            {updatedTraining &&
+              "Your training has been updated. Start the updated module below; your earlier answers are kept in your history. "}
             {primaryScenarios(module).length} scenarios. Each checked answer saves automatically. If
             you miss a topic, you may receive an approved follow-up scenario for extra practice.
           </p>
@@ -114,7 +129,7 @@ function Training({ id }: { id: string }) {
             onClick={() => void act("start")}
             className="mt-5 rounded-xl bg-primary px-5 py-3 text-primary-foreground disabled:opacity-50"
           >
-            {busy ? "Starting…" : "Begin training"}
+            {busy ? "Starting…" : updatedTraining ? "Start updated training" : "Begin training"}
           </button>
         </Card>
       </Shell>
@@ -224,6 +239,17 @@ function Training({ id }: { id: string }) {
             className="mt-4 rounded-xl border border-destructive/40 p-4 text-sm text-destructive"
           >
             {error} Your last saved answer is safe. Retry the action or return to your training.
+            <button
+              className="ml-2 underline"
+              disabled={busy}
+              onClick={() =>
+                void loadWorkspace()
+                  .then(() => setError(""))
+                  .catch((err) => setError(err.message))
+              }
+            >
+              Refresh training
+            </button>
           </div>
         )}
         <ScenarioBlock

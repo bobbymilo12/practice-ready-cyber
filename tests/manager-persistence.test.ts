@@ -740,3 +740,185 @@ test("dashboard opens published modules in scrollable manager review without att
     assert.equal(h.requests.length, requests, "opening review sends no training or save request");
   }
 });
+
+test("merge requires fresh approval for paused sources, even when duplicated by approved content", () => {
+  const question = {
+    id: "q",
+    kind: "mcq" as const,
+    title: "Same title",
+    patientQuote: "A request",
+    question: "What next?",
+    options: ["A", "B"],
+    correctIndex: 0,
+    learningPoint: "Saved guidance",
+    status: "approved" as const,
+  };
+  const module = {
+    id: "m",
+    title: "Module",
+    type: "Test",
+    topicKey: "custom",
+    published: true,
+    createdAt: 1,
+    scenarios: [question],
+  };
+  const paused = { ...module, id: "paused", needsReview: true };
+  const state: any = {
+    modules: [module, paused],
+    assignments: [],
+    packages: [],
+    practiceData: empty(),
+  };
+  const patch = managerActions.managerActionPatch(
+    state,
+    { kind: "merge", moduleId: "merged", moduleIds: ["m", "paused"], title: "Combined" },
+    { id: "op", at: 1 },
+  );
+  const merged = patch.modules!.at(-1)!;
+  assert.equal(merged.scenarios.length, 1);
+  assert.equal(merged.scenarios[0].status, "draft");
+  assert.equal(question.status, "approved");
+  const next = { ...state, ...patch };
+  assert.throws(
+    () =>
+      managerActions.managerActionPatch(
+        next,
+        { kind: "publish", moduleId: "merged" },
+        { id: "publish", at: 2 },
+      ),
+    /Approve every scenario/,
+  );
+  next.modules = next.modules.map((m: any) =>
+    m.id === "merged"
+      ? { ...m, scenarios: m.scenarios.map((s: any) => ({ ...s, status: "approved" })) }
+      : m,
+  );
+  assert.equal(
+    managerActions
+      .managerActionPatch(next, { kind: "publish", moduleId: "merged" }, { id: "publish", at: 2 })
+      .modules!.at(-1)!.published,
+    true,
+  );
+});
+
+test("merge keeps different answers/guidance and provenance, deduplicates equivalent questions and rewires recovery", () => {
+  const q: any = {
+    id: "q",
+    kind: "mcq",
+    title: "Same",
+    question: "What next?",
+    patientQuote: "Request",
+    options: ["A", "B"],
+    correctIndex: 0,
+    learningPoint: "Guidance",
+    status: "approved",
+    provenance: {
+      kind: "core",
+      inputs: [
+        { source: "practice_setup", paths: ["practiceData.repeatTurnaround"], snapshot: "48" },
+      ],
+    },
+  };
+  const follow = { ...q, id: "follow", followUpFor: "q", title: "Follow-up" };
+  const first: any = {
+    id: "one",
+    title: "One",
+    topicKey: "prescriptions",
+    published: true,
+    scenarios: [q, follow],
+  };
+  const second = {
+    ...first,
+    id: "two",
+    scenarios: [
+      structuredClone(q),
+      { ...follow, id: "follow2" },
+      { ...q, id: "different-answer", correctIndex: 1 },
+      { ...q, id: "different-guidance", learningPoint: "Other guidance" },
+      { ...q, id: "different-source", localRoleRequestId: "another-request" },
+    ],
+  };
+  const state: any = { modules: [first, second], assignments: [], packages: [] };
+  const merged = managerActions
+    .managerActionPatch(
+      state,
+      { kind: "merge", moduleId: "merged", moduleIds: ["one", "two"], title: "Combined" },
+      { id: "op", at: 1 },
+    )
+    .modules!.at(-1)!;
+  assert.equal(merged.scenarios.length, 5);
+  assert.ok(
+    merged.scenarios.some((s) => s.kind === "mcq" && s.localRoleRequestId === "another-request"),
+  );
+  assert.deepEqual(merged.scenarios[0].provenance, q.provenance);
+  assert.equal(merged.scenarios[1].followUpFor, merged.scenarios[0].id);
+  const before = empty();
+  const after = { ...before, repeatTurnaround: "Updated" };
+  const flagged = changeTracking.flagPracticeChanges(before, after, [
+    { ...merged, published: true },
+  ])[0];
+  assert.equal(flagged.needsReview, true);
+  assert.ok(
+    changeTracking.recordedSourceChanges(flagged.scenarios[0], flagged.reviewChanges!).length,
+  );
+});
+
+test("manager trainee page distinguishes replaced unfinished training from retained older completions", async () => {
+  const training = await import("../src/lib/training.ts");
+  const question: any = {
+    id: "q",
+    kind: "mcq",
+    title: "Test",
+    question: "What next?",
+    patientQuote: "Request",
+    options: ["A", "B"],
+    correctIndex: 0,
+    learningPoint: "Old guidance",
+    status: "approved",
+  };
+  const original: any = {
+    id: "m",
+    title: "Module",
+    type: "Test",
+    topicKey: "custom",
+    published: true,
+    scenarios: [question],
+  };
+  const assignment: any = { id: "a", traineeId: "t", moduleId: "m", status: "assigned" };
+  const old = training.startSession(original, assignment, "old");
+  const current = { ...original, scenarios: [{ ...question, learningPoint: "Updated guidance" }] };
+  const state: any = {
+    trainees: [{ id: "t", name: "Test trainee", status: "active" }],
+    modules: [current],
+    results: [],
+    assignments: [assignment],
+    packages: [],
+  };
+  const connection: any = { sessions: [old] };
+  const page = compile(
+    "../src/routes/trainees.$id.tsx",
+    {
+      "@/hooks/use-manager-action": { useManagerAction: () => ({ saving: false }) },
+      "@tanstack/react-router": {
+        createFileRoute: () => () => ({ useParams: () => ({ id: "t" }) }),
+        Link: "a",
+      },
+      "@/components/Shell": { Shell: "main", Card: "section", Badge: "span" },
+      "@/lib/backend": { useConnection: (select: any) => select(connection) },
+      "@/lib/training": training,
+      "@/lib/store": { useApp: (select: any) => select(state), RESULT_EMOJIS: [] },
+    },
+    "\nexports.TraineeDetail = TraineeDetail;",
+  );
+  assert.match(JSON.stringify(page.TraineeDetail()), /trainee needs to start the updated training/);
+  const completed = training.submitSession(
+    training.advanceSession(training.answerSession(old, 0), original.title),
+    original.title,
+  );
+  connection.sessions = [completed];
+  state.results = [completed.result];
+  const output = JSON.stringify(page.TraineeDetail());
+  assert.match(output, /Completed before the training was updated/);
+  assert.match(output, /no repeat has been assigned automatically/);
+  assert.doesNotMatch(output, /trainee needs to start/);
+});

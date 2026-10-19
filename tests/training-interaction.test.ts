@@ -385,3 +385,75 @@ test("an incorrect checked ordering response schedules recovery once and freezes
   const retried = training.answerSession(h.session, scenario.sequence.correctOrder);
   assert.equal(JSON.stringify(retried), saved);
 });
+
+test("training screen offers updated content without resuming or rewriting the old attempt", async () => {
+  const oldModule = moduleFor(mcq, false);
+  const old = training.answerSession(training.startSession(oldModule, assignment, "old"), 0);
+  const history = structuredClone(old);
+  const current = { ...oldModule, scenarios: [{ ...mcq, learningPoint: "Updated guidance" }] };
+  const state: any = {
+    account: { id: "t", role: "trainee" },
+    assignments: [assignment],
+    modules: [current],
+    practiceData: { practiceName: "Test" },
+  };
+  const connection = { sessions: [old] };
+  let index = 0;
+  const values: any[] = [];
+  let starts = 0;
+  const exports: any = {};
+  const imports: any = {
+    react: {
+      useState(initial: any) {
+        const slot = index++;
+        if (!(slot in values)) values[slot] = typeof initial === "function" ? initial() : initial;
+        return [
+          values[slot],
+          (value: any) => {
+            values[slot] = value;
+          },
+        ];
+      },
+    },
+    "@tanstack/react-router": {
+      createFileRoute: () => (options: any) => options,
+      useNavigate: () => async () => {},
+    },
+    "@/components/Shell": { Shell: "main", Card: "section" },
+    "@/components/SequenceBoard": { SequenceBoard: "SequenceBoard" },
+    "@/components/MatchingBoard": { MatchingBoard: "MatchingBoard" },
+    "@/lib/sequence": sequence,
+    "@/lib/training": training,
+    "@/lib/store": { useApp: () => state },
+    "@/lib/backend": {
+      useConnection: (select: any) => select(connection),
+      trainingAction: async (action: string) => {
+        assert.equal(action, "start");
+        starts++;
+        return training.startSession(current, assignment, "new");
+      },
+    },
+  };
+  new Function("require", "exports", code + "\nexports.Training = Training;")(
+    (id: string) => imports[id] ?? require(id),
+    exports,
+  );
+  const render = () => {
+    index = 0;
+    return elements(exports.Training({ id: "m" }));
+  };
+  const initial = render();
+  assert.equal(starts, 0);
+  const start = initial.find(
+    (n) => n.type === "button" && n.props.children === "Start updated training",
+  );
+  assert.ok(start);
+  start.props.onClick();
+  await Promise.resolve();
+  await Promise.resolve();
+  const screen = render();
+  const question = screen.find((n) => n.props?.scenario?.id === "q");
+  assert.equal(question.props.scenario.learningPoint, "Updated guidance");
+  assert.equal(starts, 1);
+  assert.deepEqual(old, history);
+});
