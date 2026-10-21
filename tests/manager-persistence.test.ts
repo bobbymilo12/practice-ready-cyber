@@ -1,3 +1,4 @@
+import * as trainingSupport from "../src/lib/training-support.ts";
 import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -27,7 +28,13 @@ function compile(
   }).outputText;
   const exports: any = {};
   new Function("require", "exports", ...Object.keys(globals), code + extras)(
-    (id: string) => imports[id] ?? require(id),
+    (id: string) =>
+      imports[id] ??
+      {
+        "@/lib/training-support": trainingSupport,
+        "@/components/NeedsSupport": { NeedsSupport: "NeedsSupport" },
+      }[id] ??
+      require(id),
     exports,
     ...Object.values(globals),
   );
@@ -921,6 +928,12 @@ test("manager trainee page distinguishes replaced unfinished training from retai
   assert.match(output, /Completed before the training was updated/);
   assert.match(output, /no repeat has been assigned automatically/);
   assert.doesNotMatch(output, /trainee needs to start/);
+  assert.match(output, /Understanding and support/);
+  assert.match(output, /No current support signals/);
+  assert.match(output, /Completed attempt history/);
+  const history = elements(page.TraineeDetail()).find((node) => node.type === "details");
+  assert.ok(history, "completed history remains accessible in an expandable section");
+  assert.ok(!history.props.open, "old attempts do not dominate the current summary");
 });
 
 test("assignment choices exclude inactive staff and withdrawn work is shown only as trainee history", async () => {

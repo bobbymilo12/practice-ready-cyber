@@ -1,3 +1,4 @@
+import { traineeSupport, currentCompletedAttempts } from "@/lib/training-support";
 import { useManagerAction } from "@/hooks/use-manager-action";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, Card, Badge } from "@/components/Shell";
@@ -35,6 +36,7 @@ function TraineeDetail() {
   const assignments = useApp((s) => s.assignments);
   const action = useManagerAction();
   const markResult = useApp((s) => s.markResult);
+  const induction = useApp((s) => s.packages.find((p) => p.kind === "induction"));
 
   if (!trainee) {
     return (
@@ -56,7 +58,7 @@ function TraineeDetail() {
     (m) =>
       allAssignments.some((a) => a.moduleId === m.id) || myResults.some((r) => r.moduleId === m.id),
   );
-  const induction = useApp((s) => s.packages.find((p) => p.kind === "induction"));
+  const support = traineeSupport(trainee, assignments, modules, sessions);
   const inductionAssignments = induction
     ? assigned.filter((a) => induction.moduleIds.includes(a.moduleId))
     : [];
@@ -81,9 +83,7 @@ function TraineeDetail() {
     const attempts = myResults
       .filter((r) => r.moduleId === m.id)
       .sort((a, b) => b.completedAt - a.completedAt);
-    const best = attempts.reduce((acc, r) => Math.max(acc, r.total ? r.correct / r.total : 0), 0);
-    const failedCount = attempts.filter((r) => (r.total ? r.correct / r.total : 0) < 0.7).length;
-    return { module: m, attempts, best, failedCount };
+    return { module: m, attempts };
   });
 
   const overall = assigned.length
@@ -133,7 +133,7 @@ function TraineeDetail() {
       <Card className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm text-muted-foreground">Overall across assigned modules</p>
+            <p className="text-sm text-muted-foreground">Completion across current assignments</p>
             <p className="mt-1 font-display text-4xl font-bold">{overall}%</p>
           </div>
           <div className="text-sm text-muted-foreground">
@@ -176,7 +176,43 @@ function TraineeDetail() {
         </Card>
       )}
 
-      <h2 className="mt-10 font-display text-xl font-semibold">Module results</h2>
+      <Card className="mt-6">
+        <h2 className="font-display text-xl font-semibold">Understanding and support</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Completion records finished training. These signals guide a conversation; they are not a
+          competency decision or manager sign-off.
+        </p>
+        {trainee.inactiveAt ? (
+          <p className="mt-3 text-sm">
+            Inactive staff are excluded from current support alerts. Their training history remains
+            below.
+          </p>
+        ) : !support.length ? (
+          <p className="mt-3 text-sm">
+            No current support signals in the recorded training. Missing confidence or unfinished
+            training does not establish understanding.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {support.map((item) => (
+              <li key={item.assignmentId}>
+                <p className="font-medium">{item.moduleTitle}</p>
+                <ul className="list-disc pl-5 text-sm">
+                  {item.reasons.map((reason) => (
+                    <li key={reason.kind}>{reason.text}</li>
+                  ))}
+                </ul>
+                {item.practising && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Another attempt is in progress.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      <h2 className="mt-10 font-display text-xl font-semibold">Current training and history</h2>
       <div className="mt-4 space-y-4">
         {perModule.length === 0 && (
           <Card>
@@ -185,9 +221,11 @@ function TraineeDetail() {
             </p>
           </Card>
         )}
-        {perModule.map(({ module, attempts, best, failedCount }) => {
-          const latest = attempts[0];
+        {perModule.map(({ module, attempts }) => {
           const assignment = assigned.find((a) => a.moduleId === module.id);
+          const latestCurrent = assignment
+            ? currentCompletedAttempts(assignment, module, sessions)[0]?.result
+            : undefined;
           const withdrawnIds = new Set(
             allAssignments
               .filter((a) => a.moduleId === module.id && a.withdrawnAt)
@@ -226,13 +264,14 @@ function TraineeDetail() {
                     </p>
                   )}
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {attempts.length === 0
-                      ? assignment
-                        ? "Not started"
-                        : "No completed attempts"
-                      : `Best ${Math.round(best * 100)}% · ${attempts.length} attempt${
-                          attempts.length === 1 ? "" : "s"
-                        } · last ${new Date(latest.completedAt).toLocaleDateString()}`}
+                    {latestCurrent
+                      ? `Latest completion on current content: ${latestCurrent.correct}/${latestCurrent.total} ${latestCurrent.scoreBasis === "first_committed" ? "first checked answers" : "recorded answers"} correct · ${new Date(latestCurrent.completedAt).toLocaleDateString()}`
+                      : "No completed attempt on the current assignment and content."}
+                    {latestCurrent?.confidence
+                      ? ` · Confidence ${latestCurrent.confidence}/5`
+                      : latestCurrent
+                        ? " · Confidence not recorded."
+                        : ""}
                   </p>
                 </div>
                 {assignment && !trainee.inactiveAt && (
@@ -290,61 +329,59 @@ function TraineeDetail() {
                           : " The trainee needs to start the updated training."}
                 </p>
               )}
-              {failedCount >= 3 && (
-                <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-                  Flagged: scored below 70% on this module {failedCount} times. Worth a conversation
-                  or a side-by-side run-through.
-                </div>
-              )}
-
               {attempts.length > 0 && (
-                <ul className="mt-4 space-y-2">
-                  {attempts.slice(0, 5).map((r) => (
-                    <li
-                      key={r.completedAt}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm"
-                    >
-                      <div>
-                        <span className="font-medium tabular-nums">
-                          {r.correct}/{r.total}
-                        </span>{" "}
-                        <span className="text-muted-foreground">
-                          {new Date(r.completedAt).toLocaleString()}
-                          {r.confidence ? ` · confidence ${r.confidence}/5` : ""}
-                        </span>
-                        {sessions.some(
-                          (s) => s.id === r.attemptId && attemptUsesOlderContent(s, module),
-                        ) && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Completed before the training was updated. Completion is retained; no
-                            repeat has been assigned automatically.
-                          </p>
-                        )}
-                        {r.wrongTitles.length > 0 && (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            To review: {r.wrongTitles.join(", ")}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {RESULT_EMOJIS.map((e) => (
-                          <button
-                            key={e}
-                            onClick={() => markResult(trainee.id, r.moduleId, r.completedAt, e)}
-                            aria-label={`Mark with ${e}`}
-                            className={`rounded-md px-1.5 py-1 text-base transition ${
-                              r.emoji === e
-                                ? "bg-primary/10 ring-1 ring-primary"
-                                : "opacity-50 hover:opacity-100"
-                            }`}
-                          >
-                            {e}
-                          </button>
-                        ))}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-sm font-semibold">
+                    Completed attempt history ({attempts.length})
+                  </summary>
+                  <ul className="mt-3 space-y-2">
+                    {attempts.map((r) => (
+                      <li
+                        key={r.completedAt}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm"
+                      >
+                        <div>
+                          <span className="font-medium tabular-nums">
+                            {r.correct}/{r.total}
+                          </span>{" "}
+                          <span className="text-muted-foreground">
+                            {new Date(r.completedAt).toLocaleString()}
+                            {r.confidence ? ` · confidence ${r.confidence}/5` : ""}
+                          </span>
+                          {sessions.some(
+                            (s) => s.id === r.attemptId && attemptUsesOlderContent(s, module),
+                          ) && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Completed before the training was updated. Completion is retained; no
+                              repeat has been assigned automatically.
+                            </p>
+                          )}
+                          {r.wrongTitles.length > 0 && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Unresolved at that attempt: {r.wrongTitles.join(", ")}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {RESULT_EMOJIS.map((e) => (
+                            <button
+                              key={e}
+                              onClick={() => markResult(trainee.id, r.moduleId, r.completedAt, e)}
+                              aria-label={`Mark with ${e}`}
+                              className={`rounded-md px-1.5 py-1 text-base transition ${
+                                r.emoji === e
+                                  ? "bg-primary/10 ring-1 ring-primary"
+                                  : "opacity-50 hover:opacity-100"
+                              }`}
+                            >
+                              {e}
+                            </button>
+                          ))}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
             </Card>
           );

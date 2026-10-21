@@ -1,3 +1,4 @@
+import { NeedsSupport } from "@/components/NeedsSupport";
 import { useManagerAction } from "@/hooks/use-manager-action";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -83,6 +84,13 @@ function Dashboard() {
           </Link>
         </div>
       </div>
+
+      <NeedsSupport
+        trainees={trainees}
+        assignments={assignments}
+        modules={modules}
+        sessions={sessions}
+      />
 
       {legacyAvailable && modules.length === 0 && (
         <Card className="mt-6">
