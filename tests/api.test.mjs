@@ -11,6 +11,7 @@ let user = null;
 let handler;
 let createUserError = null;
 const writes = [];
+const signOuts = [];
 function query(table) {
   const filters = [];
   let operation = "select";
@@ -60,9 +61,11 @@ function query(table) {
       if (operation === "delete") tables[table] = tables[table].filter((r) => !rows.includes(r));
       if (operation === "update") rows.forEach((r) => Object.assign(r, value));
       if (operation === "insert" || operation === "upsert") {
-        value = { version: 0, ...value };
-        tables[table].push(value);
-        rows.push(value);
+        for (const v of Array.isArray(value) ? value : [value]) {
+          const row = { version: 0, ...v };
+          tables[table].push(row);
+          rows.push(row);
+        }
       }
       return Promise.resolve({ data: single ? (rows[0] ?? null) : rows, error: null }).then(
         resolve,
@@ -121,6 +124,10 @@ const mockClient = {
           ? { data: { user: null }, error: createUserError }
           : { data: { user: { id: "invited" } }, error: null },
       deleteUser: async () => ({ error: null }),
+      signOut: async (jwt, scope) => {
+        signOuts.push([jwt, scope]);
+        return { error: null };
+      },
     },
   },
 };
@@ -218,6 +225,7 @@ function reset(role = "trainee", mustReset = false) {
     ],
   };
   tables.role_templates = [];
+  tables.audit_events = [];
   tables.training_sessions = [
     {
       id: "b-session",
@@ -255,6 +263,17 @@ test("password-change requirement cannot be bypassed with client metadata", asyn
   const loaded = await call({ action: "load" });
   assert.deepEqual(loaded.data.state, {});
   assert.deepEqual(loaded.data.sessions, []);
+});
+test("changing password signs out every other session", async () => {
+  reset("trainee", true);
+  signOuts.length = 0;
+  const r = await call({
+    action: "password",
+    currentPassword: "temporary-password",
+    password: "a-new-long-password",
+  });
+  assert.equal(r.status, 200);
+  assert.deepEqual(signOuts, [["test-token", "others"]]);
 });
 test("trainee load filters other trainees, assignments, modules and manager details", async () => {
   reset();
@@ -608,6 +627,13 @@ test("staff deactivation and reactivation preserve history and do not restore wi
   assert.equal(inactive.inactive_at, null);
   assert.ok(tables.practices[0].state.assignments[1].withdrawnAt);
   assert.deepEqual(tables.training_sessions, history);
+  assert.deepEqual(
+    tables.audit_events.map((e) => [e.practice_id, e.actor_id, e.action, e.target_id]),
+    [
+      ["oak", "alice", "staff.deactivated", "bob"],
+      ["oak", "alice", "staff.reactivated", "bob"],
+    ],
+  );
   user = { id: "bob" };
   assert.equal((await call({ action: "start", assignmentId: "a2" })).status, 403);
 });

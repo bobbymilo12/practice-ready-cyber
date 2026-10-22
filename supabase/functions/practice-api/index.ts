@@ -120,6 +120,19 @@ Deno.serve(async (request) => {
       role: profile.role,
       mustResetPassword: profile.must_reset_password,
     };
+    // Best-effort: the action has already committed, so a logging failure must not report it as failed.
+    const audit = async (events: { action: string; target: string }[]) => {
+      if (!events.length) return;
+      const { error } = await admin.from("audit_events").insert(
+        events.map((e) => ({
+          practice_id: profile.practice_id,
+          actor_id: profile.id,
+          action: e.action,
+          target_id: e.target,
+        })),
+      );
+      if (error) console.error("Audit event could not be recorded.");
+    };
 
     if (action === "password") {
       if (typeof body.password !== "string" || body.password.length < 12)
@@ -146,6 +159,8 @@ Deno.serve(async (request) => {
         .update({ must_reset_password: false, invite_status: "active" })
         .eq("id", profile.id);
       check(resetError);
+      // End every other session (old devices and the verifier sign-in above); this one stays.
+      check((await admin.auth.admin.signOut(token, "others")).error);
       return reply({ ok: true });
     }
     if (profile.must_reset_password) {
@@ -299,6 +314,19 @@ Deno.serve(async (request) => {
           },
           409,
         );
+      await audit([
+        ...(next.assignments as Assignment[])
+          .filter((a) => a.withdrawnAt && !assignments.some((o) => o.id === a.id && o.withdrawnAt))
+          .map((a) => ({ action: "assignment.withdrawn", target: a.id })),
+        ...(next.modules as Module[])
+          .filter(
+            (m) =>
+              m.published &&
+              !m.needsReview &&
+              !modules.some((o) => o.id === m.id && o.published && !o.needsReview),
+          )
+          .map((m) => ({ action: "module.published", target: m.id })),
+      ]);
       return reply({
         version: data,
         reviewConfirmations: Object.fromEntries(
@@ -497,6 +525,9 @@ Deno.serve(async (request) => {
       check(error);
       if (saved === null)
         return reply({ error: "The practice changed. Reload and try again." }, 409);
+      await audit([
+        { action: body.active ? "staff.reactivated" : "staff.deactivated", target: body.id },
+      ]);
       return reply({ ok: true });
     }
 

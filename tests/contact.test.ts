@@ -70,6 +70,26 @@ test("database failures never return success or expose backend details", async (
   );
 });
 
+test("contact route reports failure when storage fails and email is not configured", async () => {
+  const { handleContactRequest } = await import("../src/lib/contact-handler.ts");
+  for (const name of [
+    "SUPABASE_URL",
+    "VITE_SUPABASE_URL",
+    "RESEND_API_KEY",
+    "CONTACT_FROM",
+    "INVITE_FROM",
+  ])
+    delete process.env[name];
+  const response = await handleContactRequest(
+    new Request("https://practice-ready.test/api/contact", {
+      method: "POST",
+      body: JSON.stringify({ name: "Alex", email: "alex@example.test", message: "Hello" }),
+    }),
+  );
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).success, undefined);
+});
+
 test("the Supabase transport posts to the existing contact_messages REST endpoint", async () => {
   const { createClient } = await import("@supabase/supabase-js");
   let requestCount = 0;

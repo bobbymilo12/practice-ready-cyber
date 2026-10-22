@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { contactSchema, persistContact } from "./contact";
+import { contactSchema, persistContact } from "./contact.ts";
 
 async function notifyContactByEmail(data: {
   name: string;
@@ -11,7 +11,7 @@ async function notifyContactByEmail(data: {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.CONTACT_FROM ?? process.env.INVITE_FROM;
   const recipient = process.env.CONTACT_TO ?? "practicereadyuk@gmail.com";
-  if (!apiKey && !from) return; // email not configured: the stored message is the record
+  if (!apiKey && !from) return false; // email not configured: the stored message is the record
   if (!apiKey || !from || !recipient) {
     throw new Error("Contact email configuration is incomplete.");
   }
@@ -39,6 +39,7 @@ async function notifyContactByEmail(data: {
     }),
   });
   if (!response.ok) throw new Error(`Resend returned HTTP ${response.status}.`);
+  return true;
 }
 
 function createContactDatabase() {
@@ -90,16 +91,18 @@ export async function handleContactRequest(request: Request): Promise<Response> 
     console.error("Contact database storage failed.", error);
   }
 
+  let emailed = false;
   try {
-    await notifyContactByEmail(parsed.data);
+    emailed = await notifyContactByEmail(parsed.data);
   } catch (error) {
     console.error("Contact email could not be sent.", error);
-    if (!stored) {
-      return Response.json(
-        { error: "Your message could not be sent. Please try again." },
-        { status: 502 },
-      );
-    }
+  }
+  // Success only when the message reached at least one durable destination.
+  if (!stored && !emailed) {
+    return Response.json(
+      { error: "Your message could not be sent. Please try again." },
+      { status: 502 },
+    );
   }
 
   return Response.json({ success: true as const });
