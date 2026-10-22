@@ -111,7 +111,7 @@ test("foundational routing prefers roles, while an individual override and a spe
     (s) => s.kind === "mcq" && s.localRoleRequestId === "prescription-queries",
   );
   assert.ok(roleQuestion?.kind === "mcq");
-  assert.equal(roleQuestion.options[roleQuestion.correctIndex], "Pass the query to a Doctor.");
+  assert.equal(roleQuestion.options[roleQuestion.correctIndex], "A Doctor.");
   assert.doesNotMatch(roleQuestion.options[roleQuestion.correctIndex], /Dr Alex/);
   const named = configuredScenarios("urgent", "Urgent", p, {
     ...sampleSettings("urgent"),
@@ -191,10 +191,7 @@ test("every applicable Learn topic uses role actions, and explicit contacts are 
       assert.ok(q.kind === "mcq");
       assert.match(q.options[q.correctIndex], /Doctor/);
       assert.doesNotMatch(q.options[q.correctIndex], /Dr Alex/);
-      assert.match(
-        q.options[q.correctIndex],
-        /^(Book an appointment|Pass the query|Direct the patient)/,
-      );
+      assert.match(q.options[q.correctIndex], /^(Book (?:the patient )?an appointment|A Doctor\.)/);
     }
     // Query coverage must not be duplicated by the old staff-derived setup field.
     if (topic === "prescriptions")
@@ -237,7 +234,7 @@ test("structured urgent routes, named safeguarding leads and legacy instructions
     const settings = { ...defaultModuleSettings(), trainingLevel, count: 100 };
     for (const topic of ["prescriptions", "first-week"]) {
       const q = generateConfiguredModule(topic, topic, p, settings).find(
-        (q) => q.title === "Urgent prescription request",
+        (q) => q.title === "Urgent Prescription Request",
       );
       assert.ok(q?.kind === "mcq");
       assert.match(q.options[q.correctIndex], /Contact Dr Alex \(Doctor\) by telephone on 123/);
@@ -259,7 +256,7 @@ test("structured urgent routes, named safeguarding leads and legacy instructions
     }
     for (const topic of ["urgent", "first-week", "difficult"]) {
       const q = generateConfiguredModule(topic, topic, p, settings).find(
-        (q) => q.title === "Safeguarding contact",
+        (q) => q.title === "Safeguarding Contact",
       );
       assert.ok(q?.kind === "mcq");
       assert.match(q.options[q.correctIndex], /Dr Alex/);
@@ -282,7 +279,7 @@ test("structured urgent routes, named safeguarding leads and legacy instructions
       },
     };
     const q = generateConfiguredModule("prescriptions", "Prescriptions", p, settings).find(
-      (q) => q.title === "Urgent prescription request",
+      (q) => q.title === "Urgent Prescription Request",
     );
     assert.ok(q?.kind === "mcq");
     assert.match(q.options[q.correctIndex], /Contact Test reception lead in person/);

@@ -94,7 +94,7 @@ function baseStructuredBookingExercises(p: PracticeData, settings: ModuleSetting
       "A patient has explained what they need help with, but you cannot establish which of the practice’s booking routes fits. They ask what will happen next.",
       contactSnapshotCopy(contact),
       [
-        "Use the route from the patient’s previous request while waiting to clarify this one.",
+        "Offer the next available appointment before checking which route applies.",
         "Ask the patient to choose a route so you can continue with the booking.",
       ],
     );
@@ -124,7 +124,7 @@ export function configuredBookingActions(p: PracticeData, settings: ModuleSettin
 
 const genericMistakes = [
   "Ask which appointment the patient would prefer before clarifying the request.",
-  "Handle this in the same way as the patient’s previous request.",
+  "Ask the patient to call back when their preferred clinician is available.",
 ];
 
 /** Stable source key drives diversity, not random IDs or mutable answer order. */

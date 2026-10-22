@@ -1,3 +1,4 @@
+import * as questionQuality from "../src/lib/question-quality.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -42,8 +43,13 @@ for (const topic of topics.filter((t) => t !== "appointment-booking")) {
         trainingLevel: "apply",
       });
       assert.ok(easy.length && hard.length, topic);
-      assert.ok(easy.every((s) => s.kind === "mcq" && s.options.length === 3));
-      assert.ok(hard.every((s) => s.kind === "mcq" && s.options.length === 4));
+      // Comparable fields may have only one defensible alternative; do not require filler.
+      assert.ok(
+        easy.every((s) => s.kind === "mcq" && s.options.length >= 2 && s.options.length <= 3),
+      );
+      assert.ok(
+        hard.every((s) => s.kind === "mcq" && s.options.length >= 2 && s.options.length <= 4),
+      );
       assert.notEqual(easy[0].patientQuote, hard[0].patientQuote);
       assert.ok(easy.every((s) => s.question.endsWith("?")));
       assert.doesNotMatch(
@@ -76,7 +82,9 @@ for (const topic of topics.filter((t) => t !== "appointment-booking")) {
         ...settings,
         difficulty: "intermediate",
       });
-      assert.ok(medium.every((s) => s.kind === "mcq" && s.options.length === 3));
+      assert.ok(
+        medium.every((s) => s.kind === "mcq" && s.options.length >= 2 && s.options.length <= 3),
+      );
       for (const length of config.lengthOptions) {
         const generated = config.generateConfiguredModule(topic, topic, p, {
           ...settings,
@@ -110,7 +118,11 @@ for (const topic of topics.filter((t) => t !== "appointment-booking")) {
       };
       const regenerated = config.regenerateConfiguredScenario(module, hard[0].id, p);
       assert.equal(regenerated.scenarios.length, hard.length);
-      assert.ok(regenerated.scenarios.every((s) => s.kind === "mcq" && s.options.length === 4));
+      assert.ok(
+        regenerated.scenarios.every(
+          (s) => s.kind === "mcq" && s.options.length >= 2 && s.options.length <= 4,
+        ),
+      );
     },
   );
 }
@@ -210,7 +222,11 @@ test("every topic uses the real shared creation controls and saves the selected 
       },
     };
     const exports: any = {};
-    new Function("require", "exports", js)((id: string) => imports[id] ?? require(id), exports);
+    new Function("require", "exports", js)(
+      (id: string) =>
+        imports[id] ?? (id === "@/lib/question-quality" ? questionQuality : require(id)),
+      exports,
+    );
     const render = () => {
       index = 0;
       return elements(exports.PredefinedModuleSetup({ topic, title: topic, id: "draft" }));
@@ -254,14 +270,14 @@ test("factual questions retain the decision and exact saved answer with retired 
         trainingLevel,
         difficulty,
       });
-      const question = questions.find((s) => s.title === "Prescription turnaround");
+      const question = questions.find((s) => s.title === "Prescription Turnaround");
       assert.ok(question?.kind === "mcq");
-      assert.match(question.question, /information|tell|ready|turnaround/i);
+      assert.match(question.question, /processing/i);
       assert.ok(question.options[question.correctIndex].includes("72 working hours"));
       assert.ok(
         question.options
           .filter((_, i) => i !== question.correctIndex)
-          .every((option) => !/\d|same.day|routine|clinical/i.test(option)),
+          .every((option) => /^\d+ working hours$/.test(option)),
       );
       assert.doesNotMatch(question.patientQuote, /instructions for .*\?\./);
     }
@@ -276,7 +292,7 @@ test("difficult-call responses use plausible communication choices and the confi
     trainingLevel: "apply",
     difficulty: "advanced",
   });
-  const question = questions.find((s) => s.title === "Supportive language");
+  const question = questions.find((s) => s.title === "Supportive Language");
   assert.ok(question?.kind === "mcq");
   assert.equal(question.question, "What would be the best way to respond?");
   assert.equal(
@@ -291,7 +307,7 @@ test("difficult-call responses use plausible communication choices and the confi
   );
 });
 
-test("topic decision frames do not reuse identical alternatives across every topic", () => {
+test("topic decisions reuse alternatives only when the configured decision itself is the same", () => {
   const alternatives = [
     "prescriptions",
     "results",
@@ -307,7 +323,19 @@ test("topic decision frames do not reuse identical alternatives across every top
     };
     const question = config.generateConfiguredModule(topic, topic, empty(), settings)[0];
     assert.ok(question.kind === "mcq");
-    return question.options.filter((_, i) => i !== question.correctIndex).join("|");
+    return {
+      alternatives: question.options.filter((_, i) => i !== question.correctIndex).join("|"),
+      correct: question.options[question.correctIndex],
+      question: question.question,
+    };
   });
-  assert.equal(new Set(alternatives).size, alternatives.length);
+  for (let i = 0; i < alternatives.length; i++)
+    for (let j = i + 1; j < alternatives.length; j++) {
+      if (alternatives[i].alternatives === alternatives[j].alternatives) {
+        if (/^Contact /.test(alternatives[i].correct) && /^Contact /.test(alternatives[j].correct))
+          continue; // Same contact decision, different configured destination.
+        assert.equal(alternatives[i].correct, alternatives[j].correct);
+        assert.equal(alternatives[i].question, alternatives[j].question);
+      }
+    }
 });

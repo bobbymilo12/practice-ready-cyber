@@ -1,3 +1,4 @@
+import { displayLabel } from "@/lib/question-quality";
 import { useId, useState } from "react";
 import type { PracticeData } from "@/lib/store";
 import {
@@ -70,7 +71,7 @@ export function ModuleQuestion({
       className="space-y-3 rounded-xl border border-border p-4"
       aria-describedby={`${id}-hint`}
     >
-      <legend className="px-1 text-sm font-semibold">{field.label}</legend>
+      <legend className="px-1 text-sm font-semibold">{displayLabel(field.label)}</legend>
       <p id={`${id}-hint`} className="text-xs text-muted-foreground">
         {field.multiple ? "Select all that apply." : "Select one option."} Suggestions are not
         confirmed until selected.

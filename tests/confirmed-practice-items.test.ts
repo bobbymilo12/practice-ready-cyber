@@ -154,7 +154,8 @@ test("legacy prescription text remains one item; structured ordering becomes rea
     trainingLevel: "learn",
   });
   const text = JSON.stringify(questions);
-  assert.match(text, /Patients can order repeat prescriptions by telephone or through the NHS App/);
+  assert.match(text, /accepts these requests through the NHS App/);
+  assert.doesNotMatch(text, /accepts these requests by telephone/);
   assert.match(text, /Patients over 60 can order over the phone/);
   assert.doesNotMatch(text, /First legacy step|;|Apply this step/);
 });

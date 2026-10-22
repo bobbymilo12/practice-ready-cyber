@@ -1,3 +1,4 @@
+import { teachingPoint, unconditionalMethods } from "./question-quality.ts";
 import {
   methodApplication,
   submissionChannel,
@@ -262,7 +263,10 @@ export function applications(fact: ScenarioFact): Application[] {
     .filter(Boolean);
   const channels = /request methods|repeat requests|submitted|requests submitted/i.test(fact.label);
   if (channels && items.some((item) => submissionChannel(item))) {
-    const methods = items.filter((item) => submissionChannel(item));
+    const methods = unconditionalMethods(
+      items.filter((item) => submissionChannel(item)),
+      items.filter((item) => !submissionChannel(item)).join(" "),
+    );
     const instructions = items.filter((item) => !submissionChannel(item));
     return [
       ...methods.map((method) => methodApplication(fact.label, fact.situation, method)!),
@@ -293,9 +297,7 @@ export function applications(fact: ScenarioFact): Application[] {
       ...fact,
       rule: configuredAnswer(fact.label, action(fact.rule)),
       situation: naturalSituation(fact.situation),
-      feedback:
-        "Your practice’s guidance for this request: " +
-        readableGuidance(configuredAnswer(fact.label, fact.rule)),
+      feedback: teachingPoint(fact.label, configuredAnswer(fact.label, fact.rule)),
     },
   ];
 }

@@ -1,3 +1,4 @@
+import * as questionQuality from "../src/lib/question-quality.ts";
 import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -24,7 +25,9 @@ test("actual custom draft generation retains MCQs for ordering/mixed preferences
           ? config
           : id === "./practice-scenarios"
             ? { practiceScenarios }
-            : require(id),
+            : id === "./question-quality"
+              ? questionQuality
+              : require(id),
     exports,
   );
   exports.useApp.setState({ practiceData: empty(), answers: {} });

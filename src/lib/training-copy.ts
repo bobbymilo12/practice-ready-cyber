@@ -138,6 +138,8 @@ export function contactRouteCopy(route: ContactRoute, practice: PracticeData): s
 
 /** These exact UI choices specify a location or delivery method, not additional steps. */
 export function configuredAnswer(label: string, answer: string): string {
+  if (/which details|activities.*shadow/i.test(label) && !/[.!?]/.test(answer))
+    return "Include " + readableList(answer.split(";").map((v) => listItemCopy(v.trim()))) + ".";
   if (/where.*(?:document|record)/i.test(label)) {
     const locations: Record<string, string> = {
       "Clinical system task": "Record the request as a task in the clinical system.",

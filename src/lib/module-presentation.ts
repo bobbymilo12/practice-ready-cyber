@@ -1,3 +1,4 @@
+import { comparableValues, teachingPoint, displayLabel } from "./question-quality.ts";
 import { readableGuidance, readableTitle } from "./training-copy.ts";
 export { readableGuidance } from "./training-copy.ts";
 import type { ModuleSettings } from "./module-config";
@@ -60,83 +61,29 @@ function decisionFrame(topic: string, label: string): DecisionFrame {
     return {
       challenge: "A colleague suggests approaching the first available member of staff.",
       alternatives: [
-        "Approach the person who dealt with the last similar enquiry.",
-        "Choose someone available in the same team before checking who is responsible.",
+        "Send a message to the wider team asking someone to pick up the request.",
+        "Ask an available colleague to deal with the request when they finish their current task.",
         "Send a general team message and wait for someone to pick it up.",
       ],
     };
-  if (topic === "results")
-    return {
-      challenge: "The patient expects this enquiry to be handled like their previous result.",
-      alternatives: [
-        "Use the instructions attached to the patient's previous result.",
-        "Base the response on the patient's account of what normally happens.",
-        "Explain the usual next step from memory and check the current instruction if they query it.",
-      ],
-    };
-  if (topic === "prescriptions")
-    return {
-      challenge: "The patient asks whether the arrangements used last time will still apply.",
-      alternatives: [
-        "Use the arrangements from the patient's previous prescription request.",
-        "Base the response on the patient's description of their usual prescription process.",
-        "Confirm the usual arrangements first, then check whether this request follows the same process.",
-      ],
-    };
-  if (topic === "vaccines")
-    return {
-      challenge: "The patient asks for the same arrangements as their previous vaccination.",
-      alternatives: [
-        "Use the booking arrangements from the patient's previous vaccination.",
-        "Base the next step on the patient's account of what they were offered last time.",
-        "Start with the usual booking arrangements and check this request's instructions afterwards.",
-      ],
-    };
-  if (topic === "fit-notes")
-    return {
-      challenge: "The patient expects the arrangements for their previous fit note to apply again.",
-      alternatives: [
-        "Use the arrangements from the patient's previous fit note request.",
-        "Base the response on how the patient says their last request was handled.",
-        "Explain the usual process first and check this request's requirements afterwards.",
-      ],
-    };
-  if (topic === "home-visits")
-    return {
-      challenge: "The caller says their previous home visit request was handled differently.",
-      alternatives: [
-        "Use the arrangements from the patient's previous home visit request.",
-        "Base the next step on the caller's description of what happened last time.",
-        "Start the usual request process and check any different requirements at handover.",
-      ],
-    };
-  if (topic === "first-week")
-    return {
-      challenge: "A colleague suggests an approach they used at another practice.",
-      alternatives: [
-        "Use the approach you learned at your previous workplace.",
-        "Copy how a colleague handles a similar task before checking this practice's instructions.",
-        "Complete the familiar parts of the task and check the local requirements afterwards.",
-      ],
-    };
-  if (topic === "difficult")
-    return {
-      challenge: "The caller wants a resolution before you have established the next steps.",
-      alternatives: [
-        "Repeat the explanation of the usual process before exploring the caller's concern.",
-        "Suggest the approach used for a previous caller with a similar concern.",
-        "Offer to transfer the conversation before clarifying what remains unresolved.",
-      ],
-    };
+  const task: Record<string, string> = {
+    prescriptions: "prescription request",
+    results: "results enquiry",
+    vaccines: "vaccination request",
+    "fit-notes": "fit note request",
+    "home-visits": "home visit request",
+    "first-week": "new starter's task",
+    urgent: "urgent handover",
+    difficult: "caller's concern",
+    custom: "request",
+  };
+  const subject = task[topic] ?? "request";
   return {
-    challenge:
-      topic === "urgent"
-        ? "A colleague suggests using the handover arrangements from the previous call."
-        : "A colleague suggests using the approach from a similar task.",
+    challenge: "The patient asks what will happen next.",
     alternatives: [
-      "Use the approach followed for the last similar request.",
-      "Start with the familiar steps and check this request's requirements afterwards.",
-      "Pass on a summary and leave the next person to check which instructions apply.",
+      `Send the ${subject} to the responsible team for advice before giving an answer.`,
+      `Ask for the ${subject} in writing so the team can review it.`,
+      `Arrange for a colleague to call back about the ${subject} with the next steps.`,
     ],
   };
 }
@@ -146,10 +93,25 @@ export function practiceQuestionPresentation(
   situation: string,
   answer: string,
   settings: ModuleSettings,
+  configuredAlternatives?: string[],
 ) {
   const learn = settings.trainingLevel === "learn";
   const natural = naturalSituation(situation);
   const frame = decisionFrame(topic, label);
+  const value = answer.split("\n")[0].trim();
+  const comparable = comparableValues(value);
+  if (comparable)
+    return {
+      title: displayLabel(label),
+      patientQuote: natural.replace(/\s*[^.!?]*\?$/, "").trim(),
+      question: /turnaround/i.test(label)
+        ? "How long does the practice allow for processing this request?"
+        : label.endsWith("?")
+          ? label
+          : "Which value is specified by the practice?",
+      options: [value.replace(/\.$/, ""), ...comparable],
+      learningPoint: teachingPoint(label, answer),
+    };
   // Preserve the actual decision (including negative questions such as "must not promise").
   // Do not turn a question about a time/contact into "What should you do next?".
   const sourceQuestion = natural.match(/(?:^|[.!?]\s+)([^.!?]+\?)$/)?.[1];
@@ -159,17 +121,17 @@ export function practiceQuestionPresentation(
   const patientQuote =
     (base || "A colleague asks for help with " + subject + ".") +
     (!learn ? " " + frame.challenge : "");
-  const incorrect = frame.alternatives.filter(
-    (text) => text.trim().toLowerCase() !== answer.trim().toLowerCase(),
-  );
+  const incorrect = (
+    configuredAlternatives?.length ? configuredAlternatives : frame.alternatives
+  ).filter((text) => text.trim().toLowerCase() !== answer.trim().toLowerCase());
   return {
     title: readableTitle(label),
-    learningPoint: "For this request, follow your practice's guidance: " + readableGuidance(answer),
+    learningPoint: teachingPoint(label, answer),
     patientQuote,
     question:
       !learn && /supportive language|acknowledge.*frustration/i.test(label)
         ? "What would be the best way to respond?"
         : directQuestion,
-    options: [readableGuidance(answer), ...incorrect.slice(0, learn ? 2 : 3)],
+    options: [readableGuidance(answer), ...incorrect.slice(0, learn ? 2 : 3).map(readableGuidance)],
   };
 }

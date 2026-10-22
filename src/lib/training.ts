@@ -91,6 +91,16 @@ export function startSession(module: Module, assignment: Assignment, id: string)
 
 /** Structural completeness only; draft editing must not record an attempt. */
 export function answerIsComplete(scenario: Scenario, value: unknown): value is AnswerValue {
+  if (scenario.kind === "mcq" && scenario.correctIndices)
+    return (
+      Array.isArray(value) &&
+      value.length > 0 &&
+      new Set(value).size === value.length &&
+      value.every(
+        (v) =>
+          typeof v === "string" && /^(0|[1-9]\d*)$/.test(v) && Number(v) < scenario.options.length,
+      )
+    );
   if (scenario.kind === "mcq")
     return (
       Number.isInteger(value) &&
@@ -120,7 +130,11 @@ export function evaluateAnswer(scenario: Scenario, value: unknown): boolean {
           ? "Match every request before checking."
           : "Arrange all the steps before checking.",
     );
-  if (scenario.kind === "mcq") return value === scenario.correctIndex;
+  if (scenario.kind === "mcq")
+    return scenario.correctIndices
+      ? (value as string[]).length === scenario.correctIndices.length &&
+          scenario.correctIndices.every((i) => (value as string[]).includes(String(i)))
+      : value === scenario.correctIndex;
   if (scenario.kind === "matching")
     return matchingFeedback(scenario, value).every((item) => item.correct);
   return (value as string[]).every((step, index) => step === orderKey(scenario)[index]);

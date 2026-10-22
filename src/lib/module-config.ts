@@ -1,5 +1,12 @@
 import {
+  displayLabel,
+  methodQuestion,
+  responsibilityAction,
+  unconditionalMethods,
+} from "./question-quality.ts";
+import {
   submissionChannel,
+  configuredAnswer,
   readableList,
   roleDestination,
   routingAction,
@@ -669,30 +676,19 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
       p.prescriptionConfig
         ? [
             (() => {
-              const methods = p
+              return p
                 .prescriptionConfig!.methods.map((id) =>
                   id === "other"
                     ? p.prescriptionConfig!.otherMethod
                     : (prescriptionMethods.find((m) => m.id === id)?.label ?? ""),
                 )
-                .filter(Boolean);
-              return methods.length
-                ? "Patients can order repeat prescriptions " +
-                    readableList(
-                      methods.map(
-                        (method) =>
-                          submissionChannel(method)?.phrase ??
-                          "using this method: “" + method + "”",
-                      ),
-                      "disjunction",
-                    ) +
-                    "."
-                : "";
+                .filter(Boolean)
+                .join("; ");
             })(),
             ...prescriptionInstructions(p.prescriptionConfig),
           ]
             .filter(Boolean)
-            .join("\n")
+            .join("; ")
         : s.prescriptionOrdering || s.repeatOrderMethods,
       "A patient needs to order their next repeat prescription. How should they submit it?",
     );
@@ -709,7 +705,7 @@ export function moduleFacts(topic: string, p: PracticeData, settings: ModuleSett
               )
               .join("\n")
           : s.repeatTurnaround,
-        "A patient is checking when their prescription request will be ready. What information can reception give?",
+        "A patient asks how long prescription requests usually take to be processed. What should you tell them?",
       );
     if (!configMissing(p).prescription.some((x) => x.startsWith("Urgent")))
       add(
@@ -1037,7 +1033,27 @@ export function configuredScenarios(
     learningPoint: source,
     status: "draft",
     ...(topic !== "appointment-booking" && settings.trainingLevel
-      ? practiceQuestionPresentation(topic, label, situation, answer, settings)
+      ? practiceQuestionPresentation(
+          topic,
+          label,
+          situation,
+          answer,
+          settings,
+          (() => {
+            const field = (topicFields[topic] ?? []).find((f) => f.label === label);
+            if (!field || !field.options.length) return undefined;
+            const selected = selectedValues(field, settings);
+            return field.options
+              .filter(
+                (option) =>
+                  !selected.includes(option) &&
+                  !field.detailOptions?.[option] &&
+                  option !== EXCLUDE_QUESTION &&
+                  !/^(other|not yet|it depends)/i.test(option),
+              )
+              .map((option) => configuredAnswer(label, option));
+          })(),
+        )
       : {}),
   });
   const fieldLabels = new Set((topicFields[topic] ?? []).map((f) => f.label));
@@ -1046,43 +1062,88 @@ export function configuredScenarios(
       Number(fieldLabels.has(b.label) || b.label === "Local exception") -
       Number(fieldLabels.has(a.label) || a.label === "Local exception"),
   );
-  const factual = facts.flatMap((f) =>
-    applications(f)
-      .filter(
-        (application) =>
-          topic !== "appointment-booking" ||
-          settings.trainingLevel !== "apply" ||
-          !!application.followUpSituation ||
-          application.rule !== f.rule,
-      )
-      .map((application) => ({
-        ...make(
-          application.label,
-          application.situation,
-          application.rule,
-          application.alternatives ?? applicationMistakes(application.situation),
-          application.feedback,
-          application.condition ?? f.condition,
-          application.validActions,
-        ),
-        ...(application.copyKind === "allowed-channel"
-          ? {
-              title: application.label,
-              question: "What should you tell them?",
-              ...(topic === "appointment-booking"
-                ? {
-                    patientQuote: application.situation.replace(
-                      / What should you tell them\?$/,
-                      "",
-                    ),
-                  }
-                : {}),
-            }
-          : {}),
-        learningPoint: application.feedback,
-        followUpSituation: application.followUpSituation,
-      })),
-  );
+  const factual = facts.flatMap((f) => {
+    const parts = f.rule.split(";").map((v) => v.trim());
+    const methods = unconditionalMethods(
+      parts.filter((v) => submissionChannel(v)),
+      parts.filter((v) => !submissionChannel(v)).join(" "),
+    );
+    const multi = /request|submit|method/i.test(f.label)
+      ? methodQuestion(
+          f.label,
+          methods,
+          [
+            "Telephone",
+            "NHS App",
+            "Practice website / online form",
+            "Paper request at reception",
+            "Nominated pharmacy",
+          ],
+          naturalSituation(f.situation)
+            .replace(/[^.!?]*\?$/, "")
+            .trim(),
+        )
+      : undefined;
+    if (multi)
+      multi.provenance = {
+        kind: "configured_fact",
+        paths: [],
+        snapshot: { topic, label: f.label, rule: f.rule, settings: structuredClone(settings) },
+      };
+    if (multi && p.prescriptionConfig && f.label === "Repeat requests")
+      multi.provenance = {
+        kind: "configured_fact",
+        paths: ["practiceData.prescriptionConfig"],
+        snapshot: structuredClone(p.prescriptionConfig),
+      };
+    return [
+      ...(multi ? [multi] : []),
+      ...applications(f)
+        .filter((a) => !multi || a.copyKind !== "allowed-channel")
+        .filter(
+          (application) =>
+            topic !== "appointment-booking" ||
+            settings.trainingLevel !== "apply" ||
+            !!application.followUpSituation ||
+            application.rule !== f.rule,
+        )
+        .map((application) => ({
+          ...make(
+            application.label,
+            application.situation,
+            application.rule,
+            application.alternatives ?? applicationMistakes(application.situation),
+            application.feedback,
+            application.condition ?? f.condition,
+            application.validActions,
+          ),
+          ...(application.copyKind === "allowed-channel"
+            ? {
+                title: application.label,
+                options: [
+                  application.rule,
+                  application.rule.replace(
+                    /^Yes, this practice accepts/,
+                    "No, this practice does not accept",
+                  ),
+                ],
+                correctIndex: 0,
+                question: "What should you tell them?",
+                ...(topic === "appointment-booking"
+                  ? {
+                      patientQuote: application.situation.replace(
+                        / What should you tell them\?$/,
+                        "",
+                      ),
+                    }
+                  : {}),
+              }
+            : {}),
+          learningPoint: application.feedback,
+          followUpSituation: application.followUpSituation,
+        })),
+    ];
+  });
   const requests = new Map<string, string>();
   for (const role of Object.values(p.roleRequests ?? {}))
     for (const r of selectedRequests(role))
@@ -1180,8 +1241,23 @@ export function configuredScenarios(
         (settings.trainingLevel === "apply"
           ? " They ask for the person they saw last time. You need to check who handles this request."
           : "");
-      roleQuestion.question = "Who should you direct the patient to?";
-      const foundational = settings.trainingLevel === "learn" && roles.length > 0;
+      const action = responsibilityAction(label);
+      roleQuestion.patientQuote =
+        action === "book"
+          ? roleRequestSituation(label) +
+            " The practice’s booking process has confirmed an appointment is needed."
+          : "Check the practice's configured responsibilities for " + label.toLowerCase() + ".";
+      roleQuestion.question =
+        action === "book"
+          ? "Who should you book the patient an appointment with?"
+          : "Who has this responsibility at the practice?";
+      const response = (people: string[]) =>
+        action === "book"
+          ? "Book the patient an appointment with " + readableList(people, "disjunction") + "."
+          : readableList(people, "disjunction").replace(/^a /, "A ").replace(/^the /, "The ") + ".";
+      const foundational =
+        roles.length > 0 &&
+        (settings.trainingLevel === "learn" || !staff.some((person) => person.individualException));
       const destinations = foundational
         ? [
             ...roles.map((r) => roleDestination(r.label)),
@@ -1192,7 +1268,7 @@ export function configuredScenarios(
         : eligible.length
           ? eligible.map((s) => s.employee.name + " (" + s.role + ")")
           : roles.map((r) => roleDestination(r.label));
-      const correct = routingAction(destinations, /quer/i.test(label));
+      const correct = response(destinations);
       const wrongPeople = (foundational ? [] : staff)
         .filter((s) => !s.canHandle)
         .map((s) => s.employee.name + " (" + s.role + ")");
@@ -1208,21 +1284,21 @@ export function configuredScenarios(
       roleQuestion.options = [
         correct,
         ...[
-          ...wrongPeople.map((name) => routingAction([name], /quer/i.test(label))),
-          ...wrongRoles.map((name) => routingAction([roleDestination(name)], /quer/i.test(label))),
-          "The person who handled the patient's previous request.",
-          "The first available person in the team.",
-          "The person the patient prefers, with responsibilities checked afterwards.",
+          ...wrongPeople.map((name) => response([name])),
+          ...wrongRoles.map((name) => response([roleDestination(name)])),
+          ...(action === "knowledge"
+            ? ["No role is assigned this responsibility."]
+            : ["Do not book an appointment with any of these roles."]),
         ]
           .filter((text) => text !== correct)
           .slice(0, settings.trainingLevel === "learn" ? 2 : 3),
       ];
       roleQuestion.correctIndex = 0;
       roleQuestion.learningPoint =
-        readableList(destinations, "disjunction") +
-        " can help with " +
+        readableList(destinations, "disjunction").replace(/^a /, "A ").replace(/^the /, "The ") +
+        " has responsibility for " +
         label.toLowerCase() +
-        ". Check individual responsibilities before directing the patient.";
+        ". Check individual responsibilities before choosing a member of staff.";
     }
     routing.push(roleQuestion);
     for (const exception of staff.filter((s) => s.individualException))
@@ -1372,6 +1448,13 @@ export function generateConfiguredModule(
             ...s,
             options: [...s.options.slice(offset), ...s.options.slice(0, offset)],
             correctIndex: (s.correctIndex - offset + s.options.length) % s.options.length,
+            ...(s.correctIndices
+              ? {
+                  correctIndices: s.correctIndices.map(
+                    (i) => (i - offset + s.options.length) % s.options.length,
+                  ),
+                }
+              : {}),
           }
         : s;
     // Shared Learn/Apply lengths count all stored questions. Legacy settings retain follow-ups.
@@ -1379,7 +1462,9 @@ export function generateConfiguredModule(
       topic === "appointment-booking" || settings.trainingLevel
         ? undefined
         : configuredFollowUp(primary);
-    return follow ? [primary, follow] : [primary];
+    return (follow ? [primary, follow] : [primary]).map((q) =>
+      q.provenance?.kind === "sequence" ? q : { ...q, title: displayLabel(q.title) },
+    );
   });
 }
 
@@ -1428,6 +1513,13 @@ export function reviseConfiguredScenario(module: Module, scenario: Scenario): Mo
           };
         }
         if (scenario.kind === "matching") return current;
+        if (scenario.kind === "mcq" && current.provenance?.kind === "configured_fact")
+          return {
+            ...scenario,
+            status: "draft",
+            provenance: { ...structuredClone(current.provenance), managerModified: true },
+            followUpSituation: undefined,
+          };
         return {
           ...scenario,
           status: "draft",
@@ -1497,7 +1589,7 @@ export function regenerateConfiguredScenario(
     };
   }
   if (!module.settings) return module;
-  if (current.provenance) {
+  if (current.provenance?.kind === "core") {
     if (current.kind !== "mcq") return module;
     const replacement = regenerateAppointmentCore(
       current,
@@ -1528,6 +1620,9 @@ export function regenerateConfiguredScenario(
     module.scenarios.filter((s) => s.id !== scenarioId && !s.followUpFor).map((s) => s.title),
   );
   const pick =
+    (current.provenance?.kind === "configured_fact"
+      ? pool.find((s) => s.title.toLowerCase() === current.title.toLowerCase())
+      : undefined) ??
     pool.find((s) => !used.has(s.title) && s.title !== current.title) ??
     pool.find((s) => s.title === primaryTitle);
   if (!pick) return module;

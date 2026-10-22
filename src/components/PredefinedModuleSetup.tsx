@@ -1,3 +1,4 @@
+import { displayLabel } from "@/lib/question-quality";
 import { captureProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -147,7 +148,7 @@ export function PredefinedModuleSetup({
                   <dl className="mt-3 space-y-3">
                     {facts.map((f) => (
                       <div key={f.label}>
-                        <dt className="font-medium text-sm">{f.label}</dt>
+                        <dt className="font-medium text-sm">{displayLabel(f.label)}</dt>
                         <dd className="whitespace-pre-line text-sm text-muted-foreground">
                           {f.rule}
                         </dd>

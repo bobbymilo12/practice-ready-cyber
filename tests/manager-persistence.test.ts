@@ -990,3 +990,47 @@ test("assignment choices exclude inactive staff and withdrawn work is shown only
   assert.match(screen, /View completed result/);
   assert.doesNotMatch(screen, /Start module|Continue module|Practise again/);
 });
+
+test("manager review displays every correct multi-select choice without starting an attempt", () => {
+  const scenario = {
+    kind: "mcq",
+    id: "multi",
+    title: "Methods",
+    question: "Select all that apply.",
+    patientQuote: "",
+    options: ["First method", "Second method", "Other method"],
+    correctIndex: 0,
+    correctIndices: [0, 1],
+    learningPoint: "Use the configured methods.",
+    status: "draft",
+  };
+  const page = compile(
+    "../src/routes/modules.review.tsx",
+    {
+      react: { useState: (value: any) => [value, () => {}] },
+      "@/lib/practice-change-tracking": changeTracking,
+      "@/hooks/use-manager-action": {},
+      "@/lib/dev-procedure-diagnostics": {},
+      "@/lib/sequence": {},
+      "@/lib/role-matching": {},
+      "@tanstack/react-router": { createFileRoute: () => (options: any) => options },
+      "@/components/Shell": { Card: "section" },
+      "@/lib/store": {},
+    },
+    "\nexports.ScenarioCard = ScenarioCard;",
+  );
+  const before = JSON.stringify(scenario);
+  const tree = page.ScenarioCard({
+    scenario,
+    onApprove: () => {},
+    onDelete: () => {},
+    onRegenerate: () => {},
+    onSave: () => {},
+  });
+  const correct = elements(tree).filter(
+    (n) => n.type === "span" && n.props.children === "Correct choice",
+  );
+  assert.equal(correct.length, 2);
+  assert.equal(JSON.stringify(scenario), before);
+  assert.doesNotMatch(JSON.stringify(tree), /Check answer/);
+});

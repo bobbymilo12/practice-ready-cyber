@@ -1,3 +1,4 @@
+import * as questionQuality from "../src/lib/question-quality.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRequire } from "node:module";
@@ -127,10 +128,18 @@ const require = createRequire(import.meta.url);
 function component(path: string, imports: Record<string, unknown>) {
   const source = readFileSync(new URL(path, import.meta.url), "utf8");
   const code = ts.transpileModule(source, {
-    compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: {
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
   }).outputText;
   const exports: Record<string, any> = {};
-  new Function("require", "exports", code)((id: string) => imports[id] ?? require(id), exports);
+  new Function("require", "exports", code)(
+    (id: string) =>
+      imports[id] ?? (id === "@/lib/question-quality" ? questionQuality : require(id)),
+    exports,
+  );
   return exports;
 }
 test("compact escalation picker offers Reception Manager, configured roles, people and legacy selections", () => {

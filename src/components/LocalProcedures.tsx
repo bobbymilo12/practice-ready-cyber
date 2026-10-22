@@ -1,3 +1,4 @@
+import { displayLabel } from "@/lib/question-quality";
 import { useState } from "react";
 import { useApp } from "@/lib/store";
 import { saveLocalProcedures } from "@/lib/backend";
@@ -71,7 +72,7 @@ function ProcedureEditor({
                 rows={1}
                 placeholder={
                   index === 0
-                    ? `e.g. What should reception do first for this request: ${target.label}?`
+                    ? `e.g. What should reception do first for this request: ${displayLabel(target.label)}?`
                     : index === 1
                       ? "e.g. What happens next?"
                       : "e.g. What should reception do after that?"
@@ -277,10 +278,10 @@ export function LocalProcedures() {
                             : open(target.id)
                         }
                       />
-                      {target.label}
+                      {displayLabel(target.label)}
                     </label>
                   ) : (
-                    <p className="font-medium">{target.label}</p>
+                    <p className="font-medium">{displayLabel(target.label)}</p>
                   )}
                   <p className="text-xs text-muted-foreground">{target.roles.join(", ")}</p>
                   <p className="text-xs text-muted-foreground">

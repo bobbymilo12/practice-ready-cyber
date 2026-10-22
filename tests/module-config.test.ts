@@ -132,7 +132,7 @@ test("confirmed responsibilities include individual additions, exclude removals 
       if (trainingLevel === "learn")
         assert.doesNotMatch(route.options[route.correctIndex], /Robin/);
       assert.doesNotMatch(route.options[route.correctIndex], /Sam/);
-      const exception = questions.find((s) => s.title.startsWith("Responsibilities for Sam"));
+      const exception = questions.find((s) => s.title.startsWith("Responsibilities For Sam"));
       assert.ok(exception?.kind === "mcq");
       assert.match(exception.options[exception.correctIndex], /excluded/);
       const added = generateConfiguredModule("fit-notes", "Fit notes", p, {
@@ -253,14 +253,18 @@ test("multi-select preserves legacy answers, has exclusive exclusion and never m
   assert.deepEqual(selectedValues(f, settings), ["NHS App"]);
   settings = selectAnswer(settings, f, "Telephone");
   const question = configuredScenarios("prescriptions", "Prescriptions", p, settings).find(
-    (s) => s.title === "Submitting a non-repeat prescription request through the NHS App",
-  )!;
-  assert.ok(question.kind === "mcq");
-  assert.equal(
-    question.options[question.correctIndex],
-    "Yes, this practice accepts these requests through the NHS App.",
+    (s) => s.kind === "mcq" && s.correctIndices,
   );
-  assert.ok(!question.options.slice(1).includes("Telephone"));
+  assert.ok(question?.kind === "mcq" && question.correctIndices);
+  assert.deepEqual(
+    question.correctIndices.map((i) => question.options[i]),
+    ["Submit the request through the NHS App.", "Submit the request by telephone."],
+  );
+  assert.ok(
+    question.options
+      .filter((_, i) => !question.correctIndices!.includes(i))
+      .every((text) => !/telephone|NHS App/.test(text)),
+  );
   settings = selectAnswer(settings, f, EXCLUDE_QUESTION);
   assert.deepEqual(moduleFacts("prescriptions", p, settings), []);
   settings = selectAnswer(settings, f, "At reception");

@@ -1,3 +1,4 @@
+import * as questionQuality from "../src/lib/question-quality.ts";
 import * as staffLifecycle from "../src/lib/staff-lifecycle.ts";
 import * as training from "../src/lib/training.ts";
 import * as changeTracking from "../src/lib/practice-change-tracking.ts";
@@ -164,7 +165,11 @@ function compile(path: string, imports: Record<string, unknown>) {
     },
   }).outputText;
   const exports: Record<string, any> = {};
-  new Function("require", "exports", code)((id: string) => imports[id] ?? require(id), exports);
+  new Function("require", "exports", code)(
+    (id: string) =>
+      imports[id] ?? (id === "@/lib/question-quality" ? questionQuality : require(id)),
+    exports,
+  );
   return exports;
 }
 test("save/reload uses whole-practice storage; failed/stale saves leave confirmed records and sessions untouched", async () => {
@@ -346,7 +351,11 @@ test("editor selection/cancellation is draft-only and save feedback waits for pe
   let child: Bag = [];
   let form = render(editor.type, editor.props, child);
   assert.equal(form.find((n) => n.type === "textarea").props.rows, 1);
-  assert.ok(form.find((n) => n.type === "textarea").props.placeholder.includes(target.label));
+  assert.ok(
+    form
+      .find((n) => n.type === "textarea")
+      .props.placeholder.includes(questionQuality.displayLabel(target.label)),
+  );
   assert.equal(form.find((n) => n.type === "textarea").props.value, "");
   button(form, "+ Add step").props.onClick();
   form = render(editor.type, editor.props, child);
@@ -358,7 +367,7 @@ test("editor selection/cancellation is draft-only and save feedback waits for pe
       .slice(0, 3)
       .map((n) => n.props.placeholder),
     [
-      `e.g. What should reception do first for this request: ${target.label}?`,
+      `e.g. What should reception do first for this request: ${questionQuality.displayLabel(target.label)}?`,
       "e.g. What happens next?",
       "e.g. What should reception do after that?",
     ],

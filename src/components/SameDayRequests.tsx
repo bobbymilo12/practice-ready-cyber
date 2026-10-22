@@ -1,3 +1,4 @@
+import { displayLabel } from "@/lib/question-quality";
 import { useState } from "react";
 import { practiceChangePatch, useApp } from "@/lib/store";
 import { addPracticeRequest, practiceRequestChoices } from "@/lib/practice-requests";
@@ -42,7 +43,7 @@ export function SameDayRequests() {
               }
             />
             <span>
-              {r.label}
+              {displayLabel(r.label)}
               {r.roles.length > 0 && (
                 <span className="block text-xs text-muted-foreground">{r.roles.join(", ")}</span>
               )}

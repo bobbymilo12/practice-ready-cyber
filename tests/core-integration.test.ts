@@ -299,8 +299,8 @@ test("structured booking processes provide distinct Learn/Apply exercises withou
     "A routine booking request",
     "An unclear booking route",
   ]) {
-    const l = learn.find((s) => s.title === title)!,
-      a = apply.find((s) => s.title === title)!;
+    const l = learn.find((s) => s.title.toLowerCase() === title.toLowerCase())!,
+      a = apply.find((s) => s.title.toLowerCase() === title.toLowerCase())!;
     assert.ok(l?.kind === "mcq" && a?.kind === "mcq");
     assert.equal(l.options[l.correctIndex], a.options[a.correctIndex]);
     assert.notEqual(l.patientQuote, a.patientQuote);
@@ -385,8 +385,8 @@ test("local Learn states the request directly, keeping natural titles and distin
     ["A distressed caller needs help", "mental health crisis"],
     ["A new concern over the phone", "new severe headache"],
   ]) {
-    const l = learn.find((s) => s.title === title),
-      a = apply.find((s) => s.title === title);
+    const l = learn.find((s) => s.title.toLowerCase() === title.toLowerCase()),
+      a = apply.find((s) => s.title.toLowerCase() === title.toLowerCase());
     assert.ok(l?.kind === "mcq" && a?.kind === "mcq");
     assert.equal(l.patientQuote, `A patient contacts the practice about a ${request}.`);
     assert.doesNotMatch(
@@ -429,12 +429,15 @@ test("local choices use only explicit unqualified booking actions and vary deter
   ];
   const sets: string[] = [];
   for (const title of titles) {
-    const l = learn.find((s) => s.title === title)!,
-      a = apply.find((s) => s.title === title)!;
+    const l = learn.find((s) => s.title.toLowerCase() === title.toLowerCase())!,
+      a = apply.find((s) => s.title.toLowerCase() === title.toLowerCase())!;
     assert.ok(l.kind === "mcq" && a.kind === "mcq");
     assert.equal(l.options[l.correctIndex], a.options[a.correctIndex]);
     assert.notDeepEqual(new Set(l.options), new Set(a.options));
-    assert.deepEqual(a, { ...get("apply").find((s) => s.title === title)!, id: a.id });
+    assert.deepEqual(a, {
+      ...get("apply").find((s) => s.title.toLowerCase() === title.toLowerCase())!,
+      id: a.id,
+    });
     assert.doesNotMatch(l.patientQuote, /new receptionist|handles a/);
     assert.ok(a.options.some((o) => /clinical triage/.test(o)));
     assert.ok(a.options.some((o) => /Book the routine/.test(o)));
@@ -443,7 +446,9 @@ test("local choices use only explicit unqualified booking actions and vary deter
   assert.equal(new Set(sets).size, 3);
   p.bookingConfig.routineProcess = { id: "other", other: "Invented booking team" };
   p.bookingConfig.escalation.instruction = "Use the hidden custom department";
-  const withoutRoutes = get("apply").find((s) => s.title === titles[0])!;
+  const withoutRoutes = get("apply").find(
+    (s) => s.title.toLowerCase() === titles[0].toLowerCase(),
+  )!;
   assert.ok(withoutRoutes.kind === "mcq");
   assert.doesNotMatch(
     JSON.stringify(withoutRoutes.options),

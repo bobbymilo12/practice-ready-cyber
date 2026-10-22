@@ -1,3 +1,4 @@
+import { displayLabel } from "@/lib/question-quality";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
 import {
@@ -109,7 +110,7 @@ export function RoleRequestFields({
                     {request.custom ? (
                       <span className="sr-only">Select {request.label || "custom request"}</span>
                     ) : (
-                      request.label
+                      displayLabel(request.label)
                     )}
                   </label>
                   {request.custom && (

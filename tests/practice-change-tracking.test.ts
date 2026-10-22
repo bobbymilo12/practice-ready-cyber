@@ -1,3 +1,4 @@
+import * as questionQuality from "../src/lib/question-quality.ts";
 import { bookingFor, prescriptionsFor } from "../src/lib/practice-config.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -329,7 +330,10 @@ test("actual store setters cover staff overrides, roles, bookings and prescripti
     "./module-config": { reviseConfiguredScenario },
     "./practice-scenarios": {},
   };
-  new Function("require", "exports", code)((id: string) => imports[id] ?? require(id), exports);
+  new Function("require", "exports", code)(
+    (id: string) => imports[id] ?? (id === "./question-quality" ? questionQuality : require(id)),
+    exports,
+  );
   const store = exports.useApp;
   const reset = () => store.setState({ practiceData: p(), modules: [legacy()], packages: [] });
   reset();
@@ -385,7 +389,10 @@ test("modified core in a merged module retains provenance and switches to conser
     "./module-config": { reviseConfiguredScenario },
     "./practice-scenarios": {},
   };
-  new Function("require", "exports", code)((id: string) => imports[id] ?? require(id), exports);
+  new Function("require", "exports", code)(
+    (id: string) => imports[id] ?? (id === "./question-quality" ? questionQuality : require(id)),
+    exports,
+  );
   const practice = p();
   const core = appointmentCorePool({
     topicKey: "appointment-booking",

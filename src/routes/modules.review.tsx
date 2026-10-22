@@ -309,7 +309,9 @@ function ScenarioCard({
             {scenario.followUpFor
               ? "Follow-up practice · shown after a missed answer"
               : scenario.kind === "mcq"
-                ? "Multiple choice"
+                ? scenario.correctIndices
+                  ? "Select all that apply"
+                  : "Multiple choice"
                 : scenario.kind === "matching"
                   ? "Matching"
                   : "Put steps in order"}
@@ -360,27 +362,31 @@ function ScenarioCard({
         )}
       </p>
 
-      {editing && draft.kind === "mcq" && draft.provenance?.kind !== "sequence" && (
-        <label className="mt-3 block text-sm">
-          Best answer
-          <select
-            className="ml-3 rounded-lg border border-input bg-background p-2"
-            value={draft.correctIndex}
-            onChange={(e) => setDraft({ ...draft, correctIndex: Number(e.target.value) })}
-          >
-            {draft.options.map((_, i) => (
-              <option key={i} value={i}>
-                Option {String.fromCharCode(65 + i)}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      {editing &&
+        draft.kind === "mcq" &&
+        !draft.correctIndices &&
+        draft.provenance?.kind !== "sequence" && (
+          <label className="mt-3 block text-sm">
+            Best answer
+            <select
+              className="ml-3 rounded-lg border border-input bg-background p-2"
+              value={draft.correctIndex}
+              onChange={(e) => setDraft({ ...draft, correctIndex: Number(e.target.value) })}
+            >
+              {draft.options.map((_, i) => (
+                <option key={i} value={i}>
+                  Option {String.fromCharCode(65 + i)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
       {scenario.kind === "mcq" && draft.kind === "mcq" && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {scenario.options.map((opt, i) => {
-            const isBest = i === (editing ? draft.correctIndex : scenario.correctIndex);
+            const current = editing ? draft : scenario;
+            const isBest = (current.correctIndices ?? [current.correctIndex]).includes(i);
             return (
               <div
                 key={i}
@@ -390,7 +396,31 @@ function ScenarioCard({
               >
                 <div className="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
                   <span>Option {String.fromCharCode(65 + i)}</span>
-                  {isBest && <span className="text-[color:var(--success)]">Best answer</span>}
+                  {isBest && (
+                    <span className="text-[color:var(--success)]">
+                      {scenario.correctIndices ? "Correct choice" : "Best answer"}
+                    </span>
+                  )}
+                  {editing && draft.correctIndices && (
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={isBest}
+                        onChange={() => {
+                          const indices = isBest
+                            ? draft.correctIndices!.filter((n) => n !== i)
+                            : [...draft.correctIndices!, i];
+                          if (indices.length)
+                            setDraft({
+                              ...draft,
+                              correctIndices: indices,
+                              correctIndex: indices[0],
+                            });
+                        }}
+                      />{" "}
+                      Correct choice
+                    </label>
+                  )}
                 </div>
                 {editing && draft.provenance?.kind !== "sequence" ? (
                   <textarea

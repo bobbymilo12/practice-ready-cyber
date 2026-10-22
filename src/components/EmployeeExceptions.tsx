@@ -1,3 +1,4 @@
+import { displayLabel } from "@/lib/question-quality";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
 import { flushPractice } from "@/lib/backend";
@@ -101,7 +102,7 @@ export function EmployeeExceptions({
                                 )
                               }
                             />
-                            {request.label}
+                            {displayLabel(request.label)}
                           </label>
                           <p className="mt-1 text-xs text-muted-foreground">
                             {explicit
@@ -117,7 +118,7 @@ export function EmployeeExceptions({
                         {explicit && (
                           <button
                             type="button"
-                            aria-label={`Reset ${request.label} to role default`}
+                            aria-label={`Reset ${displayLabel(request.label)} to role default`}
                             onClick={() =>
                               change(
                                 resetRequestOverride(person, roleId, request.id).requestOverrides,

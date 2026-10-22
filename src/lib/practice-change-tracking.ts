@@ -189,7 +189,7 @@ function usesChange(scenario: Scenario, change: ReviewChange): boolean {
     source.kind === "core" ? source.inputs.filter((i) => i.source === "practice_setup") : undefined;
   const paths = inputs
     ? inputs.flatMap((i) => i.paths ?? [])
-    : source.kind === "practice_role_matching"
+    : source.kind === "practice_role_matching" || source.kind === "configured_fact"
       ? source.paths
       : [];
   if (!Array.isArray(paths) || (!paths.length && (source.kind !== "core" || inputs?.length)))
@@ -216,7 +216,7 @@ export function recordedSourceChanges(scenario: Scenario, changes: ReviewChange[
       ? requestId
         ? [`practiceData.localProcedures[${requestId}]`]
         : []
-      : source.kind === "practice_role_matching"
+      : source.kind === "practice_role_matching" || source.kind === "configured_fact"
         ? (source.paths ?? [])
         : source.kind === "core"
           ? (Array.isArray(source.inputs) ? source.inputs : [])

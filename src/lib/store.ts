@@ -1,3 +1,4 @@
+import { displayLabel } from "./question-quality";
 import { approveReviewedQuestion, flagPracticeChanges } from "./practice-change-tracking";
 import type { PracticeRoleRequests } from "./role-requests";
 import type { SafeguardingRoute } from "./practice-config";
@@ -967,7 +968,7 @@ export const TOPICS: {
     desc: "Design a module from any local process.",
     questions: GENERIC_QUESTIONS,
   },
-];
+].map((topic) => ({ ...topic, title: displayLabel(topic.title) }));
 
 // ------------- Scenario helpers -------------
 export type ScenarioFormat = "mcq" | "order" | "mixed";
@@ -1446,6 +1447,13 @@ export function draftsForTopic(
         ...s,
         options: [...s.options.slice(offset), ...s.options.slice(0, offset)],
         correctIndex: (s.correctIndex - offset + s.options.length) % s.options.length,
+        ...(s.correctIndices
+          ? {
+              correctIndices: s.correctIndices.map(
+                (i) => (i - offset + s.options.length) % s.options.length,
+              ),
+            }
+          : {}),
       };
     });
 }

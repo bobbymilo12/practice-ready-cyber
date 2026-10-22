@@ -159,14 +159,18 @@ function Results() {
                 const selected = Array.isArray(answer.value)
                   ? (scenario.kind === "order"
                       ? orderLabels(scenario, answer.value)
-                      : answer.value
-                    ).join(" → ")
+                      : scenario.kind === "mcq" && scenario.correctIndices
+                        ? answer.value.map((i) => scenario.options[Number(i)])
+                        : answer.value
+                    ).join(scenario.kind === "mcq" && scenario.correctIndices ? "; " : " → ")
                   : scenario.kind === "mcq" && typeof answer.value === "number"
                     ? scenario.options[answer.value]
                     : "Selected order";
                 const correct =
                   scenario.kind === "mcq"
-                    ? scenario.options[scenario.correctIndex]
+                    ? (scenario.correctIndices ?? [scenario.correctIndex])
+                        .map((i) => scenario.options[i])
+                        .join("; ")
                     : orderLabels(scenario, orderKey(scenario)).join(" → ");
                 return (
                   <li key={answer.scenarioId} className="rounded-xl border border-border p-4">

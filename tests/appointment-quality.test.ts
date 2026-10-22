@@ -1,3 +1,4 @@
+import * as questionQuality from "../src/lib/question-quality.ts";
 import * as presentation from "../src/lib/module-presentation.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -111,7 +112,11 @@ test("module topic selection explains inherent practice information use without 
       TOPICS: [{ key: "appointment-booking", title: "Appointment booking", desc: "Booking" }],
     },
   };
-  new Function("require", "exports", code)((id: string) => imports[id] ?? require(id), exports);
+  new Function("require", "exports", code)(
+    (id: string) =>
+      imports[id] ?? (id === "@/lib/question-quality" ? questionQuality : require(id)),
+    exports,
+  );
   const { renderToStaticMarkup } = require("react-dom/server");
   const html = renderToStaticMarkup(exports.Route.component());
   assert.match(html, /We use your practice’s configured information and procedures/);
@@ -364,7 +369,11 @@ test("real module-builder Generate handler carries saved procedures into Learn a
         }),
       },
     };
-    new Function("require", "exports", code)((id: string) => imports[id] ?? require(id), exports);
+    new Function("require", "exports", code)(
+      (id: string) =>
+        imports[id] ?? (id === "@/lib/question-quality" ? questionQuality : require(id)),
+      exports,
+    );
     const elements = (n: any): any[] =>
       !n || typeof n !== "object"
         ? []

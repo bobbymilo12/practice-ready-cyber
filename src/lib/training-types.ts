@@ -23,7 +23,10 @@ export type ScenarioStatus = "draft" | "approved";
 export interface MCQScenario {
   // Structured classification; trainee-facing titles are not internal identifiers.
   localRoleRequestId?: string;
-  provenance?: CoreScenarioProvenance | import("./sequence").SequenceProvenance;
+  provenance?:
+    | CoreScenarioProvenance
+    | import("./sequence").SequenceProvenance
+    | { kind: "configured_fact"; paths: string[]; snapshot: unknown; managerModified?: boolean };
   // Optional generation metadata; old saved scenarios remain valid.
   followUpSituation?: string;
   kind: "mcq";
@@ -33,6 +36,8 @@ export interface MCQScenario {
   question: string;
   options: string[];
   correctIndex: number;
+  // Present only for multi-select; all listed choices and no others must be selected.
+  correctIndices?: number[];
   learningPoint: string;
   status: ScenarioStatus;
   managerNote?: string;

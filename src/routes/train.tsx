@@ -163,8 +163,14 @@ function Training({ id }: { id: string }) {
                       {Array.isArray(selected.value)
                         ? (reviewScenario.kind === "order"
                             ? orderLabels(reviewScenario, selected.value)
-                            : selected.value
-                          ).join(" → ")
+                            : reviewScenario.kind === "mcq" && reviewScenario.correctIndices
+                              ? selected.value.map((i) => reviewScenario.options[Number(i)])
+                              : selected.value
+                          ).join(
+                            reviewScenario.kind === "mcq" && reviewScenario.correctIndices
+                              ? "; "
+                              : " → ",
+                          )
                         : reviewScenario.kind === "mcq" && typeof selected.value === "number"
                           ? reviewScenario.options[selected.value]
                           : reviewScenario.kind === "matching" && isMatchingAnswer(selected.value)
@@ -349,14 +355,28 @@ function ScenarioBlock({
             <button
               key={i}
               disabled={locked}
-              aria-pressed={selected === i}
-              onClick={() => edit(i)}
-              className={`flex w-full gap-3 rounded-xl border p-4 text-left text-sm disabled:cursor-default ${selected === i ? "border-primary bg-primary/10" : "border-border hover:border-primary"}`}
+              aria-pressed={
+                scenario.correctIndices
+                  ? Array.isArray(selected) && selected.includes(String(i))
+                  : selected === i
+              }
+              onClick={() =>
+                edit(
+                  scenario.correctIndices
+                    ? items.includes(String(i))
+                      ? items.filter((v) => v !== String(i))
+                      : [...items, String(i)]
+                    : i,
+                )
+              }
+              className={`flex w-full gap-3 rounded-xl border p-4 text-left text-sm disabled:cursor-default ${(scenario.correctIndices ? Array.isArray(selected) && selected.includes(String(i)) : selected === i) ? "border-primary bg-primary/10" : "border-border hover:border-primary"}`}
             >
               <span className="font-semibold">{String.fromCharCode(65 + i)}.</span>
               <span>
                 {option}
-                {selected === i && <span className="ml-2 text-primary">(Selected)</span>}
+                {(scenario.correctIndices
+                  ? Array.isArray(selected) && selected.includes(String(i))
+                  : selected === i) && <span className="ml-2 text-primary">(Selected)</span>}
               </span>
             </button>
           ))}
@@ -418,7 +438,12 @@ function ScenarioBlock({
         <div role="status" className="mt-6 rounded-xl bg-surface p-4 text-sm">
           <p className="font-semibold">{committed.correct ? "Correct." : "Incorrect."}</p>
           {scenario.kind === "mcq" && (
-            <p className="mt-2">Correct answer: {scenario.options[scenario.correctIndex]}</p>
+            <p className="mt-2">
+              Correct answer:{" "}
+              {(scenario.correctIndices ?? [scenario.correctIndex])
+                .map((i) => scenario.options[i])
+                .join("; ")}
+            </p>
           )}
           {scenario.kind === "order" && (
             <p className="mt-2">

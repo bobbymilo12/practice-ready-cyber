@@ -12,7 +12,13 @@ export function scenarioContent(s: Scenario) {
     managerNote: s.managerNote || undefined,
   };
   if (s.kind === "mcq")
-    return { ...common, options: [...s.options].sort(), correctAnswer: s.options[s.correctIndex] };
+    return {
+      ...common,
+      options: [...s.options].sort(),
+      correctAnswer: s.correctIndices
+        ? s.correctIndices.map((i) => s.options[i]).sort()
+        : s.options[s.correctIndex],
+    };
   if (s.kind === "matching")
     return {
       ...common,

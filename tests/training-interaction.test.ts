@@ -457,3 +457,34 @@ test("training screen offers updated content without resuming or rewriting the o
   assert.equal(starts, 1);
   assert.deepEqual(old, history);
 });
+
+test("multi-select edits stay draft, exact-set Check commits once and all correct choices appear in feedback", () => {
+  const question: Scenario = {
+    ...mcq,
+    options: ["First method", "Second method", "Unsupported method"],
+    correctIndex: 0,
+    correctIndices: [0, 1],
+  };
+  const h = harness(question);
+  h.choice(2).props.onClick();
+  h.choice(2).props.onClick();
+  h.choice(0).props.onClick();
+  assert.equal(h.calls, 0);
+  assert.deepEqual(h.session.queue, [question.id]);
+  h.choice(1).props.onClick();
+  h.button("Check answer").props.onClick();
+  assert.equal(h.calls, 1);
+  assert.equal(h.session.answers[0].correct, true);
+  assert.deepEqual(h.session.answers[0].value, ["0", "1"]);
+  assert.match(JSON.stringify(h.render()), /First method; Second method/);
+  assert.equal(h.choice(2).props.disabled, true);
+  const wrong = harness(question);
+  wrong.choice(0).props.onClick();
+  wrong.button("Check answer").props.onClick();
+  assert.equal(wrong.session.answers[0].correct, false);
+  assert.deepEqual(wrong.session.queue, [question.id, "recovery"]);
+  assert.deepEqual(
+    training.answerSession(wrong.session, ["0", "1"]).answers,
+    wrong.session.answers,
+  );
+});
