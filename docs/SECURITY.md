@@ -24,7 +24,7 @@ password-recovery detail), `docs/BACKEND-MAP.md`.
 | Decision | Reason |
 | --- | --- |
 | Deactivation is an app-level block (`inactive_at` plus API 403). Supabase Auth bans are not used. | No data is reachable except through `practice-api`, which rejects inactive profiles on every request. A ban would also block password recovery and make reactivation two-step. Revisit if any direct-table, Storage or second API is added. |
-| A password change signs out every other session (`admin.signOut(token, "others")`). | Stolen or old-device sessions stop working when the password changes. |
+| A password change ends every session, including the current one. The app then signs straight back in with the new password. | Supabase Auth revokes all sessions on an admin password change (confirmed live 2026-10-22), so stolen or old-device sessions stop working. |
 | `remove-trainee` is refused; Deactivate replaces it. | Hard delete cascaded away training history. |
 | The invite flow still tells a manager that an email "is already in use". | Any outcome of an invite (sent or refused) reveals whether the email exists, so it can't be hidden without silently failing invites. The risk is limited to authenticated managers, invites are rate-limited to one per minute per address, and the message doesn't name the other practice. **Accepted risk.** |
 | Audit log: `audit_events` records staff deactivate/reactivate, assignment withdrawal and module publish/republish. Writes are best-effort. | The action has already been committed when the log is written, so a logging failure must not make the UI report a successful save as failed. Practice deletion removes its log as part of erasure. |
@@ -92,11 +92,11 @@ needs migrations #8 and #10 and the current `practice-api` deployed.
 | Secrets in git history | `git log -p --all` scan for key patterns: placeholder only | PASS | 2026-10-22 |
 | Secrets in client bundle | `npm run build`, grep `.vercel/output/static`: none | PASS | 2026-10-22 |
 | Runtime dependencies | `npm audit --omit=dev`: 0 after `npm audit fix` (vite, source-map-js). Dev-only drizzle-kit has 4 moderate findings; accepted because it never ships. | PASS | 2026-10-22 |
-| Practice A cannot reach practice B (live) | `security-check.mjs` | not run | |
-| Trainee cannot use manager actions (live) | `security-check.mjs` | not run | |
-| Browser key + JWT cannot read or write tables or call RPCs (live) | `security-check.mjs` | not run | |
-| Logout, password change and invalid tokens rejected (live) | `security-check.mjs` | not run | |
-| Deactivated staff blocked, reactivation restores access (live) | `security-check.mjs` | not run | |
+| Practice A cannot reach practice B (live) | `security-check.mjs` | PASS | 2026-10-22 |
+| Trainee cannot use manager actions (live) | `security-check.mjs` | PASS | 2026-10-22 |
+| Browser key + JWT cannot read or write tables or call RPCs (live) | `security-check.mjs`: 64 checks | PASS | 2026-10-22 |
+| Logout, password change and invalid tokens rejected (live) | `security-check.mjs` | PASS. A password change also ended the user's own session; fixed by signing back in (rerun needed after deploy) | 2026-10-22 |
+| Deactivated staff blocked, reactivation restores access (live) | `security-check.mjs` | rerun needed after deploy | |
 | Supabase security advisors clean | Dashboard → Advisors | not run | |
 | Password reset: valid, expired, reused and tampered links | Manual, real inbox | not run | |
 | Invites: first login, expired (>7 days), repeat (1/min), used, email in another practice | Manual, real inbox | not run | |
@@ -128,8 +128,12 @@ deactivates the trainee (trainee blocked) → manager reactivates. Record any fa
 
 ## 7. Remaining risks and handover
 
-- **Live checks have not been run.** The session's Supabase connection had no access to project
-  `yuatwxjnodfumvxdoydw`. Everything marked "not run" above needs the project owner.
+- **Applied to live 2026-10-22:** migrations #6–#10. Earlier migrations had been applied under
+  dashboard-generated version numbers, so the history was repaired with `supabase migration repair`
+  (no schema change).
+- **Found live:** each trainee invite left an empty practice behind. Auth sets `app_metadata` after
+  the signup trigger runs, so the trigger still provisioned a practice. `invite` now deletes it. The
+  9 empty practices created before the fix need a one-off cleanup.
 - No separate staging project exists. Recommended: a second Supabase project with the same
   migrations and function, used for the live script and the manual checks before real staff join.
 - `purge_expired_personal_data()` is not scheduled.

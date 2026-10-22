@@ -51,6 +51,12 @@ function AuthPage() {
         throw new Error("Use at least 12 characters and make sure both new passwords match.");
       if (reset) {
         await api("password", { currentPassword, password });
+        // Changing the password revokes every session, including this one.
+        const { error: again } = await supabase.auth.signInWithPassword({
+          email: useApp.getState().account!.email,
+          password,
+        });
+        if (again) throw new Error("Your password was changed. Log in with your new password.");
         await loadWorkspace();
         setPassword("");
         setCurrentPassword("");

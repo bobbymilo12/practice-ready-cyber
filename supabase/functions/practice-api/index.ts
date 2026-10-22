@@ -159,8 +159,8 @@ Deno.serve(async (request) => {
         .update({ must_reset_password: false, invite_status: "active" })
         .eq("id", profile.id);
       check(resetError);
-      // End every other session (old devices and the verifier sign-in above); this one stays.
-      check((await admin.auth.admin.signOut(token, "others")).error);
+      // Auth revokes every session on an admin password change (incl. the verifier and this one);
+      // the client signs in again with the new password.
       return reply({ ok: true });
     }
     if (profile.must_reset_password) {
@@ -368,6 +368,7 @@ Deno.serve(async (request) => {
         fail("Please wait one minute before resending this invitation.");
       const password = `Pr!${crypto.randomUUID()}${crypto.randomUUID().slice(0, 8)}`;
       let traineeId = existing?.id;
+      let strayPractice: string | undefined;
       if (traineeId) {
         // Claim the resend before rotating credentials, so concurrent requests cannot email different passwords.
         const { data: claimed, error: claimError } = await admin
@@ -398,6 +399,14 @@ Deno.serve(async (request) => {
           fail("Could not create the invitation. Please check the email and try again.");
         }
         traineeId = data.user!.id;
+        // Auth applies app_metadata after the insert, so the signup trigger still provisions a
+        // manager practice for the invitee; it is removed once the profile is moved below.
+        const { data: auto } = await admin
+          .from("profiles")
+          .select("practice_id")
+          .eq("id", traineeId)
+          .maybeSingle();
+        strayPractice = auto?.practice_id;
       }
       const now = new Date().toISOString();
       const invitedProfile = {
@@ -420,6 +429,8 @@ Deno.serve(async (request) => {
         if (!existing) await admin.auth.admin.deleteUser(traineeId);
         fail("Could not save the invitation. Please try again.");
       }
+      if (strayPractice && strayPractice !== profile.practice_id)
+        check((await admin.from("practices").delete().eq("id", strayPractice)).error);
       const induction = (state.packages ?? []).find(
         (p: { kind?: string }) => p.kind === "induction",
       );

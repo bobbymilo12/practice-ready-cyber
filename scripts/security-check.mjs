@@ -42,6 +42,7 @@ async function signIn(email, password) {
 }
 const password = () => `Sx!${randomUUID()}`;
 const created = [];
+const strayPractices = [];
 
 async function manager(tag) {
   const email = `zz-sectest-${run}-${tag}@example.invalid`;
@@ -71,8 +72,15 @@ async function trainee(tag, practiceId) {
   });
   if (error) throw error;
   created.push(data.user.id);
+  // If a signup trigger provisioned a manager practice for this trainee, report it and clean it up.
+  const { data: auto } = await admin
+    .from("profiles")
+    .select("practice_id, role")
+    .eq("id", data.user.id)
+    .maybeSingle();
+  if (auto) strayPractices.push(auto.practice_id);
   const now = new Date().toISOString();
-  const { error: e } = await admin.from("profiles").insert({
+  const { error: e } = await admin.from("profiles").upsert({
     id: data.user.id,
     practice_id: practiceId,
     role: "trainee",
@@ -207,17 +215,20 @@ try {
   expect("password change ok", changed.status === 200, changed.status);
   const stale = await api(old.token, { action: "load" });
   expect("other session rejected after password change", stale.status === 401, stale.status);
+  const self = await api(current.token, { action: "load" });
+  expect("changing session also ends (app signs in again)", self.status === 401, self.status);
+  const fresh = await signIn(tA.email, newPw);
   const garbage = await api("not-a-jwt", { action: "load" });
   expect("invalid token rejected", garbage.status === 401, garbage.status);
 
   // Staff lifecycle
   const off = await api(mA.token, { action: "set-staff-active", id: tA.id, active: false });
   expect("manager A can deactivate own trainee", off.status === 200, off.status);
-  const inactive = await api(current.token, { action: "load" });
+  const inactive = await api(fresh.token, { action: "load" });
   expect("deactivated trainee blocked", inactive.status === 403, inactive.status);
   const on = await api(mA.token, { action: "set-staff-active", id: tA.id, active: true });
   expect("manager A can reactivate", on.status === 200, on.status);
-  const back = await api(current.token, { action: "load" });
+  const back = await api(fresh.token, { action: "load" });
   expect("reactivated trainee allowed", back.status === 200, back.status);
 } catch (error) {
   expect("script ran to completion", false, error.message);
@@ -225,7 +236,8 @@ try {
   for (const m of managers.filter((m) => m.token))
     await api(m.token, { action: "delete-practice", confirm: "DELETE" }).catch(() => {});
   for (const id of created) await admin.auth.admin.deleteUser(id).catch(() => {});
-  for (const m of managers) await admin.from("practices").delete().eq("id", m.practiceId);
+  for (const id of [...managers.map((m) => m.practiceId), ...strayPractices])
+    await admin.from("practices").delete().eq("id", id);
   const { data: leftovers } = await admin
     .from("profiles")
     .select("id")

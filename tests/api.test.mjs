@@ -11,7 +11,6 @@ let user = null;
 let handler;
 let createUserError = null;
 const writes = [];
-const signOuts = [];
 function query(table) {
   const filters = [];
   let operation = "select";
@@ -62,8 +61,9 @@ function query(table) {
       if (operation === "update") rows.forEach((r) => Object.assign(r, value));
       if (operation === "insert" || operation === "upsert") {
         for (const v of Array.isArray(value) ? value : [value]) {
-          const row = { version: 0, ...v };
-          tables[table].push(row);
+          const existing = operation === "upsert" && tables[table].find((r) => r.id === v.id);
+          const row = existing ? Object.assign(existing, v) : { version: 0, ...v };
+          if (!existing) tables[table].push(row);
           rows.push(row);
         }
       }
@@ -119,15 +119,14 @@ const mockClient = {
     }),
     admin: {
       updateUserById: async () => ({ error: null }),
-      createUser: async () =>
-        createUserError
-          ? { data: { user: null }, error: createUserError }
-          : { data: { user: { id: "invited" } }, error: null },
-      deleteUser: async () => ({ error: null }),
-      signOut: async (jwt, scope) => {
-        signOuts.push([jwt, scope]);
-        return { error: null };
+      createUser: async () => {
+        if (createUserError) return { data: { user: null }, error: createUserError };
+        // Live Auth applies app_metadata after insert, so the signup trigger provisions a practice.
+        tables.practices.push({ id: "stray", version: 1, state: {} });
+        tables.profiles.push({ id: "invited", practice_id: "stray", role: "manager" });
+        return { data: { user: { id: "invited" } }, error: null };
       },
+      deleteUser: async () => ({ error: null }),
     },
   },
 };
@@ -263,17 +262,6 @@ test("password-change requirement cannot be bypassed with client metadata", asyn
   const loaded = await call({ action: "load" });
   assert.deepEqual(loaded.data.state, {});
   assert.deepEqual(loaded.data.sessions, []);
-});
-test("changing password signs out every other session", async () => {
-  reset("trainee", true);
-  signOuts.length = 0;
-  const r = await call({
-    action: "password",
-    currentPassword: "temporary-password",
-    password: "a-new-long-password",
-  });
-  assert.equal(r.status, 200);
-  assert.deepEqual(signOuts, [["test-token", "others"]]);
 });
 test("trainee load filters other trainees, assignments, modules and manager details", async () => {
   reset();
@@ -423,6 +411,15 @@ test("invitation assigns only ready induction modules and resend does not duplic
     assert.equal(response.status, 200, JSON.stringify(response.data));
     tables.profiles.find((p) => p.id === "invited").last_invite_at = new Date(0).toISOString();
   }
+  const invitee = tables.profiles.filter((p) => p.id === "invited");
+  assert.deepEqual(
+    invitee.map((p) => [p.practice_id, p.role]),
+    [["oak", "trainee"]],
+  );
+  assert.equal(
+    tables.practices.find((p) => p.id === "stray"),
+    undefined,
+  );
   const assigned = tables.practices[0].state.assignments.filter((a) => a.packageId === "induction");
   assert.equal(assigned.length, 1);
   assert.equal(assigned[0].moduleId, "m1");
