@@ -60,9 +60,12 @@ function query(table) {
       if (operation === "delete") tables[table] = tables[table].filter((r) => !rows.includes(r));
       if (operation === "update") rows.forEach((r) => Object.assign(r, value));
       if (operation === "insert" || operation === "upsert") {
-        value = { version: 0, ...value };
-        tables[table].push(value);
-        rows.push(value);
+        for (const v of Array.isArray(value) ? value : [value]) {
+          const existing = operation === "upsert" && tables[table].find((r) => r.id === v.id);
+          const row = existing ? Object.assign(existing, v) : { version: 0, ...v };
+          if (!existing) tables[table].push(row);
+          rows.push(row);
+        }
       }
       return Promise.resolve({ data: single ? (rows[0] ?? null) : rows, error: null }).then(
         resolve,
@@ -116,10 +119,13 @@ const mockClient = {
     }),
     admin: {
       updateUserById: async () => ({ error: null }),
-      createUser: async () =>
-        createUserError
-          ? { data: { user: null }, error: createUserError }
-          : { data: { user: { id: "invited" } }, error: null },
+      createUser: async () => {
+        if (createUserError) return { data: { user: null }, error: createUserError };
+        // Live Auth applies app_metadata after insert, so the signup trigger provisions a practice.
+        tables.practices.push({ id: "stray", version: 1, state: {} });
+        tables.profiles.push({ id: "invited", practice_id: "stray", role: "manager" });
+        return { data: { user: { id: "invited" } }, error: null };
+      },
       deleteUser: async () => ({ error: null }),
     },
   },
@@ -218,6 +224,7 @@ function reset(role = "trainee", mustReset = false) {
     ],
   };
   tables.role_templates = [];
+  tables.audit_events = [];
   tables.training_sessions = [
     {
       id: "b-session",
@@ -404,6 +411,15 @@ test("invitation assigns only ready induction modules and resend does not duplic
     assert.equal(response.status, 200, JSON.stringify(response.data));
     tables.profiles.find((p) => p.id === "invited").last_invite_at = new Date(0).toISOString();
   }
+  const invitee = tables.profiles.filter((p) => p.id === "invited");
+  assert.deepEqual(
+    invitee.map((p) => [p.practice_id, p.role]),
+    [["oak", "trainee"]],
+  );
+  assert.equal(
+    tables.practices.find((p) => p.id === "stray"),
+    undefined,
+  );
   const assigned = tables.practices[0].state.assignments.filter((a) => a.packageId === "induction");
   assert.equal(assigned.length, 1);
   assert.equal(assigned[0].moduleId, "m1");
@@ -608,6 +624,13 @@ test("staff deactivation and reactivation preserve history and do not restore wi
   assert.equal(inactive.inactive_at, null);
   assert.ok(tables.practices[0].state.assignments[1].withdrawnAt);
   assert.deepEqual(tables.training_sessions, history);
+  assert.deepEqual(
+    tables.audit_events.map((e) => [e.practice_id, e.actor_id, e.action, e.target_id]),
+    [
+      ["oak", "alice", "staff.deactivated", "bob"],
+      ["oak", "alice", "staff.reactivated", "bob"],
+    ],
+  );
   user = { id: "bob" };
   assert.equal((await call({ action: "start", assignmentId: "a2" })).status, 403);
 });

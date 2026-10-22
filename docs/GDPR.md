@@ -16,11 +16,13 @@ Review whenever a table, supplier or free-text field is added.
 
 | Data | Where | Why needed | Lawful basis | Retention |
 | --- | --- | --- | --- | --- |
-| Staff name, work email | `profiles`, `auth.users` | Log in, invitations, show manager who is who | Contract / practice's legitimate interests | Until staff removed or practice deleted |
+| Staff name, work email | `profiles`, `auth.users` | Log in, invitations, show manager who is who | Contract / practice's legitimate interests | Until practice deleted (deactivation keeps the record; TODO (owner): per-person erasure route) |
+| Deactivation time | `profiles.inactive_at` | Block access while keeping training history | As above | As above |
+| Manager action log (actor id, action, target id, time) | `audit_events` | Accountability for deactivation, withdrawal, publication | Legitimate interests | Until practice deleted |
 | Job role (free text) | `profiles.job_role` | Assign role-relevant modules | As above | As above |
 | App role (manager/trainee) | `profiles.role` | Access control | As above | As above |
 | Password | Supabase Auth only (hashed). Never in our tables | Authentication | Contract | Until user deleted |
-| Assigned modules, progress, answers, scores, confidence | `training_sessions`, `practices.state` | The service itself; manager monitors progress | As above | Until staff removed or practice deleted |
+| Assigned modules, progress, answers, scores, confidence | `training_sessions`, `practices.state` | The service itself; manager monitors progress | As above | Until practice deleted |
 | Practice settings, roles, local procedures | `practice_*` tables | Generate training | Contract | Until practice deleted |
 | Staff names in `practice_staff` (name, role, clinics, legacy `notes`) | `practice_staff` | Legacy team list; **names appear in generated scenarios** | Legitimate interests | Until practice deleted |
 | Enquiry name, email, message | `contact_messages` | Reply to enquiries | Legitimate interests | 24 months (purge function) |
