@@ -167,12 +167,7 @@ test("UTI procedure teaches reception actions without assigning them to the clin
     );
     // Booking wording is intentional; role recognition must not invent procedure actions.
     assert.ok(!recognition.options.some((option) => /sample|urine-dipping/i.test(option)));
-    assert.match(
-      recognition.patientQuote,
-      trainingLevel === "learn"
-        ? /booking process has confirmed an appointment is needed/
-        : /followed the practice’s booking process/,
-    );
+    assert.match(recognition.patientQuote, /asks to book an appointment about/);
 
     const generated = modules.generateConfiguredModule(
       "appointment-booking",
@@ -260,12 +255,7 @@ test("eligible roles remain alternatives after the booking process; umbrella que
         ? "Book an appointment with a Doctor or the Practice Nurse."
         : "Doctor appointment or Practice Nurse appointment",
     );
-    assert.match(
-      q.patientQuote,
-      trainingLevel === "learn"
-        ? /booking process has confirmed an appointment is needed/
-        : /followed the practice’s booking process/,
-    );
+    assert.match(q.patientQuote, /asks to book an appointment about/);
     assert.match(
       q.learningPoint,
       /Follow the practice’s booking process before arranging the appointment/,

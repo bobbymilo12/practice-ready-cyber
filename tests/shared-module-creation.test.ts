@@ -17,15 +17,12 @@ function settingsFor(topic: string) {
     customOptions: {} as Record<string, { id: string; label: string }[]>,
   };
   config.topicFields[topic]
-    .filter((field) => !field.legacyOnly)
-    .forEach((field, i) => {
-      const id = "custom:task-" + i;
-      settings.customOptions[field.key] = [
-        { id, label: "Open the " + topic + " task form " + i + " and record the reference." },
-      ];
-      settings.answers[field.key] = id;
+    .filter((f) => !f.legacyOnly)
+    .forEach((field) => {
+      const option = field.options.find((o) => !field.detailOptions?.[o] && !/depends/i.test(o));
+      if (option) settings.answers[field.key] = option;
     });
-  settings.extra = "Check the " + topic + " handover reference.";
+  settings.extra = "When unsure -> Ask the reception lead to check the " + topic + " task";
   return settings;
 }
 
@@ -50,7 +47,11 @@ for (const topic of topics.filter((t) => t !== "appointment-booking")) {
       assert.ok(
         hard.every((s) => s.kind === "mcq" && s.options.length >= 2 && s.options.length <= 4),
       );
-      assert.notEqual(easy[0].patientQuote, hard[0].patientQuote);
+      assert.ok(easy.every((q) => !/A colleague asks for help/.test(q.patientQuote)));
+      assert.notDeepEqual(
+        easy.map((q) => [q.patientQuote, q.question]),
+        hard.map((q) => [q.patientQuote, q.question]),
+      );
       assert.ok(easy.every((s) => s.question.endsWith("?")));
       assert.doesNotMatch(
         JSON.stringify([...easy, ...hard]),
@@ -71,7 +72,13 @@ for (const topic of topics.filter((t) => t !== "appointment-booking")) {
         assert.equal(question.status, "draft");
         assert.equal(question.followUpFor, undefined);
         assert.ok(question.kind === "mcq");
-        assert.match(question.options[question.correctIndex], new RegExp(topic));
+        assert.ok(question.options[question.correctIndex].trim());
+        assert.equal(question.provenance?.kind, "configured_fact");
+        const snapshot = question.provenance!.snapshot as { rule: string };
+        assert.ok(
+          config.moduleFacts(topic, p, settings).some((f) => f.rule === snapshot.rule),
+          topic,
+        );
         assert.doesNotMatch(
           question.options.join(" "),
           /Ignore|negligent|Press the patient|correcting the patient|Which response best reflects/,
@@ -272,7 +279,7 @@ test("factual questions retain the decision and exact saved answer with retired 
       });
       const question = questions.find((s) => s.title === "Prescription Turnaround");
       assert.ok(question?.kind === "mcq");
-      assert.match(question.question, /processing/i);
+      assert.match(question.question, /process(?:ing|ed)/i);
       assert.ok(question.options[question.correctIndex].includes("72 working hours"));
       assert.ok(
         question.options
@@ -292,7 +299,7 @@ test("difficult-call responses use plausible communication choices and the confi
     trainingLevel: "apply",
     difficulty: "advanced",
   });
-  const question = questions.find((s) => s.title === "Supportive Language");
+  const question = questions.find((s) => s.title === "Responding To A Concern");
   assert.ok(question?.kind === "mcq");
   assert.equal(question.question, "What would be the best way to respond?");
   assert.equal(

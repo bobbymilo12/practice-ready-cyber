@@ -255,8 +255,8 @@ export function PredefinedModuleSetup({
                           Practice information for this topic
                         </h2>
                         <p className="text-sm">
-                          Training uses the shared information saved in Practice Setup. Complete any
-                          missing processes there, then return to create your module.
+                          Training uses the shared information saved in Practice Setup. Review saved
+                          information or add further processes there whenever needed.
                         </p>
                         <Link
                           to="/practice/setup"
@@ -270,8 +270,9 @@ export function PredefinedModuleSetup({
                           }}
                           className="text-primary underline"
                         >
-                          Complete missing {topic === "prescriptions" ? "prescription" : "topic"}{" "}
-                          information in Practice Setup
+                          {facts.length ? "Review" : "Complete missing"}{" "}
+                          {topic === "prescriptions" ? "prescription" : "topic"} information in
+                          Practice Setup
                         </Link>
                         {topic === "prescriptions" && (
                           <Link

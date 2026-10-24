@@ -33,7 +33,7 @@ test("actual custom draft generation retains MCQs for ordering/mixed preferences
   exports.useApp.setState({ practiceData: empty(), answers: {} });
   for (const format of ["mcq", "order", "mixed"]) {
     const scenarios = exports.draftsForTopic("custom", format, "Test", "easy", "short", {
-      example: "Requests go through the example form.",
+      example: "When unsure -> Ask the reception lead to check the task",
     });
     assert.ok(scenarios.length > 0);
     assert.ok(scenarios.every((s: any) => s.kind === "mcq"));

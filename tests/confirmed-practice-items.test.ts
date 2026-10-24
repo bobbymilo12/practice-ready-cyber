@@ -153,7 +153,15 @@ test("legacy prescription text remains one item; structured ordering becomes rea
     ...config.defaultModuleSettings(),
     trainingLevel: "learn",
   });
-  const text = JSON.stringify(questions);
+  const text = JSON.stringify(
+    questions.map((q) => [
+      q.title,
+      q.patientQuote,
+      q.question,
+      q.kind === "mcq" ? q.options : [],
+      q.learningPoint,
+    ]),
+  );
   assert.match(text, /accepts these requests through the NHS App/);
   assert.doesNotMatch(text, /accepts these requests by telephone/);
   assert.match(text, /Patients over 60 can order over the phone/);
@@ -164,7 +172,10 @@ test("all predefined topics reuse shared configuration across modules and change
   for (const topic of Object.keys(config.topicFields).filter((topic) => topic !== "custom")) {
     const p = empty();
     p.topicSettings = {
-      [topic]: { answers: {}, extra: "Record this test request in the agreed inbox." },
+      [topic]: {
+        answers: {},
+        extra: "When unsure -> Record this test request in the agreed inbox",
+      },
     };
     const settings = { ...config.defaultModuleSettings(), trainingLevel: "learn" as const };
     const scenarios = config.generateConfiguredModule(topic, topic, p, settings);
@@ -180,7 +191,7 @@ test("all predefined topics reuse shared configuration across modules and change
       scenarios,
     };
     const next = structuredClone(p);
-    next.topicSettings![topic].extra = "Use the updated test inbox.";
+    next.topicSettings![topic].extra = "When unsure -> Use the updated test inbox";
     const flagged = flagPracticeChanges(p, next, [module]);
     assert.ok(flagged[0].needsReview, topic);
     const regenerated = config.generateConfiguredModule(

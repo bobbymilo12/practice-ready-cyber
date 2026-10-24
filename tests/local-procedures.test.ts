@@ -1,3 +1,5 @@
+import * as moduleConfig from "../src/lib/module-config.ts";
+import { configMissing } from "../src/lib/practice-config.ts";
 import * as questionQuality from "../src/lib/question-quality.ts";
 import * as staffLifecycle from "../src/lib/staff-lifecycle.ts";
 import * as training from "../src/lib/training.ts";
@@ -533,8 +535,69 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
       );
     }
     assert.deepEqual(data.staff, []);
-    assert.equal(data.hours, "");
+    assert.equal(data.hours, "Monday to Friday, 08:00–18:30");
+    assert.deepEqual(configMissing(data).prescription, []);
+    assert.deepEqual(data.prescriptionConfig.methods, ["nhs-app", "website", "paper"]);
+    assert.equal(data.prescriptionConfig.turnaround.id, "48");
+    assert.ok(
+      data.prescriptionConfig.orderingInstructions.includes(
+        "Telephone ordering is available for patients aged 60 and over.",
+      ),
+    );
+    assert.equal(data.topicSettings.prescriptions.answers.queries, undefined);
+    for (const trainingLevel of ["learn", "apply"] as const) {
+      const questions = generateConfiguredModule("prescriptions", "Prescriptions", data, {
+        ...defaultModuleSettings(),
+        trainingLevel,
+      });
+      const methods = questions.find((q) => q.kind === "mcq" && q.correctIndices);
+      assert.ok(methods?.kind === "mcq" && methods.correctIndices);
+      assert.equal(methods.correctIndices.length, 3);
+      assert.ok(methods.correctIndices.every((i) => !/telephone/i.test(methods.options[i])));
+      assert.ok(
+        questions.some((q) => q.kind === "mcq" && q.localRoleRequestId === "medication-reviews"),
+      );
+      assert.ok(questions.some((q) => q.learningPoint.includes("patients aged 60 and over")));
+    }
+    for (const topic of [
+      "results",
+      "vaccines",
+      "fit-notes",
+      "home-visits",
+      "difficult",
+      "first-week",
+    ]) {
+      assert.ok(
+        generateConfiguredModule(topic, topic, data, {
+          ...defaultModuleSettings(),
+          trainingLevel: "learn",
+        }).length,
+        topic,
+      );
+    }
     assert.equal(data.prescriptionOrdering, "");
+    const creation = compile("../src/components/PredefinedModuleSetup.tsx", {
+      "@/lib/dev-procedure-diagnostics": {},
+      "@tanstack/react-router": { Link: "a", useNavigate: () => () => {} },
+      "./Shell": { Shell: "main", Card: "section" },
+      "./PracticeProcessFields": { BookingFields: () => null, PrescriptionFields: () => null },
+      "@/lib/store": { useApp: () => ({ practiceData: data, modules: [] }) },
+      "@/lib/backend": {},
+      "./ModuleQuestion": {},
+      "@/lib/practice-config": { configMissing },
+      "@/lib/module-config": moduleConfig,
+    });
+    const html = renderToStaticMarkup(
+      createElement(creation.PredefinedModuleSetup, {
+        topic: "prescriptions",
+        title: "Prescriptions",
+        id: "",
+      }),
+    );
+    assert.match(html, /Choose training type/);
+    assert.match(html, /Review prescription/);
+    assert.doesNotMatch(html, /Complete missing prescription/);
+
     assert.deepEqual(loaded.state.modules, []);
     procedures.validateLocalProcedures(data.localProcedures);
     const sequence = generateConfiguredModule("appointment-booking", "Booking", data, {
@@ -615,7 +678,10 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
     role = "manager";
     // Removing only the mock workspace restores the baseline on the next load.
     stored = null;
-    assert.ok((await devApi("load", {})).state.practiceData.localProcedures.utis);
+    const baseline = (await devApi("load", {})).state.practiceData;
+    assert.ok(baseline.localProcedures.utis);
+    assert.deepEqual(baseline.prescriptionConfig, data.prescriptionConfig);
+    assert.deepEqual(baseline.topicSettings, data.topicSettings);
     role = null;
     stored = null;
     const previousReads = reads;

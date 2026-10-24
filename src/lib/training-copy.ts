@@ -93,6 +93,7 @@ export function hasFinishedCopy(scenario: Scenario): boolean {
   if (
     !scenario.title.trim() ||
     !scenario.question.trim() ||
+    scenario.options.length < 2 ||
     scenario.options.some((option) => !option.trim())
   )
     return false;
@@ -105,7 +106,7 @@ export function hasFinishedCopy(scenario: Scenario): boolean {
     ...scenario.options,
     scenario.learningPoint,
   ].join("\n");
-  return !/\?:|\b(?:using|use) (?:Telephone|Practice website \/ online form|Paper request at reception)\b|^Routing:|Apply this step to this type of request|\[object Object\]|\bundefined\b/m.test(
+  return !/configured responsibilities|configured role|internal categories|saved responsibilities|saved configuration|practice settings|source fields|Who has this responsibility|previous experience|last similar enquiry|A colleague asks for help|additional requirement for submitting|booking process has confirmed|\?:|\b(?:using|use) (?:Telephone|Practice website \/ online form|Paper request at reception)\b|^Routing:|Apply this step to this type of request|\[object Object\]|\bundefined\b/im.test(
     copy,
   );
 }
@@ -115,6 +116,8 @@ export function contactRouteCopy(route: ContactRoute, practice: PracticeData): s
   if (contactMissing(route, practice)) return "";
   // Instruction-only legacy routes have no destination/method to interpolate.
   if (route.contact.kind === "unconfirmed") return route.instruction.trim();
+  // Qualifying prose could change when this route applies. Keep it in setup rather than strip it.
+  if (/\b(if|when|unless|only|except|before|after|instead)\b/i.test(route.instruction)) return "";
   const contacts = routeContacts(route).map((c) => {
     if (c.kind === "role")
       return roleDestination(contactText(c, practice.staff, practice.roleRequests));
@@ -126,14 +129,7 @@ export function contactRouteCopy(route: ContactRoute, practice: PracticeData): s
   });
   const method = contactMethodCopy(route.method.id, route.method.other);
   if (!method) return "";
-  return (
-    "Contact " +
-    readableList(contacts, "disjunction") +
-    " " +
-    method +
-    "." +
-    (route.instruction.trim() ? " " + route.instruction.trim() : "")
-  );
+  return "Contact " + readableList(contacts, "disjunction") + " " + method + ".";
 }
 
 /** These exact UI choices specify a location or delivery method, not additional steps. */
@@ -198,14 +194,7 @@ export function urgentPrescriptionCopy(practice: PracticeData): string {
       : practice.bookingConfig
         ? contactRouteCopy(practice.bookingConfig.escalation, practice)
         : practice.dutyContact;
-  const actions: Record<string, string> = {
-    system: "Send an urgent request through the clinical system.",
-    contact: "Contact the responsible clinician.",
-    other: config.otherAction.trim(),
-  };
-  return [route, ...config.urgentActions.map((id) => actions[id] ?? ""), config.urgentInstruction]
-    .filter((text) => text?.trim())
-    .join("\n");
+  return route; // Separate action selections/notes do not establish a combined workflow.
 }
 
 export function contactMethodCopy(id: string, detail = ""): string {

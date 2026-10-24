@@ -238,7 +238,7 @@ test("Apply is contextual rather than a re-labelled Learn recipe and avoids ambi
     ...settings,
     trainingLevel: "apply",
   });
-  assert.ok(JSON.stringify(baseline).includes(settings.extra));
+  assert.ok(!JSON.stringify(baseline).includes(settings.extra));
   assert.ok(!JSON.stringify(applied).includes(settings.extra));
   assert.ok(applied[0].kind === "mcq" && applied[0].localRoleRequestId);
   assert.ok(!applied[0].title.startsWith("Routing:"));
@@ -249,7 +249,11 @@ test("legacy settings remain mixed; other topics now use explicit Learn/Apply le
   assert.ok(legacy.scenarios.some((s) => s.provenance?.level === "learn"));
   assert.ok(legacy.scenarios.some((s) => s.provenance?.level === "apply"));
   for (const topic of Object.keys(topicFields).filter((t) => t !== "appointment-booking")) {
-    const settings = { ...defaultModuleSettings(), extra: "Confirm the request with the patient." };
+    const settings = {
+      ...defaultModuleSettings(),
+      trainingLevel: "learn" as const,
+      extra: "When unsure -> Ask the reception lead to check the task",
+    };
     const plain = generateConfiguredModule(topic, topic, practice(), settings);
     const levelled = generateConfiguredModule(topic, topic, practice(), {
       ...settings,
