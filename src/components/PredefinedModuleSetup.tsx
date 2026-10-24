@@ -285,12 +285,14 @@ export function PredefinedModuleSetup({
                         )}
                       </>
                     )}
-                    <button
-                      className="rounded-xl bg-primary px-5 py-3 text-primary-foreground"
-                      onClick={() => setPhase("length")}
-                    >
-                      Choose Training Type &amp; Length
-                    </button>
+                    <div>
+                      <button
+                        className="rounded-xl bg-primary px-5 py-3 text-primary-foreground"
+                        onClick={() => setPhase("length")}
+                      >
+                        Choose Training Type &amp; Length
+                      </button>
+                    </div>
                   </Card>
                 </>
               ) : (

@@ -252,9 +252,13 @@ test("every topic uses the real shared creation controls and saves the selected 
       index = 0;
       return elements(exports.PredefinedModuleSetup({ topic, title: topic, id: "draft" }));
     };
-    render()
-      .find((n) => n.type === "button" && n.props.children === "Choose Training Type & Length")
-      .props.onClick();
+    const initial = render();
+    const cta = initial.find(
+      (n) => n.type === "button" && n.props.children === "Choose Training Type & Length",
+    );
+    const row = initial.find((n) => n.type === "div" && n.props.children === cta);
+    assert.ok(row, topic + ": CTA has its own block row, separate from setup/review links");
+    cta.props.onClick();
     const select = (name: string, value: string) => {
       const radio = render().find(
         (n) => n.type === "input" && n.props.name === name && n.props.value === value,
@@ -491,4 +495,70 @@ test("allocation retains separate named staff exceptions and capability question
       );
     }
   }
+});
+
+test("Learn samples capabilities without padding omitted responsibilities or limiting Apply coverage", () => {
+  const p = practice([[0, 1, 2, 3, 4, 5, 6, 10, 14]]);
+  const role = Object.values(p.roleRequests!)[0];
+  const before = JSON.stringify(p);
+  const settings = {
+    ...config.defaultModuleSettings(),
+    trainingLevel: "learn" as const,
+    count: 100,
+  };
+  for (const topic of ["appointment-booking", "first-week"]) {
+    const questions = config.generateConfiguredModule(topic, topic, p, settings);
+    const capabilities = questions.filter(
+      (q) => q.kind === "mcq" && q.generationObjective?.skill === "capability",
+    );
+    assert.equal(capabilities.length, 1, "no duplicate capability questions to cover omissions");
+    const q = capabilities[0];
+    assert.ok(q.kind === "mcq" && q.correctIndices);
+    assert.equal(q.options.length, 6);
+    assert.equal(q.correctIndices.length, 4);
+    const correct = q.correctIndices.map((i) => q.options[i]);
+    const catalog = role.categories.flatMap((c) => c.requests);
+    const selected = catalog.filter((r) => role.selectedRequestIds.includes(r.id));
+    for (const [i, option] of q.options.entries()) {
+      const request = catalog.find((r) => r.label === option);
+      assert.ok(request, "every choice comes from the existing responsibility catalogue");
+      assert.equal(role.selectedRequestIds.includes(request.id), q.correctIndices.includes(i));
+    }
+    for (const category of role.categories
+      .filter((c) => c.requests.some((r) => role.selectedRequestIds.includes(r.id)))
+      .slice(0, 4)) {
+      assert.ok(
+        category.requests.some((r) => correct.includes(r.label)),
+        "sample across categories when available",
+      );
+    }
+    const omitted = selected.filter((r) => !correct.includes(r.label));
+    assert.ok(omitted.length > 0);
+    assert.ok(
+      omitted.every((r) => !q.options.includes(r.label) && !q.learningPoint.includes(r.label)),
+    );
+    assert.match(q.question, /Which of these requests/);
+    assert.match(q.learningPoint, /Among the requests shown/);
+    assert.match(q.learningPoint, /selection of the role’s responsibilities/);
+    assert.match(q.learningPoint, /Check individual staff exceptions/);
+    assert.deepEqual((q.provenance!.snapshot as any).role, role, "retain the full source snapshot");
+    assert.ok(
+      !questions.some((q) => q.kind === "mcq" && q.localRoleRequestId),
+      "do not backfill omitted capabilities with routing questions",
+    );
+    assert.ok(questions.length < settings.count);
+    const apply = config.generateConfiguredModule(topic, topic, p, {
+      ...settings,
+      trainingLevel: "apply",
+    });
+    for (const request of omitted) {
+      const decision = apply.find((q) => q.kind === "mcq" && q.localRoleRequestId === request.id);
+      assert.ok(
+        decision?.kind === "mcq" && decision.patientQuote,
+        "Apply retains the distinct patient problem",
+      );
+      assert.ok(decision.options[decision.correctIndex].includes(role.label));
+    }
+  }
+  assert.equal(JSON.stringify(p), before);
 });

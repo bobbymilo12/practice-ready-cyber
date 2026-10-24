@@ -1455,7 +1455,17 @@ function roleCapabilityQuestions(
           !covered.has(r.id) &&
           unambiguous(r.id, r.label),
       );
-    const correct = relevant.filter((r) => selected.has(r.id));
+    // Sample across the role's categories, rather than asking for its entire scope.
+    // This limit is specific to foundational capabilities, not complete practice rules.
+    const correct = role.categories
+      .flatMap((category) =>
+        category.requests
+          .filter((r) => relevant.includes(r) && selected.has(r.id))
+          .map((request, index) => ({ request, index })),
+      )
+      .sort((a, b) => a.index - b.index)
+      .slice(0, 4)
+      .map(({ request }) => request);
     const wrong = relevant.filter((r) => !selected.has(r.id));
     if (!correct.length || !wrong.length) return [];
     return [
@@ -1468,10 +1478,10 @@ function roleCapabilityQuestions(
         options: [...correct.map((r) => r.label), ...wrong.slice(0, 2).map((r) => r.label)],
         correctIndex: 0,
         ...(correct.length > 1 ? { correctIndices: correct.map((_, i) => i) } : {}),
-        learningPoint: `${role.label} can handle ${readableList(
+        learningPoint: `Among the requests shown, ${role.label} can handle ${readableList(
           correct.map((r) => r.label),
           "conjunction",
-        )}. Check individual staff exceptions before choosing a member of staff.`,
+        )}. This is a selection of the role’s responsibilities. Check individual staff exceptions before choosing a member of staff.`,
         status: "draft" as const,
         generationObjective: {
           source: `role:${role.roleId}`,
@@ -1562,7 +1572,8 @@ export function selectedModuleScenarios(
     local = [
       ...(matching ? [matching] : []),
       ...capabilities,
-      // Keep direct knowledge when there is no safe capability exercise for this request.
+      // Omitted capabilities do not become extra routing questions to fill the module.
+      // Keep direct knowledge only when there is no safe capability exercise for the role.
       ...local.filter(
         (q) => q.kind !== "mcq" || !q.localRoleRequestId || !covered.has(q.localRoleRequestId),
       ),
