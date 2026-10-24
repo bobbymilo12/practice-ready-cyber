@@ -107,7 +107,7 @@ export function inspectLocalProcedureSequences(p: PracticeData) {
         requestId,
         record: structuredClone(record),
         eligible,
-        reason: eligible ? "Learn and Apply candidates created." : reasons.slice(before).join(" "),
+        reason: eligible ? "Apply sequencing candidate created." : reasons.slice(before).join(" "),
       });
     }
   }

@@ -289,7 +289,7 @@ export function PredefinedModuleSetup({
                       className="rounded-xl bg-primary px-5 py-3 text-primary-foreground"
                       onClick={() => setPhase("length")}
                     >
-                      Choose training type + length
+                      Choose Training Type &amp; Length
                     </button>
                   </Card>
                 </>
@@ -358,7 +358,7 @@ export function PredefinedModuleSetup({
                   </div>
                   {settings.length === "custom" && (
                     <label className="block text-sm">
-                      Number of scenarios
+                      Target number of questions
                       <input
                         className={input}
                         type="number"
@@ -381,10 +381,8 @@ export function PredefinedModuleSetup({
                   </p>
                   {pool.length < settings.count && (
                     <p className="rounded-xl bg-surface p-3 text-sm">
-                      The available content supports {pool.length} distinct scenarios, fewer than
-                      the requested {settings.count}. Add further confirmed topic information for
-                      wider coverage, or create this shorter draft. We will not invent guidance or
-                      repeat scenarios to reach a number.
+                      Current Practice Setup supports {pool.length} grounded questions. You can
+                      create this shorter module or add more practice information.
                     </p>
                   )}
                   {existing && (

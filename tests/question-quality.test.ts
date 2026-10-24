@@ -45,6 +45,10 @@ function practice() {
 for (const trainingLevel of ["learn", "apply"] as const) {
   test(`${trainingLevel}: real generation includes multi-select with exact-set scoring and source snapshots`, () => {
     const p = practice();
+    if (trainingLevel === "apply")
+      p.prescriptionConfig!.orderingInstructions = [
+        "Telephone ordering is available for patients aged 60 and over.",
+      ];
     const before = JSON.stringify(p);
     const settings = {
       ...defaultModuleSettings(),
@@ -55,13 +59,16 @@ for (const trainingLevel of ["learn", "apply"] as const) {
     const questions = generateConfiguredModule("prescriptions", "Prescriptions", p, settings);
     const q = questions.find((q) => q.kind === "mcq" && q.correctIndices);
     assert.ok(q?.kind === "mcq" && q.correctIndices);
-    assert.equal(q.correctIndices.length, 3);
+    assert.equal(q.correctIndices.length, trainingLevel === "apply" ? 4 : 3);
     assert.deepEqual(
       q.correctIndices.map((i) => q.options[i]).sort(),
       [
         "Ask the patient to submit the request through the NHS App.",
         "Ask the patient to submit the request through the practice website or online form.",
         "Ask the patient to submit the request on paper at reception.",
+        ...(trainingLevel === "apply"
+          ? ["Ask the patient to submit the request by telephone."]
+          : []),
       ].sort(),
     );
     const correct = q.correctIndices.map(String);
@@ -145,12 +152,18 @@ test("conditional telephone permissions never become universal methods, includin
   p.prescriptionConfig!.methods.push("telephone");
   p.prescriptionConfig!.orderingInstructions = ["Patients over 60 can order by phone."];
   for (const trainingLevel of ["learn", "apply"] as const) {
-    const qs = generateConfiguredModule("prescriptions", "Prescriptions", p, {
+    const qs = configuredScenarios("prescriptions", "Prescriptions", p, {
       ...defaultModuleSettings(),
       trainingLevel,
       count: 30,
     });
-    const q = qs.find((s) => s.kind === "mcq" && s.correctIndices);
+    const q = qs.find(
+      (s) =>
+        s.kind === "mcq" &&
+        s.correctIndices &&
+        !s.patientQuote &&
+        s.generationObjective?.structure === "methods",
+    );
     assert.ok(q?.kind === "mcq" && q.correctIndices);
     assert.ok(q.correctIndices.every((i) => !/telephone|phone/.test(q.options[i])));
     assert.ok(qs.some((s) => s.learningPoint.includes("Patients over 60 can order by phone.")));
@@ -244,14 +257,39 @@ test("conditional age permission reaches the final module with all applicable me
   ];
   const before = JSON.stringify(p);
   for (const trainingLevel of ["learn", "apply"] as const) {
-    const qs = generateConfiguredModule("prescriptions", "Prescriptions", p, {
+    const qs = configuredScenarios("prescriptions", "Prescriptions", p, {
       ...defaultModuleSettings(),
       trainingLevel,
       count: 100,
     });
-    const eligible = qs.find((q) => /60-year-old/.test(q.patientQuote));
-    const below = qs.find((q) => /59-year-old/.test(q.patientQuote));
-    const general = qs.find((q) => q.kind === "mcq" && q.correctIndices && !q.patientQuote);
+    const final = generateConfiguredModule("prescriptions", "Prescriptions", p, {
+      ...defaultModuleSettings(),
+      trainingLevel,
+      count: 100,
+    });
+    const methodExercises = final.filter(
+      (q) => q.kind === "mcq" && /methods$/.test(q.generationObjective?.structure ?? ""),
+    );
+    assert.equal(
+      methodExercises.length,
+      1,
+      "one method objective, not both age boundaries plus the general rule",
+    );
+    if (trainingLevel === "learn") {
+      assert.equal(methodExercises[0].patientQuote, "");
+      assert.match(methodExercises[0].question, /patients aged 60 and over/);
+    } else assert.match(methodExercises[0].patientQuote, /60-year-old/);
+    const eligible = qs.find((q) =>
+      /60-year-old|patients aged 60 and over/.test(q.patientQuote + q.question),
+    );
+    const below = qs.find((q) => /59-year-old|patients under 60/.test(q.patientQuote + q.question));
+    const general = qs.find(
+      (q) =>
+        q.kind === "mcq" &&
+        q.correctIndices &&
+        !q.patientQuote &&
+        q.generationObjective?.structure === "methods",
+    );
     for (const [q, expected] of [
       [eligible, 4],
       [below, 3],
@@ -305,7 +343,7 @@ test("repeat methods do not supply a non-repeat pathway; explicit non-repeat met
 
 test("direct Learn facts need no scenario; unsupported facts and ambiguous conditions never pad a module", () => {
   const p = practice();
-  const qs = generateConfiguredModule("prescriptions", "Prescriptions", p, {
+  const qs = configuredScenarios("prescriptions", "Prescriptions", p, {
     ...defaultModuleSettings(),
     trainingLevel: "learn",
     count: 100,

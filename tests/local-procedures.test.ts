@@ -550,12 +550,19 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
         ...defaultModuleSettings(),
         trainingLevel,
       });
-      const methods = questions.find((q) => q.kind === "mcq" && q.correctIndices);
+      const methods = questions.find(
+        (q) => q.kind === "mcq" && q.generationObjective?.structure === "conditional-methods",
+      );
       assert.ok(methods?.kind === "mcq" && methods.correctIndices);
-      assert.equal(methods.correctIndices.length, 3);
-      assert.ok(methods.correctIndices.every((i) => !/telephone/i.test(methods.options[i])));
+      assert.equal(methods.correctIndices.length, 4);
+      assert.ok(methods.correctIndices.some((i) => /telephone/i.test(methods.options[i])));
       assert.ok(
-        questions.some((q) => q.kind === "mcq" && q.localRoleRequestId === "medication-reviews"),
+        questions.some(
+          (q) =>
+            q.kind === "mcq" &&
+            (q.generationObjective?.skill === "capability" ||
+              q.localRoleRequestId === "medication-reviews"),
+        ),
       );
       assert.ok(questions.some((q) => q.learningPoint.includes("patients aged 60 and over")));
     }
@@ -594,7 +601,7 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
         id: "",
       }),
     );
-    assert.match(html, /Choose training type/);
+    assert.match(html, /Choose Training Type/);
     assert.match(html, /Review prescription/);
     assert.doesNotMatch(html, /Complete missing prescription/);
 
@@ -602,7 +609,7 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
     procedures.validateLocalProcedures(data.localProcedures);
     const sequence = generateConfiguredModule("appointment-booking", "Booking", data, {
       ...defaultModuleSettings(),
-      trainingLevel: "learn",
+      trainingLevel: "apply",
     }).find((s) => s.kind === "order");
     assert.ok(sequence?.kind === "order" && sequence.sequence);
     assert.deepEqual(sequence.sequence.correctOrder, ["sample", "booking", "collection"]);

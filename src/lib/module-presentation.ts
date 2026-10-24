@@ -7,6 +7,16 @@ import { naturalSituation } from "./scenario-applications.ts";
 // These frames describe the decision only. The selected practice answer supplies all policy.
 const applyDecisions: [RegExp, string, string][] = [
   [
+    /^Urgent prescription request$/,
+    "A prescription request has already been identified as urgent. You need to pass it on.",
+    "Who should you contact and how?",
+  ],
+  [
+    /^Safeguarding contact$/,
+    "A safeguarding concern has been identified and needs to be raised with the responsible person.",
+    "Who should you contact and how?",
+  ],
+  [
     /When may reception pass on a result/,
     "A patient asks you to read out a test result that is visible on their record.",
     "What should you do before sharing it?",

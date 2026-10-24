@@ -118,6 +118,7 @@ export function conditionalMethodQuestions(
   label: string,
   methods: string[],
   instructions: string,
+  level?: "learn" | "apply",
 ): MCQScenario[] {
   const sentences = instructions
     .split(/\n|;|\.\s*/)
@@ -188,6 +189,14 @@ export function conditionalMethodQuestions(
   if (below) {
     below.title = "Ordering Below the Age Threshold";
     below.learningPoint += " " + text + ". This patient does not meet that age condition.";
+  }
+  if (level === "learn") {
+    q.patientQuote = "";
+    q.question = `Which methods can patients aged ${age} and over use to submit ${requestSubject(label, "")}? Select all that apply.`;
+    if (below) {
+      below.patientQuote = "";
+      below.question = `Which methods can patients under ${age} use to submit ${requestSubject(label, "")}? Select all that apply.`;
+    }
   }
   return below ? [q, below] : [q];
 }

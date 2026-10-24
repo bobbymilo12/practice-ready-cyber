@@ -7,6 +7,7 @@ import {
 } from "./question-quality.ts";
 import {
   submissionChannel,
+  requestSubject,
   configuredAnswer,
   readableList,
   roleDestination,
@@ -476,23 +477,23 @@ for (const fields of Object.values(topicFields)) {
   }
 }
 export const lengthOptions = [
-  { key: "quick", label: "Quick", description: "~5 minutes · 5–7 scenarios", count: 6 },
+  { key: "quick", label: "Quick", description: "Short refresher", count: 6 },
   {
     key: "standard",
     label: "Standard — Recommended",
-    description: "~10–15 minutes · 10–15 scenarios",
+    description: "Balanced training",
     count: 12,
   },
   {
     key: "thorough",
     label: "Thorough",
-    description: "~20–25 minutes · 18–25 scenarios",
+    description: "Most comprehensive",
     count: 22,
   },
   {
     key: "custom",
-    label: "Custom length",
-    description: "Choose the number of scenarios",
+    label: "Custom",
+    description: "Choose your target length",
     count: 12,
   },
 ] as const;
@@ -1105,6 +1106,7 @@ export function configuredScenarios(
           f.label,
           methods,
           parts.filter((v) => !submissionChannel(v)).join(" "),
+          settings.trainingLevel,
         )
       : [];
     const provenance = multi?.provenance ??
@@ -1129,8 +1131,20 @@ export function configuredScenarios(
         paths: [],
         snapshot: { topic, label: f.label, rule: f.rule },
       };
+    const methodSource = `methods:${requestSubject(f.label, f.situation)}`;
+    if (multi)
+      multi.generationObjective = {
+        source: methodSource,
+        skill: "knowledge",
+        structure: "methods",
+      };
     conditional.forEach((q) => {
       q.provenance = provenance;
+      q.generationObjective = {
+        source: methodSource,
+        skill: settings.trainingLevel === "learn" ? "knowledge" : "application",
+        structure: "conditional-methods",
+      };
     });
     return [
       ...(multi ? [multi] : []),
@@ -1172,6 +1186,17 @@ export function configuredScenarios(
               }
             : {}),
           provenance,
+          generationObjective: {
+            source:
+              application.copyKind === "allowed-channel"
+                ? methodSource
+                : `fact:${topic}:${f.label}:${application.condition ?? f.condition ?? ""}`,
+            skill:
+              application.condition || f.condition
+                ? ("application" as const)
+                : ("knowledge" as const),
+            structure: application.copyKind === "allowed-channel" ? "methods" : "fact",
+          },
           learningPoint: application.feedback,
           followUpSituation: application.followUpSituation,
         })),
@@ -1336,8 +1361,8 @@ export function configuredScenarios(
     }
     routing.push(roleQuestion);
     for (const exception of staff.filter((s) => s.individualException))
-      routing.push(
-        make(
+      routing.push({
+        ...make(
           `Individual exception: ${exception.employee.name} · ${label}`,
           `A colleague suggests ${exception.employee.name} for ${label.toLowerCase()} based on their role title. Can they handle this request?`,
           exception.canHandle
@@ -1350,7 +1375,12 @@ export function configuredScenarios(
           ],
           `${exception.employee.name} ${exception.canHandle ? "can" : "does not"} handle ${label.toLowerCase()} at this practice. Individual responsibilities take precedence over the shared role.`,
         ),
-      );
+        generationObjective: {
+          source: `staff:${exception.employee.id}:${id}`,
+          skill: "exception",
+          structure: "staff-exception",
+        },
+      });
   }
   // Interleave process and routing coverage; never pad by paraphrasing the same question.
   const pool: Scenario[] =
@@ -1381,7 +1411,14 @@ export function configuredScenarios(
         .filter((s) => s.kind === "mcq")
         .map(exerciseSignature),
     );
-    return distinct.filter((s) => s.kind !== "mcq" || !recognition.has(exerciseSignature(s)));
+    // A named staff exception remains relevant in a patient/colleague decision even
+    // when the same restriction is also taught in Learn.
+    return distinct.filter(
+      (s) =>
+        s.kind !== "mcq" ||
+        s.generationObjective?.skill === "exception" ||
+        !recognition.has(exerciseSignature(s)),
+    );
   }
   return distinct;
 }
@@ -1397,6 +1434,105 @@ export function configuredFollowUp(s: Scenario): Scenario | undefined {
     status: "draft",
   };
 }
+/** Teach a role's confirmed scope, rather than repeating a patient-to-role MCQ for each request. */
+function roleCapabilityQuestions(
+  topic: string,
+  p: PracticeData,
+  covered: Set<string>,
+): MCQScenario[] {
+  const roles = Object.values(p.roleRequests ?? {}).filter((r) => r.confirmed && !r.archived);
+  const all = roles.flatMap((r) => r.categories.flatMap((c) => c.requests));
+  const unambiguous = (id: string, label: string) =>
+    !all.some((r) => (r.id === id && r.label !== label) || (r.id !== id && r.label === label));
+  return roles.flatMap((role) => {
+    const selected = new Set(selectedRequests(role).map((r) => r.id));
+    const relevant = role.categories
+      .flatMap((c) => c.requests)
+      .filter(
+        (r) =>
+          relevantRequest(topic, r.label) &&
+          !broadRequestLabel(r.label) &&
+          !covered.has(r.id) &&
+          unambiguous(r.id, r.label),
+      );
+    const correct = relevant.filter((r) => selected.has(r.id));
+    const wrong = relevant.filter((r) => !selected.has(r.id));
+    if (!correct.length || !wrong.length) return [];
+    return [
+      {
+        id: crypto.randomUUID(),
+        kind: "mcq" as const,
+        title: `${role.label}: requests they can handle`,
+        patientQuote: "",
+        question: `Which of these requests can ${roleDestination(role.label)} handle at this practice?${correct.length > 1 ? " Select all that apply." : ""}`,
+        options: [...correct.map((r) => r.label), ...wrong.slice(0, 2).map((r) => r.label)],
+        correctIndex: 0,
+        ...(correct.length > 1 ? { correctIndices: correct.map((_, i) => i) } : {}),
+        learningPoint: `${role.label} can handle ${readableList(
+          correct.map((r) => r.label),
+          "conjunction",
+        )}. Check individual staff exceptions before choosing a member of staff.`,
+        status: "draft" as const,
+        generationObjective: {
+          source: `role:${role.roleId}`,
+          skill: "capability" as const,
+          structure: "role-capabilities",
+        },
+        provenance: {
+          kind: "configured_fact" as const,
+          paths: ["practiceData.roleRequests"],
+          snapshot: { label: `Role capabilities: ${role.roleId}`, role: structuredClone(role) },
+        },
+      },
+    ];
+  });
+}
+
+/** Group by recorded source/objective, then round-robin structures without discarding distinct requests. */
+function diverseQuestions(pool: Scenario[]): Scenario[] {
+  const chosen = new Map<string, Scenario>();
+  for (const q of pool) {
+    const origin = q.provenance;
+    const key =
+      origin?.kind === "core"
+        ? `core:${origin.conceptId}`
+        : origin?.kind === "sequence"
+          ? `sequence:${origin.sourceId}`
+          : q.kind === "matching"
+            ? "role-matching"
+            : q.kind === "mcq" && q.localRoleRequestId
+              ? `request:${q.localRoleRequestId}`
+              : q.kind === "mcq" && q.generationObjective
+                ? q.generationObjective.source
+                : `copy:${q.question}:${q.kind === "mcq" ? q.options[q.correctIndex] : q.title}`;
+    const previous = chosen.get(key);
+    // A qualifying method question covers both general permission and the explicit exception.
+    if (
+      !previous ||
+      (q.kind === "mcq" &&
+        q.generationObjective?.structure === "conditional-methods" &&
+        !(
+          previous.kind === "mcq" &&
+          previous.generationObjective?.structure === "conditional-methods"
+        ))
+    )
+      chosen.set(key, q);
+  }
+  const groups = new Map<string, Scenario[]>();
+  for (const q of chosen.values()) {
+    const structure =
+      q.kind !== "mcq"
+        ? q.kind
+        : (q.generationObjective?.structure ??
+          (q.localRoleRequestId ? "role-decisions" : q.question));
+    groups.set(structure, [...(groups.get(structure) ?? []), q]);
+  }
+  const result: Scenario[] = [];
+  while ([...groups.values()].some((group) => group.length))
+    for (const group of groups.values()) if (group.length) result.push(group.shift()!);
+  return result;
+}
+
 /** Preview and generation share this finite selection; no source can pad the total. */
 export function selectedModuleScenarios(
   topic: string,
@@ -1407,67 +1543,65 @@ export function selectedModuleScenarios(
   settings = effectiveTopicSettings(topic, p, settings);
   if (settings.trainingLevel && !["learn", "apply"].includes(settings.trainingLevel)) return [];
   const count = Number.isInteger(settings.count) ? Math.min(100, Math.max(1, settings.count)) : 12;
-  const local = configuredScenarios(topic, title, p, settings).filter(
-    (s) => !settings.trainingLevel || hasFinishedCopy(s),
-  );
-  if (topic !== "appointment-booking") return local.slice(0, count);
-  const core = appointmentCorePool({ topicKey: topic, practice: p, settings }).filter(
-    hasFinishedCopy,
-  );
-  const selectedCore = core.slice(0, Math.round(count * 0.3));
-  const selectedLocal = local.slice(0, count - selectedCore.length);
-  // Prefer a procedure for a request already selected for a weaker role-only question.
-  // A confirmed procedure must not lose its slot to role recognition or matching.
-  const candidates = inspectLocalProcedureSequences(p).candidates;
-  const sequence =
-    candidates.find((candidate) =>
-      selectedLocal.some(
-        (s) =>
-          s.kind === "mcq" &&
-          s.localRoleRequestId === candidate.provenance.snapshot.localProcedure?.requestId,
-      ),
-    ) ?? candidates[0];
-  const replaceWithProcedure = (scenario: Scenario) => {
-    const requestId = sequence?.provenance.snapshot.localProcedure?.requestId;
-    const sameRequest = selectedLocal.findIndex(
-      (s) => s.kind === "mcq" && s.localRoleRequestId === requestId,
-    );
-    const index =
-      sameRequest >= 0 ? sameRequest : selectedLocal.findIndex((s, i) => i > 0 && s.kind === "mcq");
-    if (index >= 0) selectedLocal.splice(index, 1, scenario);
-  };
+  let local = configuredScenarios(topic, title, p, settings).filter(hasFinishedCopy);
   if (settings.trainingLevel === "learn") {
-    if (sequence && !selectedLocal.length && selectedCore.length < count)
-      selectedLocal.push(sequence);
-    else if (sequence && selectedLocal.length) {
-      const requestId = sequence.provenance.snapshot.localProcedure?.requestId;
-      const sameRequest = selectedLocal.findIndex(
-        (s) => s.kind === "mcq" && s.localRoleRequestId === requestId,
+    const matching = ["appointment-booking", "first-week"].includes(topic)
+      ? roleMatchingScenario(p)
+      : undefined;
+    const covered = new Set(matching?.items.map((item) => item.id) ?? []);
+    const capabilities = roleCapabilityQuestions(topic, p, covered);
+    const capabilityRoles = new Set(capabilities.map((q) => q.generationObjective!.source));
+    for (const role of Object.values(p.roleRequests ?? {})) {
+      if (capabilityRoles.has(`role:${role.roleId}`)) {
+        for (const request of selectedRequests(role)) {
+          if (relevantRequest(topic, request.label) && !broadRequestLabel(request.label))
+            covered.add(request.id);
+        }
+      }
+    }
+    local = [
+      ...(matching ? [matching] : []),
+      ...capabilities,
+      // Keep direct knowledge when there is no safe capability exercise for this request.
+      ...local.filter(
+        (q) => q.kind !== "mcq" || !q.localRoleRequestId || !covered.has(q.localRoleRequestId),
+      ),
+    ];
+  }
+  if (settings.trainingLevel === "apply") {
+    // Direct recall is not transformed into a story merely to fill an Apply module.
+    local = local.filter((q) => q.kind === "mcq" && !!q.patientQuote.trim());
+    if (topic === "appointment-booking") {
+      const sequences = inspectLocalProcedureSequences(p).candidates;
+      const requests = new Set(
+        sequences.map((q) => q.provenance.snapshot.localProcedure?.requestId),
       );
-      // Even a single local slot teaches the saved procedure. Preserve the total/Core budget.
-      selectedLocal.splice(sameRequest >= 0 ? sameRequest : selectedLocal.length - 1, 1, sequence);
-    }
-    if (selectedLocal.length >= 2) {
-      const matching = roleMatchingScenario(p);
-      const index = selectedLocal.findIndex((s, i) => i > 0 && s.kind === "mcq");
-      const fallback = selectedLocal.findIndex((s) => s.kind === "mcq");
-      if (matching && fallback >= 0)
-        selectedLocal.splice(index >= 0 ? index : fallback, 1, matching);
+      local = [
+        ...sequences,
+        ...local.filter((q) => q.kind !== "mcq" || !requests.has(q.localRoleRequestId)),
+      ];
     }
   }
-  if (settings.trainingLevel === "apply" && selectedLocal.length >= 2 && sequence) {
-    const application = localProcedureApplication(p, sequence);
-    if (application) replaceWithProcedure(application);
-  }
-  // If local data is sparse, return a shorter module; do not turn it into a Core-only filler bank.
-  const result: Scenario[] = [];
-  let c = 0,
-    l = 0;
-  while (c < selectedCore.length || l < selectedLocal.length) {
-    if (c < selectedCore.length) result.push(selectedCore[c++]);
-    for (let i = 0; i < 2 && l < selectedLocal.length; i++) result.push(selectedLocal[l++]);
-  }
-  return result;
+  local = diverseQuestions(local);
+  if (topic !== "appointment-booking") return local.slice(0, count);
+  const core = diverseQuestions(
+    appointmentCorePool({ topicKey: topic, practice: p, settings }).filter(hasFinishedCopy),
+  );
+  // Local knowledge leads. Core complements it, rather than filling unsupported local slots.
+  const coreBudget = Math.min(core.length, Math.round(count * 0.3));
+  const selectedLocal = local.slice(
+    0,
+    Math.max(0, count - (local.length ? Math.min(coreBudget, count - 1) : coreBudget)),
+  );
+  const selectedCore = core.slice(
+    0,
+    Math.min(
+      coreBudget,
+      count - selectedLocal.length,
+      local.length ? Math.max(1, selectedLocal.length) : coreBudget,
+    ),
+  );
+  return [...selectedLocal, ...selectedCore];
 }
 
 export function generateConfiguredModule(
@@ -1648,9 +1782,20 @@ export function regenerateConfiguredScenario(
     const follow = primary && configuredFollowUp(primary);
     return follow ? reviseConfiguredScenario(module, { ...follow, id: current.id }) : module;
   }
-  const pool = configuredScenarios(module.topicKey, module.type, practice, module.settings).filter(
-    (s) => !module.settings?.trainingLevel || hasFinishedCopy(s),
-  );
+  const pool = [
+    ...configuredScenarios(module.topicKey, module.type, practice, module.settings),
+    ...(module.settings.trainingLevel === "learn"
+      ? roleCapabilityQuestions(
+          module.topicKey,
+          practice,
+          new Set(
+            module.scenarios.flatMap((q) =>
+              q.kind === "matching" ? q.items.map((item) => item.id) : [],
+            ),
+          ),
+        )
+      : []),
+  ].filter((s) => !module.settings?.trainingLevel || hasFinishedCopy(s));
   const primaryTitle = current.title;
   const used = new Set(
     module.scenarios.filter((s) => s.id !== scenarioId && !s.followUpFor).map((s) => s.title),

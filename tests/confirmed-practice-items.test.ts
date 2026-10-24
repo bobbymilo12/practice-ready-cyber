@@ -162,7 +162,7 @@ test("legacy prescription text remains one item; structured ordering becomes rea
       q.learningPoint,
     ]),
   );
-  assert.match(text, /accepts these requests through the NHS App/);
+  assert.match(text, /submit the request through the NHS App/);
   assert.doesNotMatch(text, /accepts these requests by telephone/);
   assert.match(text, /Patients over 60 can order over the phone/);
   assert.doesNotMatch(text, /First legacy step|;|Apply this step/);

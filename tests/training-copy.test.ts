@@ -256,7 +256,7 @@ test("structured urgent routes, named safeguarding leads and legacy instructions
         [q.patientQuote, q.question, ...q.options].join(" "),
         /Phone\/extension|Internal clinical system\/message|run out|last dose/,
       );
-      assert.match(q.question, /identified as urgent/);
+      assert.match(q.question + " " + q.patientQuote, /identified as urgent/);
       const module = {
         id: "test",
         title: topic,

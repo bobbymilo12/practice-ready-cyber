@@ -406,10 +406,17 @@ test("routing joins a practice request to confirmed roles and all employees with
   );
   const drafts = practiceScenarios("first-week", "Reception", p, {});
   assert.ok(
-    drafts.some(
-      (s) =>
-        s.learningPoint.includes("Nurse Practitioner") &&
-        s.learningPoint.includes("asthma reviews"),
+    drafts.some((s) =>
+      s.kind === "matching"
+        ? s.items.some(
+            (item) =>
+              item.id === "asthma-reviews" &&
+              s.validMatches[item.id].some(
+                (id) => s.targets.find((t) => t.id === id)?.label === "Nurse Practitioner",
+              ),
+          )
+        : s.learningPoint.includes("Nurse Practitioner") &&
+          /asthma reviews?/i.test(s.learningPoint),
     ),
   );
   assert.ok(

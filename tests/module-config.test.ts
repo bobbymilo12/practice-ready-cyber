@@ -117,7 +117,7 @@ test("confirmed responsibilities include individual additions, exclude removals 
   );
   for (const trainingLevel of ["learn", "apply"] as const) {
     for (const difficulty of ["easy", "intermediate", "advanced"] as const) {
-      const questions = generateConfiguredModule("vaccines", "Vaccines", p, {
+      const questions = configuredScenarios("vaccines", "Vaccines", p, {
         ...settings,
         trainingLevel,
         difficulty,
@@ -131,10 +131,10 @@ test("confirmed responsibilities include individual additions, exclude removals 
       if (trainingLevel === "learn")
         assert.doesNotMatch(route.options[route.correctIndex], /Robin/);
       assert.doesNotMatch(route.options[route.correctIndex], /Sam/);
-      const exception = questions.find((s) => s.title.startsWith("Responsibilities For Sam"));
+      const exception = questions.find((s) => s.title.startsWith("Responsibilities for Sam"));
       assert.ok(exception?.kind === "mcq");
       assert.match(exception.options[exception.correctIndex], /excluded/);
-      const added = generateConfiguredModule("fit-notes", "Fit notes", p, {
+      const added = configuredScenarios("fit-notes", "Fit notes", p, {
         ...settings,
         trainingLevel,
         difficulty,
@@ -162,7 +162,7 @@ test("length limits distinct primary scenarios, preserves recovery links and rep
     const primary = generated.filter((s) => !s.followUpFor);
     assert.equal(
       primary.length,
-      Math.min(count, pool.length + Math.min(Math.round(count * 0.3), 10)),
+      Math.min(count, pool.length + Math.min(Math.round(count * 0.3), 4)),
     );
     assert.equal(generated.length, primary.length);
     assert.equal(new Set(primary.map((s) => s.patientQuote)).size, primary.length);

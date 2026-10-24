@@ -40,6 +40,20 @@ for (const topic of topics.filter((t) => t !== "appointment-booking")) {
         trainingLevel: "apply",
       });
       assert.ok(easy.length && hard.length, topic);
+      assert.ok(
+        hard.every((q) => q.patientQuote.trim()),
+        "Apply uses grounded situations: " + topic,
+      );
+      for (const questions of [easy, hard]) {
+        const objectives = questions.flatMap((q) =>
+          q.kind === "mcq" && q.generationObjective ? [q.generationObjective.source] : [],
+        );
+        assert.equal(
+          new Set(objectives).size,
+          objectives.length,
+          "no repeated teaching objectives: " + topic,
+        );
+      }
       // Comparable fields may have only one defensible alternative; do not require filler.
       assert.ok(
         easy.every((s) => s.kind === "mcq" && s.options.length >= 2 && s.options.length <= 3),
@@ -239,7 +253,7 @@ test("every topic uses the real shared creation controls and saves the selected 
       return elements(exports.PredefinedModuleSetup({ topic, title: topic, id: "draft" }));
     };
     render()
-      .find((n) => n.type === "button" && n.props.children === "Choose training type + length")
+      .find((n) => n.type === "button" && n.props.children === "Choose Training Type & Length")
       .props.onClick();
     const select = (name: string, value: string) => {
       const radio = render().find(
@@ -277,6 +291,10 @@ test("factual questions retain the decision and exact saved answer with retired 
         trainingLevel,
         difficulty,
       });
+      if (trainingLevel === "apply") {
+        assert.deepEqual(questions, [], "a turnaround fact alone cannot invent an Apply decision");
+        continue;
+      }
       const question = questions.find((s) => s.title === "Prescription Turnaround");
       assert.ok(question?.kind === "mcq");
       assert.match(question.question, /process(?:ing|ed)/i);
@@ -345,4 +363,132 @@ test("topic decisions reuse alternatives only when the configured decision itsel
         assert.equal(alternatives[i].question, alternatives[j].question);
       }
     }
+});
+
+test("Learn groups confirmed role capabilities while Apply retains distinct patient requests, even for the same role", () => {
+  const p = practice([
+    [0, 1, 2, 3, 4, 5],
+    [6, 7, 8],
+  ]);
+  const settings = { ...config.defaultModuleSettings(), count: 100 };
+  const learn = config.generateConfiguredModule("appointment-booking", "Booking", p, {
+    ...settings,
+    trainingLevel: "learn",
+  });
+  const apply = config.generateConfiguredModule("appointment-booking", "Booking", p, {
+    ...settings,
+    trainingLevel: "apply",
+  });
+  const capabilities = learn.filter(
+    (q) => q.kind === "mcq" && q.generationObjective?.skill === "capability",
+  );
+  assert.equal(capabilities.length, 2);
+  assert.ok(capabilities.every((q) => q.kind === "mcq" && q.correctIndices && !q.patientQuote));
+  assert.ok(!learn.some((q) => q.kind === "mcq" && q.localRoleRequestId));
+  const candidates = config
+    .configuredScenarios("appointment-booking", "Booking", p, {
+      ...settings,
+      trainingLevel: "apply",
+    })
+    .filter((q) => q.localRoleRequestId);
+  const decisions = apply.filter((q) => q.kind === "mcq" && q.localRoleRequestId);
+  assert.deepEqual(
+    new Set(decisions.map((q) => q.kind === "mcq" && q.localRoleRequestId)),
+    new Set(candidates.map((q) => q.localRoleRequestId)),
+  );
+  assert.ok(decisions.length > capabilities.length);
+  assert.ok(decisions.every((q) => q.patientQuote));
+  for (const questions of [learn, apply]) {
+    const core = questions.filter((q) => q.provenance?.kind === "core");
+    assert.ok(core.length > 0);
+    assert.equal(core.length, new Set(core.map((q) => q.provenance!.conceptId)).size);
+    assert.ok(questions.filter((q) => q.provenance?.kind !== "core").length >= core.length);
+  }
+  const original = JSON.stringify(p);
+  const q = capabilities[0];
+  const module = {
+    id: "capabilities",
+    title: "Booking",
+    type: "Booking",
+    topicKey: "appointment-booking",
+    published: false,
+    createdAt: 1,
+    settings: { ...settings, trainingLevel: "learn" as const },
+    scenarios: learn,
+  };
+  const regenerated = config
+    .regenerateConfiguredScenario(module, q.id, p)
+    .scenarios.find((s) => s.id === q.id)!;
+  assert.equal(regenerated.provenance?.kind, "configured_fact");
+  assert.deepEqual(regenerated.provenance, q.provenance);
+  assert.equal(JSON.stringify(p), original);
+});
+
+test("relative lengths and Custom describe targets, never promised numerical ranges", () => {
+  assert.deepEqual(
+    config.lengthOptions.map((o) => o.description),
+    ["Short refresher", "Balanced training", "Most comprehensive", "Choose your target length"],
+  );
+  assert.ok(
+    config.lengthOptions.every((o) => !/\d|minutes|questions/.test(o.label + o.description)),
+  );
+  const p = empty();
+  const settings = {
+    ...config.defaultModuleSettings(),
+    trainingLevel: "learn" as const,
+    length: "custom" as const,
+    count: 100,
+    extra: "When unsure -> Ask the reception lead to check the task",
+  };
+  const questions = config.generateConfiguredModule("custom", "Custom", p, settings);
+  assert.equal(questions.length, 1);
+  assert.equal(questions[0].provenance?.kind, "configured_fact");
+});
+
+test("allocation retains separate named staff exceptions and capability questions keep review provenance", async () => {
+  const { recordedSourceChanges } = await import("../src/lib/practice-change-tracking.ts");
+  const { evaluateAnswer } = await import("../src/lib/training.ts");
+  const p = practice([[0, 1, 2]]);
+  const role = Object.values(p.roleRequests!)[0];
+  p.staff = ["Alex", "Sam"].map((name) => ({
+    id: name,
+    name,
+    role: role.label,
+    clinics: "",
+    requestOverrides: { [role.roleId]: { [role.selectedRequestIds[0]]: false } },
+  }));
+  for (const trainingLevel of ["learn", "apply"] as const) {
+    const questions = config.generateConfiguredModule("appointment-booking", "Booking", p, {
+      ...config.defaultModuleSettings(),
+      trainingLevel,
+      count: 100,
+    });
+    const exceptions = questions.filter(
+      (q) => q.kind === "mcq" && q.generationObjective?.skill === "exception",
+    );
+    assert.equal(exceptions.length, 2);
+    assert.ok(exceptions.some((q) => q.title.includes("Alex")));
+    assert.ok(exceptions.some((q) => q.title.includes("Sam")));
+    if (trainingLevel === "learn") {
+      const capability = questions.find(
+        (q) => q.kind === "mcq" && q.generationObjective?.skill === "capability",
+      );
+      assert.ok(capability?.kind === "mcq" && capability.correctIndices);
+      assert.equal(evaluateAnswer(capability, capability.correctIndices.map(String)), true);
+      assert.equal(
+        evaluateAnswer(capability, capability.correctIndices.slice(1).map(String)),
+        false,
+      );
+      assert.equal(
+        recordedSourceChanges(capability, [
+          {
+            path: "practiceData.roleRequests",
+            label: "Role responsibilities",
+            reason: "Responsibilities changed",
+          },
+        ]).length,
+        1,
+      );
+    }
+  }
 });
