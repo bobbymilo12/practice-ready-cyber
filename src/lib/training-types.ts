@@ -21,6 +21,12 @@ export interface CoreScenarioProvenance {
 export type ScenarioStatus = "draft" | "approved";
 
 export interface MCQScenario {
+  /** Allocation metadata only; never affects scoring or source-change dependencies. */
+  generationObjective?: {
+    source: string;
+    skill: "knowledge" | "application" | "capability" | "exception";
+    structure: string;
+  };
   // Structured classification; trainee-facing titles are not internal identifiers.
   localRoleRequestId?: string;
   provenance?:

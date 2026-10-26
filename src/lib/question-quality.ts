@@ -1,5 +1,5 @@
 import type { MCQScenario } from "./training-types.ts";
-import { submissionChannel, readableList } from "./training-copy.ts";
+import { submissionChannel, readableList, requestSubject } from "./training-copy.ts";
 
 /** Display labels only: never call on sentences, options or authored procedure steps. */
 export function displayLabel(value: string): string {
@@ -37,14 +37,16 @@ export function methodQuestion(
   );
   // Unsupported methods are alternatives to the explicit configured list, not invented workflows.
   if (!incorrect.length) return undefined;
-  const phrase = (m: string) => `Submit the request ${submissionChannel(m)!.phrase}.`;
+  const phrase = (m: string) =>
+    `Ask the patient to submit the request ${submissionChannel(m)!.phrase}.`;
   return {
     id: crypto.randomUUID(),
     kind: "mcq",
-    title: displayLabel(label),
+    title: label.endsWith("?") ? "Submitting a Request" : displayLabel(label),
     patientQuote: situation,
-    question:
-      "Which standard methods does the practice accept for this request, outside any separately configured exception? Select all that apply.",
+    question: situation
+      ? "How can this patient submit their request? Select all that apply."
+      : `Which methods can all patients use to submit ${requestSubject(label, "")}? Select all that apply.`,
     options: [...methods.map(phrase), ...incorrect.slice(0, 2).map(phrase)],
     correctIndex: 0,
     correctIndices: methods.map((_, i) => i),
@@ -91,7 +93,12 @@ export function teachingPoint(label: string, value: string): string {
 }
 
 export function unconditionalMethods(methods: string[], instructions: string): string[] {
-  if (!/\b(if|only|over|under|except|aged|unless)\b/i.test(instructions)) return methods;
+  if (
+    !/\b(if|only|over|under|except|aged|unless|eligible|after|before|cannot)\b|\d+\+/i.test(
+      instructions,
+    )
+  )
+    return methods;
   const aliases: Record<string, RegExp> = {
     Telephone: /telephone|\bphone\b/i,
     "NHS App": /NHS\s*App/i,
@@ -100,7 +107,96 @@ export function unconditionalMethods(methods: string[], instructions: string): s
     "At reception": /reception|in person/i,
     "Nominated pharmacy": /pharmacy|pharmacist/i,
   };
-  const mentioned = methods.filter((m) => aliases[m]?.test(instructions));
+  const mentioned = Object.keys(aliases).filter((m) => aliases[m].test(instructions));
   // If we cannot establish which method the condition limits, do not assert universal permission.
   return mentioned.length ? methods.filter((m) => !mentioned.includes(m)) : [];
+}
+
+/** Deliberately bounded parsing: a whole sentence must state the permission and age threshold.
+ * Unknown prose is retained in practice setup, never interpreted as a clinical rule. */
+export function conditionalMethodQuestions(
+  label: string,
+  methods: string[],
+  instructions: string,
+  level?: "learn" | "apply",
+): MCQScenario[] {
+  const sentences = instructions
+    .split(/\n|;|\.\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const conditional = sentences.filter((s) =>
+    /\b(aged|over|under|if|only|unless|except)\b|\d+\+/i.test(s),
+  );
+  // A second qualifier could narrow this permission; never discard it.
+  if (conditional.length !== 1) return [];
+  const text = conditional[0];
+  const named = text.match(
+    /^(.+?) ordering is available for patients aged (\d+)(?: and over|\+)$/i,
+  );
+  const patient = text.match(
+    /^Patients (aged |over )(\d+)(?: and over|\+)? can order(?: (repeat prescriptions|fit notes))? (.+)$/i,
+  );
+  const channels = [
+    "Telephone",
+    "NHS App",
+    "Practice website / online form",
+    "Paper request at reception",
+    "Nominated pharmacy",
+  ];
+  const method = channels.find((m) =>
+    named
+      ? m.toLowerCase() === named[1].toLowerCase()
+      : patient &&
+        [submissionChannel(m)!.phrase, ...(m === "Telephone" ? ["by phone", "over the phone"] : [])]
+          .map((value) => value.toLowerCase())
+          .includes(patient[4].toLowerCase()),
+  );
+  if (
+    !method ||
+    (!named && !patient) ||
+    (patient?.[3] &&
+      requestSubject(label, "") !== "a " + patient[3].toLowerCase().replace(/s$/, "") + " request")
+  )
+    return [];
+  // "Aged 60" alone is not an age range. Require the explicit lower bound.
+  if (patient?.[1].toLowerCase() === "aged " && !/aged \d+(?: and over|\+)/i.test(text)) return [];
+  const age = Number(named?.[2] ?? patient?.[2]) + (patient?.[1].toLowerCase() === "over " ? 1 : 0);
+  if (age < 1 || age > 110) return [];
+  const q = methodQuestion(
+    label,
+    [...methods, method],
+    [
+      "Telephone",
+      "Nominated pharmacy",
+      "NHS App",
+      "Practice website / online form",
+      "Paper request at reception",
+    ],
+    `A ${age}-year-old patient asks how to submit ${requestSubject(label, "")}.`,
+  );
+  if (!q) return [];
+  q.title = "Ordering with an Age Exception";
+  q.learningPoint += " " + text + ".";
+  const below =
+    age > 1
+      ? methodQuestion(
+          label,
+          methods,
+          [method],
+          `A ${age - 1}-year-old patient asks how to submit ${requestSubject(label, "")}.`,
+        )
+      : undefined;
+  if (below) {
+    below.title = "Ordering Below the Age Threshold";
+    below.learningPoint += " " + text + ". This patient does not meet that age condition.";
+  }
+  if (level === "learn") {
+    q.patientQuote = "";
+    q.question = `Which methods can patients aged ${age} and over use to submit ${requestSubject(label, "")}? Select all that apply.`;
+    if (below) {
+      below.patientQuote = "";
+      below.question = `Which methods can patients under ${age} use to submit ${requestSubject(label, "")}? Select all that apply.`;
+    }
+  }
+  return below ? [q, below] : [q];
 }

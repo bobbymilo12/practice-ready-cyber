@@ -3,7 +3,6 @@ import {
   methodApplication,
   submissionChannel,
   readableList,
-  readableGuidance,
   configuredAnswer,
   listItemCopy,
 } from "./training-copy.ts";
@@ -209,11 +208,10 @@ function conditionFrame(condition: string): ConditionFrame | undefined {
   if (/^(?:when |if )?unsure$/.test(key))
     return {
       title: "Unsure how to help",
-      situation: "You cannot work out which route fits a patient's request.",
+      situation: "You are unsure which process applies to the task you have been asked to handle.",
       alternatives: [
-        "Use the route for the closest matching appointment type.",
-        "Ask the patient to choose between the available appointment types.",
-        "Use the route taken for the patient's last request.",
+        "Follow the process for the closest matching type of task.",
+        "Ask the person making the request which next step they would prefer.",
       ],
     };
   return undefined;
@@ -267,21 +265,7 @@ export function applications(fact: ScenarioFact): Application[] {
       items.filter((item) => submissionChannel(item)),
       items.filter((item) => !submissionChannel(item)).join(" "),
     );
-    const instructions = items.filter((item) => !submissionChannel(item));
-    return [
-      ...methods.map((method) => methodApplication(fact.label, fact.situation, method)!),
-      ...(instructions.length
-        ? [
-            {
-              label: "Additional submission guidance",
-              situation:
-                "A patient asks about an additional requirement for submitting this request. What should you tell them?",
-              rule: readableGuidance(instructions.join("\n")),
-              feedback: "The practice also specifies: " + readableGuidance(instructions.join("\n")),
-            },
-          ]
-        : []),
-    ];
+    return [...methods.map((method) => methodApplication(fact.label, fact.situation, method)!)];
   }
   if (/which details|activities.*shadow/i.test(fact.label) && items.length > 1)
     return items.map((item) => ({
@@ -299,44 +283,5 @@ export function applications(fact: ScenarioFact): Application[] {
       situation: naturalSituation(fact.situation),
       feedback: teachingPoint(fact.label, configuredAnswer(fact.label, fact.rule)),
     },
-  ];
-}
-
-// Mistakes concern timing, completeness or assumptions, never invented local services.
-export function applicationMistakes(situation: string): string[] {
-  if (/identity|confidential|another patient|behalf/i.test(situation))
-    return [
-      "Treat familiarity with the caller as enough to release the information.",
-      "Give a brief summary before completing the checks.",
-      "Take the caller's knowledge of the patient's details as permission to share.",
-    ];
-  if (/record|details|handover|report/i.test(situation))
-    return [
-      "Leave the details until the end of the shift.",
-      "Pass on only the patient's name and the general reason for calling.",
-      "Assume the earlier conversation contains everything needed.",
-    ];
-  if (/prescription|medication|pharmacy/i.test(situation))
-    return [
-      "Treat the request being submitted as confirmation that it has been authorised.",
-      "Use the status of the last prescription to answer this enquiry.",
-      "Check only where the prescription should be sent, without checking its progress.",
-    ];
-  if (/result/i.test(situation))
-    return [
-      "Treat the result being available as permission to share it.",
-      "Give the result without checking whether there is a follow-up instruction.",
-      "Use the previous result's follow-up instruction for this enquiry.",
-    ];
-  if (/appointment|book|request|unwell/i.test(situation))
-    return [
-      "Choose an appointment by availability before checking whether it suits this request.",
-      "Use the appointment type from the patient's last visit for this request.",
-      "Treat the patient's requested appointment type as confirmation that it is appropriate.",
-    ];
-  return [
-    "Carry out the first step only and treat the request as complete.",
-    "Use the response to a similar enquiry without checking the differences.",
-    "Pass on the request without the information needed to act on it.",
   ];
 }

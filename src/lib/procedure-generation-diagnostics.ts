@@ -11,7 +11,6 @@ export function procedureGenerationReport(
 ) {
   const inspected = inspectLocalProcedureSequences(p);
   const localCount = scenarios.filter((s) => s.provenance?.kind !== "core").length;
-  const included = scenarios.find((s) => s.provenance?.kind === "sequence");
   return {
     generatedAt: new Date().toISOString(),
     level,
@@ -28,16 +27,14 @@ export function procedureGenerationReport(
         ? d.reason
         : allocated
           ? "Allocated"
-          : !["learn", "apply"].includes(level ?? "")
-            ? "No explicit Learn/Apply level"
-            : localCount < (level === "learn" ? 1 : 2)
-              ? "Insufficient selected local slots"
-              : included
-                ? "Another eligible procedure selected; maximum one procedure per module"
-                : "No replaceable local MCQ slot";
+          : level === "learn"
+            ? "Sequencing is available in Apply, not Learn"
+            : level !== "apply"
+              ? "No explicit Apply level"
+              : "Not selected within the module target";
       return {
         ...d,
-        learnCandidateCreated: d.eligible,
+        learnCandidateCreated: false,
         applyCandidateCreated: d.eligible,
         allocated,
         allocationReason: reason,

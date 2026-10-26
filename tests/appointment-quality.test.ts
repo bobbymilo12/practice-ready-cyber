@@ -167,12 +167,7 @@ test("UTI procedure teaches reception actions without assigning them to the clin
     );
     // Booking wording is intentional; role recognition must not invent procedure actions.
     assert.ok(!recognition.options.some((option) => /sample|urine-dipping/i.test(option)));
-    assert.match(
-      recognition.patientQuote,
-      trainingLevel === "learn"
-        ? /booking process has confirmed an appointment is needed/
-        : /followed the practice’s booking process/,
-    );
+    assert.match(recognition.patientQuote, /asks to book an appointment about/);
 
     const generated = modules.generateConfiguredModule(
       "appointment-booking",
@@ -181,30 +176,17 @@ test("UTI procedure teaches reception actions without assigning them to the clin
       settings,
     );
     const exercise = generated.find((s) => s.provenance?.kind === "sequence");
-    assert.ok(exercise);
-    assert.equal(exercise.status, "draft");
-    assert.deepEqual(exercise.provenance?.snapshot.localProcedure, record);
     assert.ok(!generated.some((s) => s.kind === "mcq" && s.localRoleRequestId === "utis"));
     if (trainingLevel === "learn") {
-      assert.ok(exercise.kind === "order" && exercise.sequence);
+      assert.equal(exercise, undefined);
+    } else {
+      assert.ok(exercise?.kind === "order" && exercise.sequence);
+      assert.equal(exercise.status, "draft");
+      assert.deepEqual(exercise.provenance?.snapshot.localProcedure, record);
       assert.deepEqual(exercise.sequence.correctOrder, record.stepOrder);
       assert.deepEqual(
         exercise.sequence.steps.map((s) => s.label),
         record.steps.map((s) => s.text),
-      );
-      assert.match(exercise.question, /handling this request at reception/);
-    } else {
-      assert.ok(exercise.kind === "mcq");
-      assert.equal(exercise.question, "As the receptionist, what should you do first?");
-      assert.equal(
-        exercise.options[exercise.correctIndex],
-        "Ask the patient to provide a urine sample.",
-      );
-      assert.deepEqual([...exercise.options].sort(), record.steps.map((s) => s.text).sort());
-      assert.ok(
-        !exercise.options.some((option) =>
-          /Ask (?:the )?(?:Doctor|Practice Nurse) to provide/.test(option),
-        ),
       );
     }
   }
@@ -260,12 +242,7 @@ test("eligible roles remain alternatives after the booking process; umbrella que
         ? "Book an appointment with a Doctor or the Practice Nurse."
         : "Doctor appointment or Practice Nurse appointment",
     );
-    assert.match(
-      q.patientQuote,
-      trainingLevel === "learn"
-        ? /booking process has confirmed an appointment is needed/
-        : /followed the practice’s booking process/,
-    );
+    assert.match(q.patientQuote, /asks to book an appointment about/);
     assert.match(
       q.learningPoint,
       /Follow the practice’s booking process before arranging the appointment/,
@@ -289,7 +266,7 @@ test("eligible roles remain alternatives after the booking process; umbrella que
 });
 
 const require = createRequire(import.meta.url);
-test("real module-builder Generate handler carries saved procedures into Learn and Apply drafts", async () => {
+test("real module-builder Generate handler allocates saved procedure sequencing only to Apply", async () => {
   const source = readFileSync(
     new URL("../src/components/PredefinedModuleSetup.tsx", import.meta.url),
     "utf8",
@@ -402,7 +379,7 @@ test("real module-builder Generate handler carries saved procedures into Learn a
       ),
     );
     initial
-      .find((n) => n.type === "button" && n.props.children === "Choose training type + length")
+      .find((n) => n.type === "button" && n.props.children === "Choose Training Type & Length")
       .props.onClick();
     const button = render().find(
       (n) =>
@@ -412,25 +389,27 @@ test("real module-builder Generate handler carries saved procedures into Learn a
     assert.equal(button.props.disabled, false);
     await button.props.onClick();
     assert.equal(destination.to, "/modules/review");
-    assert.equal(generated.length, sparse ? Math.round(count * 0.3) + 1 : count);
-    assert.equal(
-      generated.filter((s) => s.provenance?.kind === "core").length,
-      Math.round(count * 0.3),
+    assert.ok(generated.length > 0 && generated.length <= count);
+    assert.ok(
+      generated.filter((s) => s.provenance?.kind === "core").length <=
+        Math.min(4, Math.round(count * 0.3)),
     );
     const q = generated.find((s) => s.provenance?.kind === "sequence");
-    assert.ok(q, "the real save handler must include the Local Procedure");
     assert.ok(!generated.some((s) => s.kind === "mcq" && s.localRoleRequestId === "utis"));
-    assert.equal(q.kind, level === "learn" ? "order" : "mcq");
-    assert.equal(q.provenance.sourceVersion, procedure.version);
-    assert.deepEqual(q.provenance.snapshot.localProcedure, procedure);
-    if (q.kind === "order") {
+    if (level === "learn") assert.equal(q, undefined);
+    else {
+      assert.ok(
+        q?.kind === "order",
+        "the real Apply save handler must include the Local Procedure",
+      );
+      assert.equal(q.provenance.sourceVersion, procedure.version);
+      assert.deepEqual(q.provenance.snapshot.localProcedure, procedure);
       assert.deepEqual(q.sequence.correctOrder, ["check", "record", "file"]);
       assert.deepEqual(
         q.sequence.steps.map((s: any) => s.label),
         procedure.status === "configured" && procedure.steps.map((s) => s.text),
       );
-    } else
-      assert.equal(q.options[q.correctIndex], "Check if the practice form has been completed.");
+    }
   }
 });
 
@@ -462,7 +441,7 @@ test("generation diagnostics report every saved procedure and exact allocation c
   const result = modules.generateConfiguredModule("appointment-booking", "Booking", p, settings);
   const report = procedureGenerationReport(p, "learn", 10, result);
   assert.equal(report.procedures.length, 2);
-  assert.equal(report.procedures.find((d) => d.requestId === "utis")!.allocated, true);
+  assert.equal(report.procedures.find((d) => d.requestId === "utis")!.allocated, false);
   const excluded = report.procedures.find((d) => d.requestId === target.id)!;
   assert.equal(excluded.eligible, false);
   assert.match(excluded.reason, /order has not been confirmed/);
@@ -476,7 +455,7 @@ test("generation diagnostics report every saved procedure and exact allocation c
   assert.equal(
     procedureGenerationReport(p, "learn", 2, small).procedures.find((d) => d.requestId === "utis")!
       .allocationReason,
-    "Allocated",
+    "Sequencing is available in Apply, not Learn",
   );
 });
 
@@ -540,6 +519,9 @@ test("booking action requires explicit request procedure; general routine bookin
   };
   const generated = modules.generateConfiguredModule("appointment-booking", "Booking", p, settings);
   const exercise = generated.find((s) => s.provenance?.kind === "sequence");
-  assert.ok(exercise?.kind === "mcq");
-  assert.equal(exercise.options[exercise.correctIndex], action);
+  assert.ok(exercise?.kind === "order");
+  assert.equal(
+    exercise.sequence!.steps.find((s) => s.id === exercise.sequence!.correctOrder[0])!.label,
+    action,
+  );
 });

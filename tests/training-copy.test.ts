@@ -26,7 +26,10 @@ function samplePractice() {
   doctor.confirmed = true;
   doctor.selectedRequestIds = doctor.categories.flatMap((c) => c.requests.map((r) => r.id));
   p.roleRequests = { [doctor.roleId]: doctor };
-  p.staff = [{ id: "alex", name: "Dr Alex", role: "Doctor", clinics: "" }];
+  p.staff = [
+    { id: "alex", name: "Dr Alex", role: "Doctor", clinics: "" },
+    { id: "pat", name: "Pat Example", role: "Practice Manager", clinics: "" },
+  ];
   p.prescriptionConfig = {
     ...prescriptionsFor(p),
     methods: ["telephone", "nhs-app", "website", "paper", "pharmacy"],
@@ -68,7 +71,10 @@ function sampleSettings(topic: string) {
       if (option) settings.answers[field.key] = option;
     }
   }
-  settings.extra = "Record this test request in the agreed reception inbox.";
+  settings.extra =
+    topic === "custom"
+      ? "When unsure -> Ask the reception lead to check the task"
+      : "Record this test request in the agreed reception inbox.";
   settings.count = 100;
   return settings;
 }
@@ -108,21 +114,24 @@ test("foundational routing prefers roles, while an individual override and a spe
   const p = samplePractice();
   const settings = { ...sampleSettings("prescriptions"), trainingLevel: "learn" as const };
   const roleQuestion = configuredScenarios("prescriptions", "Prescriptions", p, settings).find(
-    (s) => s.kind === "mcq" && s.localRoleRequestId === "prescription-queries",
+    (s) => s.kind === "mcq" && s.localRoleRequestId === "medication-reviews",
   );
   assert.ok(roleQuestion?.kind === "mcq");
-  assert.equal(roleQuestion.options[roleQuestion.correctIndex], "A Doctor.");
+  assert.equal(
+    roleQuestion.options[roleQuestion.correctIndex],
+    "Book the patient an appointment with a Doctor.",
+  );
   assert.doesNotMatch(roleQuestion.options[roleQuestion.correctIndex], /Dr Alex/);
   const named = configuredScenarios("urgent", "Urgent", p, {
     ...sampleSettings("urgent"),
     trainingLevel: "learn",
-  }).find((s) => s.title.includes("usual urgent contact"));
+  }).find((s) => s.question.includes("usual urgent contact"));
   assert.ok(named?.kind === "mcq");
   assert.match(named.options[named.correctIndex], /Contact Dr Alex/);
   const doctor = Object.values(p.roleRequests!)[0];
-  p.staff[0].requestOverrides = { [doctor.roleId]: { "prescription-queries": false } };
+  p.staff[0].requestOverrides = { [doctor.roleId]: { "medication-reviews": false } };
   const exception = configuredScenarios("prescriptions", "Prescriptions", p, settings).find(
-    (s) => s.title.startsWith("Responsibilities for Dr Alex") && s.title.includes("Prescription"),
+    (s) => s.title.startsWith("Responsibilities for Dr Alex") && s.title.includes("Medication"),
   );
   assert.ok(exception?.kind === "mcq");
   assert.match(exception.options[exception.correctIndex], /excluded/);
@@ -136,9 +145,15 @@ test("all ten topics pass shared copy checks in Learn and Apply and expose only 
       const settings = { ...sampleSettings(topic), trainingLevel };
       const questions = generateConfiguredModule(topic, topic, p, settings);
       assert.ok(questions.length, topic);
+      if (topic === "custom") assert.doesNotMatch(JSON.stringify(questions), /appointment type/i);
       for (const q of questions) {
         assert.ok(hasFinishedCopy(q), topic + ": " + q.title);
         assert.doesNotMatch(q.title, /\?:|^Routing:/);
+        if (q.kind === "mcq" && q.provenance?.kind !== "sequence")
+          assert.doesNotMatch(
+            [q.patientQuote, q.question, ...q.options, q.learningPoint].join(" "),
+            /configured responsibilities|saved configuration|practice settings|source fields|Who has this responsibility|A colleague asks for help|additional requirement for submitting|booking process has confirmed|previous experience|last similar enquiry/i,
+          );
         assert.doesNotMatch(
           JSON.stringify(q),
           /Explain how to submit the request using|using Telephone|using Practice website \/ online form|\[object Object\]/,
@@ -177,14 +192,9 @@ test("every applicable Learn topic uses role actions, and explicit contacts are 
     const questions = configuredScenarios(topic, topic, p, settings);
     const routing = questions.filter((q) => q.kind === "mcq" && q.localRoleRequestId);
     if (
-      [
-        "appointment-booking",
-        "prescriptions",
-        "results",
-        "vaccines",
-        "fit-notes",
-        "first-week",
-      ].includes(topic)
+      ["appointment-booking", "prescriptions", "vaccines", "fit-notes", "first-week"].includes(
+        topic,
+      )
     )
       assert.ok(routing.length, topic);
     for (const q of routing) {
@@ -199,16 +209,14 @@ test("every applicable Learn topic uses role actions, and explicit contacts are 
   }
   const p = samplePractice();
   const doctor = Object.values(p.roleRequests!)[0];
-  doctor.selectedRequestIds = doctor.selectedRequestIds.filter(
-    (id) => id !== "prescription-queries",
-  );
-  p.staff[0].requestOverrides = { [doctor.roleId]: { "prescription-queries": true } };
+  doctor.selectedRequestIds = doctor.selectedRequestIds.filter((id) => id !== "medication-reviews");
+  p.staff[0].requestOverrides = { [doctor.roleId]: { "medication-reviews": true } };
   const questions = configuredScenarios("prescriptions", "Prescriptions", p, {
     ...defaultModuleSettings(),
     trainingLevel: "learn",
   });
   const added = questions.find(
-    (q) => q.kind === "mcq" && q.localRoleRequestId === "prescription-queries",
+    (q) => q.kind === "mcq" && q.localRoleRequestId === "medication-reviews",
   );
   assert.ok(added?.kind === "mcq");
   assert.match(added.options[added.correctIndex], /Dr Alex/);
@@ -220,10 +228,10 @@ test("mixed channel lists teach allowed methods separately from additional guida
     rule: "Telephone; NHS App; Include the agreed request reference.",
     situation: "A patient asks about submitting a prescription request.",
   });
-  assert.equal(questions.length, 3);
+  assert.equal(questions.length, 2);
   assert.match(questions[0].rule, /accepts these requests by telephone/);
   assert.match(questions[1].rule, /accepts these requests through the NHS App/);
-  assert.equal(questions[2].rule, "Include the agreed request reference.");
+  assert.ok(!questions.some((q) => q.label === "Additional submission guidance"));
   assert.doesNotMatch(JSON.stringify(questions), /Explain how|using Telephone|\?:/);
 });
 
@@ -238,9 +246,17 @@ test("structured urgent routes, named safeguarding leads and legacy instructions
       );
       assert.ok(q?.kind === "mcq");
       assert.match(q.options[q.correctIndex], /Contact Dr Alex \(Doctor\) by telephone on 123/);
-      assert.match(q.options[q.correctIndex], /Send an urgent request through the clinical system/);
-      assert.match(q.options[q.correctIndex], /Record the test reference/);
-      assert.doesNotMatch(JSON.stringify(q), /Phone\/extension|Internal clinical system\/message/);
+      assert.doesNotMatch(
+        q.options[q.correctIndex],
+        /Send an urgent request through the clinical system/,
+      );
+      assert.doesNotMatch(q.options[q.correctIndex], /Record the test reference/);
+      assert.match(JSON.stringify(q.provenance), /Record the test reference/);
+      assert.doesNotMatch(
+        [q.patientQuote, q.question, ...q.options].join(" "),
+        /Phone\/extension|Internal clinical system\/message|run out|last dose/,
+      );
+      assert.match(q.question + " " + q.patientQuote, /identified as urgent/);
       const module = {
         id: "test",
         title: topic,
@@ -260,7 +276,7 @@ test("structured urgent routes, named safeguarding leads and legacy instructions
       );
       assert.ok(q?.kind === "mcq");
       assert.match(q.options[q.correctIndex], /Dr Alex/);
-      assert.match(q.options[q.correctIndex], /Retain the additional test reference/);
+      assert.doesNotMatch(q.options[q.correctIndex], /Retain the additional test reference/);
     }
     assert.equal(JSON.stringify(p), before);
     // Only the active route is used; the saved inactive prescription contact is not leaked.
@@ -283,7 +299,10 @@ test("structured urgent routes, named safeguarding leads and legacy instructions
     );
     assert.ok(q?.kind === "mcq");
     assert.match(q.options[q.correctIndex], /Contact Test reception lead in person/);
-    assert.doesNotMatch(JSON.stringify(q), /Inactive contact/);
+    assert.doesNotMatch(
+      [q.patientQuote, q.question, ...q.options, q.learningPoint].join(" "),
+      /Inactive contact/,
+    );
   }
 });
 
@@ -303,7 +322,7 @@ test("detail lists preserve acronym casing and contact lists remain complete sen
     answers: { backup: "staff:alex" },
   };
   const q = configuredScenarios("urgent", "Urgent", p, settings).find((q) =>
-    q.title.includes("usual urgent contact"),
+    q.question.includes("usual urgent contact"),
   );
   assert.ok(q?.kind === "mcq");
   assert.equal(q.options[q.correctIndex], "Contact Dr Alex (Doctor).");
@@ -365,4 +384,31 @@ test("Appointment Booking Core and local escalation render the same structured m
     }
   }
   assert.equal(JSON.stringify(p), before);
+});
+
+test("contact questions neither drop an explicit qualifier nor offer the same phone method without its extension as wrong", () => {
+  const p = samplePractice();
+  const settings = { ...defaultModuleSettings(), trainingLevel: "learn" as const, count: 100 };
+  const qs = generateConfiguredModule("prescriptions", "Prescriptions", p, settings);
+  const urgent = qs.find((q) => q.title === "Urgent Prescription Request");
+  assert.ok(urgent?.kind === "mcq");
+  assert.match(urgent.options[urgent.correctIndex], /by telephone on 123/);
+  assert.ok(
+    urgent.options
+      .filter((_, i) => i !== urgent.correctIndex)
+      .every((s) => !/by telephone/.test(s)),
+  );
+  if (p.prescriptionConfig!.urgentRoute.source !== "separate") throw Error("fixture");
+  p.prescriptionConfig!.urgentRoute.route.instruction =
+    "Only after the duty clinician has accepted the request.";
+  assert.equal(contactRouteCopy(p.prescriptionConfig!.urgentRoute.route, p), "");
+  assert.ok(
+    !generateConfiguredModule("prescriptions", "Prescriptions", p, settings).some(
+      (q) => q.title === "Urgent Prescription Request",
+    ),
+  );
+  assert.equal(
+    p.prescriptionConfig!.urgentRoute.route.instruction,
+    "Only after the duty clinician has accepted the request.",
+  );
 });

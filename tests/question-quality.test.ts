@@ -5,6 +5,7 @@ import {
   methodQuestion,
   comparableValues,
   unconditionalMethods,
+  conditionalMethodQuestions,
 } from "../src/lib/question-quality.ts";
 import {
   configuredScenarios,
@@ -44,6 +45,10 @@ function practice() {
 for (const trainingLevel of ["learn", "apply"] as const) {
   test(`${trainingLevel}: real generation includes multi-select with exact-set scoring and source snapshots`, () => {
     const p = practice();
+    if (trainingLevel === "apply")
+      p.prescriptionConfig!.orderingInstructions = [
+        "Telephone ordering is available for patients aged 60 and over.",
+      ];
     const before = JSON.stringify(p);
     const settings = {
       ...defaultModuleSettings(),
@@ -54,13 +59,16 @@ for (const trainingLevel of ["learn", "apply"] as const) {
     const questions = generateConfiguredModule("prescriptions", "Prescriptions", p, settings);
     const q = questions.find((q) => q.kind === "mcq" && q.correctIndices);
     assert.ok(q?.kind === "mcq" && q.correctIndices);
-    assert.equal(q.correctIndices.length, 3);
+    assert.equal(q.correctIndices.length, trainingLevel === "apply" ? 4 : 3);
     assert.deepEqual(
       q.correctIndices.map((i) => q.options[i]).sort(),
       [
-        "Submit the request through the NHS App.",
-        "Submit the request through the practice website or online form.",
-        "Submit the request on paper at reception.",
+        "Ask the patient to submit the request through the NHS App.",
+        "Ask the patient to submit the request through the practice website or online form.",
+        "Ask the patient to submit the request on paper at reception.",
+        ...(trainingLevel === "apply"
+          ? ["Ask the patient to submit the request by telephone."]
+          : []),
       ].sort(),
     );
     const correct = q.correctIndices.map(String);
@@ -134,12 +142,9 @@ for (const trainingLevel of ["learn", "apply"] as const) {
     const broad = qs.find(
       (s) => s.kind === "mcq" && s.localRoleRequestId === "prescription-queries",
     );
-    assert.ok(broad?.kind === "mcq");
-    assert.equal(broad.question, "Who has this responsibility at the practice?");
-    assert.doesNotMatch(
-      broad.patientQuote + broad.options[broad.correctIndex],
-      /Pass|Direct|patient contacts/,
-    );
+    assert.equal(broad, undefined, "A broad responsibility is not a routing decision");
+    assert.doesNotMatch(review.patientQuote, /booking process has confirmed/);
+    assert.match(review.patientQuote, /arrange a medication review/);
   });
 }
 test("conditional telephone permissions never become universal methods, including phone aliases", () => {
@@ -147,12 +152,18 @@ test("conditional telephone permissions never become universal methods, includin
   p.prescriptionConfig!.methods.push("telephone");
   p.prescriptionConfig!.orderingInstructions = ["Patients over 60 can order by phone."];
   for (const trainingLevel of ["learn", "apply"] as const) {
-    const qs = generateConfiguredModule("prescriptions", "Prescriptions", p, {
+    const qs = configuredScenarios("prescriptions", "Prescriptions", p, {
       ...defaultModuleSettings(),
       trainingLevel,
       count: 30,
     });
-    const q = qs.find((s) => s.kind === "mcq" && s.correctIndices);
+    const q = qs.find(
+      (s) =>
+        s.kind === "mcq" &&
+        s.correctIndices &&
+        !s.patientQuote &&
+        s.generationObjective?.structure === "methods",
+    );
     assert.ok(q?.kind === "mcq" && q.correctIndices);
     assert.ok(q.correctIndices.every((i) => !/telephone|phone/.test(q.options[i])));
     assert.ok(qs.some((s) => s.learningPoint.includes("Patients over 60 can order by phone.")));
@@ -236,4 +247,234 @@ test("method alternatives do not mark overlapping reception methods as false", (
   assert.ok(q?.correctIndices);
   assert.equal(q.correctIndices.length, 2);
   assert.ok(!q.options.some((o) => /on paper/.test(o)));
+});
+
+test("conditional age permission reaches the final module with all applicable methods and exact boundary scoring", () => {
+  const p = practice();
+  p.prescriptionConfig!.orderingInstructions = [
+    "Telephone ordering is available for patients aged 60 and over.",
+    "Include the patient's full name and date of birth.",
+  ];
+  const before = JSON.stringify(p);
+  for (const trainingLevel of ["learn", "apply"] as const) {
+    const qs = configuredScenarios("prescriptions", "Prescriptions", p, {
+      ...defaultModuleSettings(),
+      trainingLevel,
+      count: 100,
+    });
+    const final = generateConfiguredModule("prescriptions", "Prescriptions", p, {
+      ...defaultModuleSettings(),
+      trainingLevel,
+      count: 100,
+    });
+    const methodExercises = final.filter(
+      (q) => q.kind === "mcq" && /methods$/.test(q.generationObjective?.structure ?? ""),
+    );
+    assert.equal(
+      methodExercises.length,
+      1,
+      "one method objective, not both age boundaries plus the general rule",
+    );
+    if (trainingLevel === "learn") {
+      assert.equal(methodExercises[0].patientQuote, "");
+      assert.match(methodExercises[0].question, /patients aged 60 and over/);
+    } else assert.match(methodExercises[0].patientQuote, /60-year-old/);
+    const eligible = qs.find((q) =>
+      /60-year-old|patients aged 60 and over/.test(q.patientQuote + q.question),
+    );
+    const below = qs.find((q) => /59-year-old|patients under 60/.test(q.patientQuote + q.question));
+    const general = qs.find(
+      (q) =>
+        q.kind === "mcq" &&
+        q.correctIndices &&
+        !q.patientQuote &&
+        q.generationObjective?.structure === "methods",
+    );
+    for (const [q, expected] of [
+      [eligible, 4],
+      [below, 3],
+      [general, 3],
+    ] as const) {
+      assert.ok(q?.kind === "mcq" && q.correctIndices);
+      assert.equal(q.correctIndices.length, expected);
+      const correct = q.correctIndices.map((i) => q.options[i]);
+      assert.equal(
+        correct.some((s) => /telephone/.test(s)),
+        q === eligible,
+      );
+      assert.ok(correct.every((s) => /^Ask the patient to submit/.test(s)));
+      assert.equal(evaluateAnswer(q, q.correctIndices.map(String)), true);
+      assert.equal(evaluateAnswer(q, q.correctIndices.slice(1).map(String)), false);
+      assert.equal(q.provenance?.kind, "configured_fact");
+      assert.deepEqual(
+        recordedSourceChanges(q, [
+          { path: "practiceData.prescriptionConfig", label: "Methods", reason: "Age changed" },
+        ]).length,
+        1,
+      );
+    }
+  }
+  assert.equal(JSON.stringify(p), before);
+});
+
+test("repeat methods do not supply a non-repeat pathway; explicit non-repeat methods keep their own scope", () => {
+  for (const trainingLevel of ["learn", "apply"] as const) {
+    const p = practice();
+    const settings = { ...defaultModuleSettings(), trainingLevel, count: 100 };
+    const visible = (qs: any[]) =>
+      qs
+        .map((q) => [q.title, q.patientQuote, q.question, q.options, q.learningPoint])
+        .flat(Infinity)
+        .join(" ");
+    assert.doesNotMatch(
+      visible(generateConfiguredModule("prescriptions", "Prescriptions", p, settings)),
+      /non-repeat|not on their repeat/,
+    );
+    settings.answers.acute = "Telephone";
+    const acute = generateConfiguredModule("prescriptions", "Prescriptions", p, settings).filter(
+      (q) => /non-repeat/i.test(q.title),
+    );
+    assert.equal(acute.length, 1);
+    assert.ok(acute[0].kind === "mcq");
+    assert.match(acute[0].options[acute[0].correctIndex], /telephone/);
+    assert.doesNotMatch(visible(acute), /NHS App|website|paper at reception/);
+  }
+});
+
+test("direct Learn facts need no scenario; unsupported facts and ambiguous conditions never pad a module", () => {
+  const p = practice();
+  const qs = configuredScenarios("prescriptions", "Prescriptions", p, {
+    ...defaultModuleSettings(),
+    trainingLevel: "learn",
+    count: 100,
+  });
+  const turnaround = qs.find((q) => /Turnaround/.test(q.title));
+  assert.ok(turnaround);
+  assert.equal(turnaround.patientQuote, "");
+  assert.match(turnaround.question, /routine prescription request.*processed/);
+  assert.ok(qs.length < 100);
+  for (const instruction of [
+    "Telephone only if appropriate.",
+    "Telephone ordering is available for patients aged 60 and over, unless a review is needed.",
+    "Patients aged 60 and over can order by telephone. Only after approval.",
+  ]) {
+    p.prescriptionConfig!.orderingInstructions = [instruction];
+    p.prescriptionConfig!.methods.push("telephone");
+    const generated = generateConfiguredModule("prescriptions", "Prescriptions", p, {
+      ...defaultModuleSettings(),
+      trainingLevel: "apply",
+      count: 100,
+    });
+    assert.ok(!generated.some((q) => /year-old/.test(q.patientQuote)));
+    assert.ok(
+      generated
+        .filter((q) => q.kind === "mcq" && q.correctIndices)
+        .every(
+          (q) =>
+            q.kind === "mcq" && q.correctIndices!.every((i) => !/telephone/.test(q.options[i])),
+        ),
+    );
+  }
+  assert.deepEqual(
+    generateConfiguredModule("custom", "Custom", empty(), {
+      ...defaultModuleSettings(),
+      trainingLevel: "learn",
+      count: 100,
+      extra: "Use the usual method, depending on circumstances.",
+    }),
+    [],
+  );
+});
+
+test("shared Apply decisions need the supplied situation while Learn asks direct practice knowledge", () => {
+  const cases = [
+    ["results", "release", "Only when marked as reviewed and authorised for reception to share"],
+    ["vaccines", "eligibility", "Check that the patient has been invited for the vaccination"],
+    ["fit-notes", "delivery", "Secure digital message"],
+    ["home-visits", "intake", "Clinical system task"],
+    [
+      "first-week",
+      "supervision",
+      "A supervisor observes them handling requests and gives feedback",
+    ],
+  ];
+  for (const [topic, key, value] of cases) {
+    const settings = { ...defaultModuleSettings(), answers: { [key]: value } };
+    const learn = generateConfiguredModule(topic, topic, empty(), {
+      ...settings,
+      trainingLevel: "learn",
+    })[0];
+    const apply = generateConfiguredModule(topic, topic, empty(), {
+      ...settings,
+      trainingLevel: "apply",
+    })[0];
+    assert.ok(learn?.kind === "mcq" && apply?.kind === "mcq", topic);
+    assert.equal(learn.patientQuote, "", topic);
+    assert.ok(apply.patientQuote.length > 0, topic);
+    assert.notEqual(learn.question, apply.question, topic);
+    assert.equal(learn.options[learn.correctIndex], apply.options[apply.correctIndex], topic);
+    assert.doesNotMatch(apply.options.join(" "), /previous experience|last similar enquiry/);
+  }
+});
+
+test("conditional methods share the parser across topics without transferring a repeat permission to non-repeat requests", () => {
+  const methods = ["NHS App", "Paper request at reception"];
+  const rule = "Patients aged 60 and over can order repeat prescriptions by telephone.";
+  assert.equal(
+    conditionalMethodQuestions("Non-repeat prescription requests", methods, rule).length,
+    0,
+  );
+  assert.equal(conditionalMethodQuestions("Fit note requests", methods, rule).length, 0);
+  const qs = conditionalMethodQuestions(
+    "Fit note requests",
+    methods,
+    "Telephone ordering is available for patients aged 60 and over.",
+  );
+  assert.equal(qs.length, 2);
+  assert.ok(qs.every((q) => /fit note request/.test(q.patientQuote)));
+  assert.equal(qs[0].correctIndices!.length, 3);
+  assert.equal(qs[1].correctIndices!.length, 2);
+  assert.ok(
+    conditionalMethodQuestions(
+      "Repeat requests",
+      ["Telephone", "Paper request at reception"],
+      "Patients aged 60 and over can order repeat prescriptions through the NHS App.",
+    ).length,
+  );
+});
+
+test("regeneration retains a question's recorded decision when several questions share a concise heading", () => {
+  const settings = {
+    ...defaultModuleSettings(),
+    trainingLevel: "learn" as const,
+    answers: {
+      release: "All result enquiries go to the reviewing clinician",
+      identity: "Full name and date of birth",
+    },
+  };
+  const p = empty();
+  const scenarios = generateConfiguredModule("results", "Results", p, settings);
+  const identity = scenarios.find((q) => /identity details/.test(q.question))!;
+  assert.ok(identity);
+  assert.ok(scenarios.filter((q) => q.title === identity.title).length > 1);
+  const module = {
+    id: "m",
+    type: "Results",
+    topicKey: "results",
+    title: "Results",
+    createdAt: 1,
+    published: false,
+    settings,
+    scenarios,
+  };
+  const before = JSON.stringify(module);
+  const regenerated = regenerateConfiguredScenario(module, identity.id, p);
+  const updated = regenerated.scenarios.find((q) => q.id === identity.id)!;
+  assert.equal(updated.question, identity.question);
+  assert.equal(updated.kind, "mcq");
+  assert.equal(
+    updated.kind === "mcq" && updated.options[updated.correctIndex],
+    "Full name and date of birth.",
+  );
+  assert.equal(JSON.stringify(module), before);
 });

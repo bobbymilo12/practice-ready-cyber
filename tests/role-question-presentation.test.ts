@@ -60,7 +60,8 @@ test("new Learn role questions use request wording, role choices and structured 
   assert.equal(uti.kind, "mcq");
   if (uti.kind !== "mcq") return;
   assert.equal(uti.title, "A patient contacts the practice about a UTI");
-  assert.ok(uti.patientQuote.includes("booking process has confirmed an appointment is needed"));
+  assert.doesNotMatch(uti.patientQuote, /booking process has confirmed/);
+  assert.match(uti.patientQuote, /asks to book an appointment about a UTI/);
   assert.equal(uti.question, "Who should you book the patient an appointment with?");
   assert.equal(
     uti.options[uti.correctIndex],
@@ -78,8 +79,12 @@ test("new Learn role questions use request wording, role choices and structured 
   });
   const same = apply.find((s) => s.kind === "mcq" && s.localRoleRequestId === "utis")!;
   if (same.kind !== "mcq") return;
-  assert.notEqual(same.patientQuote, uti.patientQuote);
-  assert.ok(same.patientQuote.includes("followed the practice’s booking process"));
+  assert.match(same.patientQuote, /asks to book an appointment about a UTI/);
+  assert.doesNotMatch(
+    same.patientQuote,
+    /followed the practice’s booking process|booking process has confirmed/,
+  );
+  assert.notDeepEqual(same.options, uti.options);
   assert.ok(!same.title.includes("Routing:"));
 });
 

@@ -255,8 +255,8 @@ export function PredefinedModuleSetup({
                           Practice information for this topic
                         </h2>
                         <p className="text-sm">
-                          Training uses the shared information saved in Practice Setup. Complete any
-                          missing processes there, then return to create your module.
+                          Training uses the shared information saved in Practice Setup. Review saved
+                          information or add further processes there whenever needed.
                         </p>
                         <Link
                           to="/practice/setup"
@@ -270,8 +270,9 @@ export function PredefinedModuleSetup({
                           }}
                           className="text-primary underline"
                         >
-                          Complete missing {topic === "prescriptions" ? "prescription" : "topic"}{" "}
-                          information in Practice Setup
+                          {facts.length ? "Review" : "Complete missing"}{" "}
+                          {topic === "prescriptions" ? "prescription" : "topic"} information in
+                          Practice Setup
                         </Link>
                         {topic === "prescriptions" && (
                           <Link
@@ -284,12 +285,14 @@ export function PredefinedModuleSetup({
                         )}
                       </>
                     )}
-                    <button
-                      className="rounded-xl bg-primary px-5 py-3 text-primary-foreground"
-                      onClick={() => setPhase("length")}
-                    >
-                      Choose training type + length
-                    </button>
+                    <div>
+                      <button
+                        className="rounded-xl bg-primary px-5 py-3 text-primary-foreground"
+                        onClick={() => setPhase("length")}
+                      >
+                        Choose Training Type &amp; Length
+                      </button>
+                    </div>
                   </Card>
                 </>
               ) : (
@@ -357,7 +360,7 @@ export function PredefinedModuleSetup({
                   </div>
                   {settings.length === "custom" && (
                     <label className="block text-sm">
-                      Number of scenarios
+                      Target number of questions
                       <input
                         className={input}
                         type="number"
@@ -380,10 +383,8 @@ export function PredefinedModuleSetup({
                   </p>
                   {pool.length < settings.count && (
                     <p className="rounded-xl bg-surface p-3 text-sm">
-                      The available content supports {pool.length} distinct scenarios, fewer than
-                      the requested {settings.count}. Add further confirmed topic information for
-                      wider coverage, or create this shorter draft. We will not invent guidance or
-                      repeat scenarios to reach a number.
+                      Current Practice Setup supports {pool.length} grounded questions. You can
+                      create this shorter module or add more practice information.
                     </p>
                   )}
                   {existing && (

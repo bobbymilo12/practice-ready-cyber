@@ -28,7 +28,7 @@ test("all predefined topics reuse shared practice rules and expose Training Type
       .getByRole("button", { name: "Add", exact: true })
       .click();
     await page.goto("/modules/setup?topic=" + topic + "&title=" + topic);
-    await page.getByRole("button", { name: "Choose training type + length", exact: true }).click();
+    await page.getByRole("button", { name: "Choose Training Type & Length", exact: true }).click();
     await expect(page.getByRole("group", { name: "Training Type", exact: true })).toBeVisible();
     await expect(page.getByRole("radio", { name: /^Learn/ })).toBeChecked();
     await expect(page.getByRole("radio", { name: /^Handle/ })).toBeDisabled();
@@ -51,7 +51,7 @@ test("Custom retains module-specific instructions with the same type and length 
   await expect(
     page.getByText("What should staff do for the main task?", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Choose training type + length", exact: true }).click();
+  await page.getByRole("button", { name: "Choose Training Type & Length", exact: true }).click();
   await expect(page.getByRole("radio", { name: /^Apply/ })).toBeVisible();
   await expect(page.getByRole("radio", { name: /Standard/ })).toBeChecked();
   await expect(page.getByText("Difficulty", { exact: true })).toHaveCount(0);

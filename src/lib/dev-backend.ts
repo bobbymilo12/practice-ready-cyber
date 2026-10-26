@@ -76,6 +76,86 @@ function managerSeed(): Workspace {
     ],
   };
   practiceData.roleRequests = { [doctor.roleId]: doctor, [nurse.roleId]: nurse };
+  // Fictional local-development choices, never defaults for registered practices.
+  practiceData.address = "1 Example Lane, Demo Town";
+  practiceData.hours = "Monday to Friday, 08:00–18:30";
+  practiceData.localConfidentiality =
+    "Confirm the patient's full name and date of birth before sharing information. Check recorded consent for requests made on someone else's behalf.";
+  practiceData.prescriptionConfig = {
+    version: 1,
+    methods: ["nhs-app", "website", "paper"],
+    otherMethod: "",
+    orderingInstruction: "",
+    orderingInstructions: [
+      "Telephone ordering is available for patients aged 60 and over.",
+      "Include the patient's full name, date of birth and the medicines requested.",
+    ],
+    turnaround: { id: "48", other: "" },
+    turnaroundInstruction: "",
+    weekends: { id: "exclude", other: "" },
+    bankHolidays: { id: "exclude", other: "" },
+    urgentRoute: {
+      source: "separate",
+      route: {
+        contact: { kind: "role", role: doctor.label, roleId: doctor.roleId },
+        method: { id: "system", other: "" },
+        instruction: "Record the patient's request and callback number for the Doctor to review.",
+      },
+    },
+    urgentActions: ["system"],
+    otherAction: "",
+    urgentInstruction: "Do not promise that a prescription will be issued.",
+  };
+  // Existing Practice Setup topic settings; contacts/responsibilities still resolve through Roles.
+  practiceData.topicSettings = {
+    prescriptions: {
+      answers: {
+        acute: "Practice website / online form",
+        monitoring: "Offer a medication review appointment where the clinician has requested one",
+        chasing: "Check the request’s progress and explain any update to the patient",
+        pharmacyIssue:
+          "Check whether the prescription has been issued and which pharmacy it was sent to",
+      },
+      extra: "",
+    },
+    results: {
+      answers: {
+        release: "Only when marked as reviewed and authorised for reception to share",
+        pending: "Explain that the result needs clinician review before it can be shared",
+        followup: "Arrange the follow-up requested by the reviewing clinician",
+      },
+      extra: "",
+    },
+    vaccines: {
+      answers: { eligibility: "Check booking instructions provided by a clinician" },
+      extra: "",
+    },
+    "fit-notes": {
+      answers: {
+        request: "Practice website / online form",
+        delivery: "Secure digital message",
+        extension: "Use the same request pathway as a new fit note",
+      },
+      extra: "",
+    },
+    "home-visits": {
+      answers: { intake: "Clinical system task", review: "role:" + doctor.roleId },
+      extra: "",
+    },
+    difficult: {
+      answers: {
+        complaint: "Write to the practice",
+        record: "Practice incident reporting system",
+        phrasing: "Acknowledge the concern and explain what can happen next",
+      },
+      extra: "",
+    },
+    "first-week": {
+      answers: { supervision: "A supervisor observes them handling requests and gives feedback" },
+      extra: "",
+    },
+  };
+
   const target = procedureTargets(practiceData).find((target) => target.id === "utis")!;
   practiceData.localProcedures = {
     utis: confirmProcedure(

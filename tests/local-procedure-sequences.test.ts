@@ -139,45 +139,36 @@ test("candidate selection is deterministic regardless of dictionary insertion an
   });
   assert.notEqual(localProcedureSequence(p)!.provenance.sourceId, first.provenance.sourceId);
 });
-test("Learn reserves a procedure slot before matching, including short modules", () => {
-  const { p } = fixture();
+test("Learn omits sequencing; Apply includes the exact authored sequence even at short lengths", () => {
+  const { p, record } = fixture();
   for (const count of [1, 2, 3, 4, 6, 10]) {
-    const settings = { ...defaultModuleSettings(), trainingLevel: "learn" as const, count };
-    const baseline = generateConfiguredModule(
-      "appointment-booking",
-      "Booking",
-      { ...p, localProcedures: undefined },
-      settings,
-    );
-    const result = generateConfiguredModule("appointment-booking", "Booking", p, settings);
-    assert.equal(result.length, baseline.length);
-    const core = result.filter((s) => s.provenance?.kind === "core").length;
-    assert.equal(core, baseline.filter((s) => s.provenance?.kind === "core").length);
-    const localCount = result.length - core;
-    assert.equal(result.filter((s) => s.kind === "matching").length, localCount >= 2 ? 1 : 0);
-    assert.equal(result.filter((s) => s.kind === "order").length, localCount >= 1 ? 1 : 0);
-    if (localCount >= 4)
-      assert.ok(result.filter((s) => s.kind === "mcq" && !s.provenance).length >= 2);
+    const settings = { ...defaultModuleSettings(), count };
+    const learn = generateConfiguredModule("appointment-booking", "Booking", p, {
+      ...settings,
+      trainingLevel: "learn",
+    });
+    assert.ok(learn.every((q) => q.kind !== "order" && q.provenance?.kind !== "sequence"));
+    const apply = generateConfiguredModule("appointment-booking", "Booking", p, {
+      ...settings,
+      trainingLevel: "apply",
+    });
+    assert.ok(apply.length <= count);
+    const q = apply.find((q) => q.kind === "order");
+    assert.ok(q?.kind === "order");
+    assert.deepEqual(q.provenance?.snapshot.localProcedure, record);
+    assert.deepEqual(q.sequence!.correctOrder, record.status === "configured" && record.stepOrder);
   }
 });
-test("sequence can use a two-slot local budget without matching; does not fill absent local capacity", () => {
+test("Apply sequence can use a small budget without matching or filler", () => {
   const { p } = fixture([[0, 1, 2, 3, 4, 5]]);
-  const settings = { ...defaultModuleSettings(), trainingLevel: "learn" as const, count: 3 };
-  const result = generateConfiguredModule("appointment-booking", "Booking", p, settings);
-  assert.equal(result.filter((s) => s.kind === "matching").length, 0);
+  const result = generateConfiguredModule("appointment-booking", "Booking", p, {
+    ...defaultModuleSettings(),
+    trainingLevel: "apply",
+    count: 3,
+  });
   assert.equal(result.filter((s) => s.kind === "order").length, 1);
+  assert.equal(result.filter((s) => s.kind === "matching").length, 0);
   assert.equal(result.length, 3);
-  const before = generateConfiguredModule(
-    "appointment-booking",
-    "Booking",
-    { ...p, localProcedures: undefined },
-    { ...settings, count: 100 },
-  );
-  assert.equal(
-    generateConfiguredModule("appointment-booking", "Booking", p, { ...settings, count: 100 })
-      .length,
-    before.length,
-  );
 });
 test("Implicit legacy levels, other modules and ineligible Learn remain unchanged", () => {
   const { p, record } = fixture();

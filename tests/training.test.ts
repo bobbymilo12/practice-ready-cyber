@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { empty } from "./fixtures/role-matching.ts";
 import test from "node:test";
 import {
   advanceSession,
@@ -128,27 +129,22 @@ test("completion and an optional retake do not erase the achievement", () => {
   assert.equal(assignmentProgress(assignment, [session, retake]).fraction, 1);
 });
 
-test("generated scenarios quote actual practice rules and clinicians, with draft followups", () => {
+test("legacy generation shares eligibility and does not infer routes from clinic notes or unknown answers", () => {
   const practice = {
+    ...empty(),
     practiceName: "Oak Practice",
     prescriptionOrdering: "Use Oak's portal",
-    repeatTurnaround: "Three working days",
+    repeatTurnaround: "3 working days",
     staff: [{ id: "staff", name: "Alex Green", role: "Pharmacist", clinics: "Medication queries" }],
-    rolePolicies: {},
-    sameDayReasons: [],
-  } as unknown as PracticeData;
+  };
   const scenarios = practiceScenarios("prescriptions", "Prescriptions", practice, {
     runOut: "Contact Alex on extension 123",
   });
+  assert.ok(scenarios.length);
   assert.ok(scenarios.every((s) => s.status === "draft"));
-  assert.ok(scenarios.some((s) => s.learningPoint.includes("Oak's portal")));
-  assert.ok(scenarios.some((s) => s.learningPoint.includes("Alex Green")));
-  assert.ok(scenarios.some((s) => s.learningPoint.includes("extension 123")));
-  for (const s of scenarios.filter((s) => s.followUpFor)) {
-    const primary = scenarios.find((p) => p.id === s.followUpFor)!;
-    assert.ok(primary);
-    assert.notEqual(primary.patientQuote, s.patientQuote);
-  }
+  assert.ok(scenarios.some((s) => s.learningPoint.includes("3 working days")));
+  assert.doesNotMatch(JSON.stringify(scenarios), /Alex Green|extension 123|run out/);
+  assert.equal(practice.prescriptionOrdering, "Use Oak's portal");
 });
 
 // Structured setup must preserve legacy text and resolve shared references at read time.
@@ -410,8 +406,17 @@ test("routing joins a practice request to confirmed roles and all employees with
   );
   const drafts = practiceScenarios("first-week", "Reception", p, {});
   assert.ok(
-    drafts.some(
-      (s) => s.learningPoint.includes("Catherine") && s.learningPoint.includes("Asthma reviews"),
+    drafts.some((s) =>
+      s.kind === "matching"
+        ? s.items.some(
+            (item) =>
+              item.id === "asthma-reviews" &&
+              s.validMatches[item.id].some(
+                (id) => s.targets.find((t) => t.id === id)?.label === "Nurse Practitioner",
+              ),
+          )
+        : s.learningPoint.includes("Nurse Practitioner") &&
+          /asthma reviews?/i.test(s.learningPoint),
     ),
   );
   assert.ok(
@@ -492,13 +497,13 @@ test("employee exceptions are sparse, inherit live defaults and support reset, c
     scenarios.some(
       (s) =>
         s.learningPoint.includes("Catherine") &&
-        s.learningPoint.includes("Specialist diabetes clinic"),
+        s.learningPoint.includes("specialist diabetes clinic"),
     ),
   );
   assert.ok(
     !scenarios.some(
       (s) =>
-        s.learningPoint.includes("Sarah") && s.learningPoint.includes("Specialist diabetes clinic"),
+        s.learningPoint.includes("Sarah") && s.learningPoint.includes("specialist diabetes clinic"),
     ),
   );
   p.staff[0].role = "HCA";

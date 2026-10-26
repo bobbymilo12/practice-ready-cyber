@@ -335,6 +335,7 @@ function ScenarioCard({
 
       {scenario.kind !== "matching" &&
         draft.kind !== "matching" &&
+        (editing || !!scenario.patientQuote) &&
         !(scenario.kind === "order" && scenario.sequence) && (
           <blockquote className="mt-3 rounded-lg border-l-4 border-accent bg-surface p-3 text-sm italic">
             {editing && draft.provenance?.kind !== "sequence" ? (

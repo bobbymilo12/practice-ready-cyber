@@ -99,22 +99,33 @@ test("only the four approved versions and their eight recipes are production eli
     }
   }
 });
-test("10/20/30 total questions deterministically target 3/6/9 Core questions", () => {
+test("Core complements local content without repeating its four approved concepts", () => {
   for (const count of [10, 20, 30]) {
     const a = moduleWithCount(count),
       b = moduleWithCount(count);
-    assert.equal(a.scenarios.length, count);
-    assert.equal(a.scenarios.filter((s) => s.provenance).length, Math.round(count * 0.3));
+    assert.ok(a.scenarios.length <= count);
+    assert.equal(
+      a.scenarios.filter((s) => s.provenance?.kind === "core").length,
+      Math.min(4, Math.round(count * 0.3)),
+    );
     assert.deepEqual(
       a.scenarios.map(({ id, ...s }) => s),
       b.scenarios.map(({ id, ...s }) => s),
     );
-    assert.equal(a.scenarios.filter((s) => !s.provenance).length, count - Math.round(count * 0.3));
-    assert.ok(a.scenarios.some((s) => s.provenance?.level === "learn"));
-    assert.ok(a.scenarios.some((s) => s.provenance?.level === "apply"));
     assert.equal(
-      new Set(a.scenarios.filter((s) => s.provenance).map((s) => s.patientQuote)).size,
-      Math.round(count * 0.3),
+      new Set(
+        a.scenarios
+          .filter((s) => s.provenance?.kind === "core")
+          .map((s) => s.provenance!.conceptId),
+      ).size,
+      Math.min(4, Math.round(count * 0.3)),
+    );
+    assert.ok(a.scenarios.some((s) => s.provenance?.level === "learn"));
+    // Explicit levels are tested below; legacy selection prefers one variation per concept.
+    assert.equal(
+      new Set(a.scenarios.filter((s) => s.provenance?.kind === "core").map((s) => s.patientQuote))
+        .size,
+      Math.min(4, Math.round(count * 0.3)),
     );
   }
 });
@@ -126,18 +137,18 @@ test("finite Core capacity falls back to local content; sparse local data is nev
   assert.equal(core.length, 10);
   const local = configuredScenarios(ctx.topicKey, "Booking", p, settings);
   const all = generateConfiguredModule(ctx.topicKey, "Booking", p, settings);
-  assert.equal(all.filter((s) => s.provenance).length, 10);
-  assert.equal(all.length, Math.min(100, 10 + local.length));
+  assert.equal(all.filter((s) => s.provenance?.kind === "core").length, 4);
+  assert.equal(all.length, Math.min(100, 4 + local.length));
   assert.equal(new Set(core.map((s) => s.patientQuote)).size, core.length);
   p.roleRequests = {};
   const sparse = generateConfiguredModule(ctx.topicKey, "Booking", p, { ...settings, count: 10 });
   assert.equal(sparse.length, 3);
-  assert.ok(sparse.every((s) => s.provenance));
+  assert.ok(sparse.every((s) => s.provenance?.kind === "core"));
 });
 test("Core regeneration pins concept and recipe, preserves provenance and does not duplicate", () => {
   const module = JSON.parse(JSON.stringify(moduleWithCount())) as Module;
   const original = structuredClone(module);
-  const core = module.scenarios.find((s) => s.provenance)!;
+  const core = module.scenarios.find((s) => s.provenance?.kind === "core")!;
   const regenerated = regenerateConfiguredScenario(module, core.id, practice());
   const replacement = regenerated.scenarios.find((s) => s.id === core.id)!;
   assert.equal(regenerated.scenarios.length, module.scenarios.length);
@@ -153,12 +164,17 @@ test("Core regeneration pins concept and recipe, preserves provenance and does n
   outdated.scenarios.find((s) => s.id === core.id)!.provenance!.conceptVersion = 0;
   assert.equal(regenerateConfiguredScenario(outdated, core.id, practice()), outdated);
   const full = moduleWithCount(100, "learn");
-  const exhausted = full.scenarios.find((s) => s.provenance)!;
+  full.scenarios = appointmentCorePool({
+    topicKey: "appointment-booking",
+    practice: practice(),
+    settings: full.settings!,
+  });
+  const exhausted = full.scenarios.find((s) => s.provenance?.kind === "core")!;
   assert.equal(regenerateConfiguredScenario(full, exhausted.id, practice()), full);
 });
 test("manual editing retains original Core origin and marks modified, including omitted incoming provenance", () => {
   const module = moduleWithCount();
-  const original = module.scenarios.find((s) => s.provenance)!;
+  const original = module.scenarios.find((s) => s.provenance?.kind === "core")!;
   const { provenance, ...withoutOrigin } = original;
   const edited = reviseConfiguredScenario(module, {
     ...withoutOrigin,
@@ -182,7 +198,7 @@ test("other predefined modules and Custom Module do not acquire Core questions",
     const settings = defaultModuleSettings();
     settings.extra = "Confirm the request details with the patient.";
     const result = generateConfiguredModule(topic, topic, practice(), settings);
-    assert.ok(result.every((s) => !s.provenance));
+    assert.ok(result.every((s) => s.provenance?.kind !== "core"));
   }
 });
 
@@ -191,9 +207,9 @@ test("selected Learn/Apply persists, restricts every Core recipe, and survives r
     for (const count of [10, 20, 30]) {
       const module = JSON.parse(JSON.stringify(moduleWithCount(count, level))) as Module;
       assert.equal(module.settings!.trainingLevel, level);
-      assert.equal(module.scenarios.length, count);
-      const core = module.scenarios.filter((s) => s.provenance);
-      assert.equal(core.length, Math.round(count * 0.3));
+      assert.ok(module.scenarios.length <= count);
+      const core = module.scenarios.filter((s) => s.provenance?.kind === "core");
+      assert.equal(core.length, Math.min(4, Math.round(count * 0.3)));
       assert.ok(
         core.every(
           (s) => s.provenance!.level === level && s.provenance!.templateId!.includes(`.${level}.`),
@@ -209,7 +225,7 @@ test("selected Learn/Apply persists, restricts every Core recipe, and survives r
       assert.equal(regenerated.settings!.trainingLevel, level);
       assert.ok(
         regenerated.scenarios
-          .filter((s) => s.provenance)
+          .filter((s) => s.provenance?.kind === "core")
           .every((s) => s.provenance!.level === level),
       );
     }
@@ -218,8 +234,8 @@ test("selected Learn/Apply persists, restricts every Core recipe, and survives r
 test("Apply is contextual rather than a re-labelled Learn recipe and avoids ambiguous local prose", () => {
   const learn = moduleWithCount(10, "learn"),
     apply = moduleWithCount(10, "apply");
-  const learnCore = learn.scenarios.filter((s) => s.provenance),
-    applyCore = apply.scenarios.filter((s) => s.provenance);
+  const learnCore = learn.scenarios.filter((s) => s.provenance?.kind === "core"),
+    applyCore = apply.scenarios.filter((s) => s.provenance?.kind === "core");
   for (let i = 0; i < learnCore.length; i++) {
     assert.equal(learnCore[i].provenance!.conceptId, applyCore[i].provenance!.conceptId);
     assert.notEqual(learnCore[i].patientQuote, applyCore[i].patientQuote);
@@ -238,18 +254,29 @@ test("Apply is contextual rather than a re-labelled Learn recipe and avoids ambi
     ...settings,
     trainingLevel: "apply",
   });
-  assert.ok(JSON.stringify(baseline).includes(settings.extra));
+  assert.ok(!JSON.stringify(baseline).includes(settings.extra));
   assert.ok(!JSON.stringify(applied).includes(settings.extra));
   assert.ok(applied[0].kind === "mcq" && applied[0].localRoleRequestId);
   assert.ok(!applied[0].title.startsWith("Routing:"));
 });
-test("legacy settings remain mixed; other topics now use explicit Learn/Apply levels", () => {
+test("legacy settings remain readable; other topics use explicit Learn/Apply levels", () => {
   const legacy = moduleWithCount();
   assert.equal(legacy.settings!.trainingLevel, undefined);
   assert.ok(legacy.scenarios.some((s) => s.provenance?.level === "learn"));
-  assert.ok(legacy.scenarios.some((s) => s.provenance?.level === "apply"));
+  assert.equal(
+    new Set(
+      legacy.scenarios
+        .filter((s) => s.provenance?.kind === "core")
+        .map((s) => s.provenance!.conceptId),
+    ).size,
+    3,
+  );
   for (const topic of Object.keys(topicFields).filter((t) => t !== "appointment-booking")) {
-    const settings = { ...defaultModuleSettings(), extra: "Confirm the request with the patient." };
+    const settings = {
+      ...defaultModuleSettings(),
+      trainingLevel: "learn" as const,
+      extra: "When unsure -> Ask the reception lead to check the task",
+    };
     const plain = generateConfiguredModule(topic, topic, practice(), settings);
     const levelled = generateConfiguredModule(topic, topic, practice(), {
       ...settings,
@@ -292,8 +319,8 @@ test("structured booking processes provide distinct Learn/Apply exercises withou
     trainingLevel: "apply",
   });
   assert.equal(apply.length, 10);
-  assert.equal(apply.filter((s) => s.provenance).length, 3);
-  assert.equal(apply.filter((s) => !s.provenance).length, 7);
+  assert.equal(apply.filter((s) => s.provenance?.kind === "core").length, 3);
+  assert.equal(apply.filter((s) => s.provenance?.kind !== "core").length, 7);
   for (const title of [
     "An eligible same-day request",
     "A routine booking request",

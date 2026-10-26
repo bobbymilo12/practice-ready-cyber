@@ -71,7 +71,8 @@ test("all ten topics have their own configuration and empty information never pr
     const settings = defaultModuleSettings();
     for (const f of fieldsForTopic(topic, p))
       settings.answers[f.key] = optionsForField(f, p)[0] ?? "";
-    if (topic === "custom") settings.extra = "Open the confirmed local task form.";
+    if (topic === "custom")
+      settings.extra = "When unsure -> Ask the reception lead to check the task";
     assert.ok(configuredScenarios(topic, topic, p, settings).length > 0, topic);
   }
 });
@@ -106,19 +107,17 @@ test("confirmed responsibilities include individual additions, exclude removals 
   ];
   const settings = defaultModuleSettings();
   const vaccines = configuredScenarios("vaccines", "Vaccines", p, settings);
-  const routing = vaccines.find((s) => s.title === "Routing: Vaccinations");
+  const routing = vaccines.find((s) => s.localRoleRequestId === "vaccinations");
   assert.ok(routing?.kind === "mcq");
   assert.ok(routing.options[routing.correctIndex].includes("Robin"));
   assert.ok(!routing.options[routing.correctIndex].includes("Sam"));
-  assert.ok(vaccines.some((s) => s.title.startsWith("Individual exception: Sam")));
+  assert.ok(vaccines.some((s) => s.title.startsWith("Responsibilities for Sam")));
   assert.ok(
-    configuredScenarios("fit-notes", "Fit notes", p, settings).some((s) =>
-      s.title.startsWith("Routing:"),
-    ),
+    configuredScenarios("fit-notes", "Fit notes", p, settings).some((s) => !!s.localRoleRequestId),
   );
   for (const trainingLevel of ["learn", "apply"] as const) {
     for (const difficulty of ["easy", "intermediate", "advanced"] as const) {
-      const questions = generateConfiguredModule("vaccines", "Vaccines", p, {
+      const questions = configuredScenarios("vaccines", "Vaccines", p, {
         ...settings,
         trainingLevel,
         difficulty,
@@ -132,10 +131,10 @@ test("confirmed responsibilities include individual additions, exclude removals 
       if (trainingLevel === "learn")
         assert.doesNotMatch(route.options[route.correctIndex], /Robin/);
       assert.doesNotMatch(route.options[route.correctIndex], /Sam/);
-      const exception = questions.find((s) => s.title.startsWith("Responsibilities For Sam"));
+      const exception = questions.find((s) => s.title.startsWith("Responsibilities for Sam"));
       assert.ok(exception?.kind === "mcq");
       assert.match(exception.options[exception.correctIndex], /excluded/);
-      const added = generateConfiguredModule("fit-notes", "Fit notes", p, {
+      const added = configuredScenarios("fit-notes", "Fit notes", p, {
         ...settings,
         trainingLevel,
         difficulty,
@@ -163,7 +162,7 @@ test("length limits distinct primary scenarios, preserves recovery links and rep
     const primary = generated.filter((s) => !s.followUpFor);
     assert.equal(
       primary.length,
-      Math.min(count, pool.length + Math.min(Math.round(count * 0.3), 10)),
+      Math.min(count, pool.length + Math.min(Math.round(count * 0.3), 4)),
     );
     assert.equal(generated.length, primary.length);
     assert.equal(new Set(primary.map((s) => s.patientQuote)).size, primary.length);
@@ -185,10 +184,11 @@ test("deleted contacts and cross-topic answers are excluded; settings survive JS
   settings.extra = "Local orientation procedure";
   const restored = JSON.parse(JSON.stringify(settings));
   const scenarios = configuredScenarios("first-week", "First week", p, restored);
-  assert.equal(scenarios.length, 1);
+  assert.equal(scenarios.length, 0, "Unstructured orientation text does not justify a question");
+  assert.ok(moduleFacts("first-week", p, restored).some((f) => f.rule === settings.extra));
   assert.ok(!JSON.stringify(scenarios).includes("removed"));
   assert.ok(!JSON.stringify(scenarios).includes("Invented rule"));
-  assert.ok(JSON.stringify(scenarios).includes(settings.extra));
+  assert.equal(restored.extra, settings.extra);
 });
 
 test("regeneration retains settings, avoids duplicates and omits unsupported recovery questions", () => {
@@ -213,7 +213,7 @@ test("regeneration retains settings, avoids duplicates and omits unsupported rec
   assert.equal(regenerated.settings, settings);
   assert.equal(regenerated.needsReview, true);
   const main = regenerated.scenarios.filter((s) => !s.followUpFor);
-  assert.equal(new Set(main.map((s) => s.title)).size, main.length);
+  assert.equal(new Set(main.map((s) => s.question + s.patientQuote)).size, main.length);
   assert.ok(!regenerated.scenarios.some((s) => s.followUpFor));
   assert.ok(primary.kind === "mcq");
   const edited = { ...primary, correctIndex: 2, status: "approved" as const };
@@ -236,7 +236,11 @@ test("custom options only become guidance when explicitly selected, and cannot l
     settings = selectAnswer(settings, f, "custom:local");
     settings = JSON.parse(JSON.stringify(settings));
     const generated = configuredScenarios(topic, topic, p, settings);
-    assert.ok(JSON.stringify(generated).includes("Use the local review inbox"), topic);
+    assert.ok(
+      moduleFacts(topic, p, settings).some((f) => f.rule.includes("Use the local review inbox")),
+      topic,
+    );
+    assert.ok(generated.every((q) => q.kind === "mcq" && q.options.length >= 2));
     assert.ok(!JSON.stringify(generated).includes("An unselected local alternative"), topic);
     const another = fields.find((other) => !other.showWhen && other.key !== f.key)!;
     settings = selectAnswer(settings, f, EXCLUDE_QUESTION);
@@ -258,7 +262,10 @@ test("multi-select preserves legacy answers, has exclusive exclusion and never m
   assert.ok(question?.kind === "mcq" && question.correctIndices);
   assert.deepEqual(
     question.correctIndices.map((i) => question.options[i]),
-    ["Submit the request through the NHS App.", "Submit the request by telephone."],
+    [
+      "Ask the patient to submit the request through the NHS App.",
+      "Ask the patient to submit the request by telephone.",
+    ],
   );
   assert.ok(
     question.options
@@ -315,8 +322,9 @@ test("a selected custom answer is never also offered as an incorrect alternative
   settings.answers.chasing = "custom:collision";
   const scenario = configuredScenarios("prescriptions", "Prescriptions", p, settings)[0];
   assert.ok(scenario.kind === "mcq");
-  assert.equal(scenario.options.length, 4);
-  assert.equal(new Set(scenario.options).size, 4);
+  assert.ok(scenario.options.length >= 2 && scenario.options.length <= 4);
+  assert.equal(new Set(scenario.options).size, scenario.options.length);
+  assert.ok(scenario.options.length >= 2);
   assert.equal(scenario.options[scenario.correctIndex], settings.customOptions.chasing[0].label);
 });
 
@@ -398,7 +406,7 @@ test("structured same-day criteria stay separate and use the configured process"
   assert.equal(scenarios.length, 2);
   for (const s of scenarios) {
     assert.ok(s.kind === "mcq");
-    assert.equal(s.options[s.correctIndex], "Send the request for clinical triage before booking");
+    assert.equal(s.options[s.correctIndex], "Send the request for clinical triage before booking.");
   }
   assert.ok(!JSON.stringify(scenarios).includes("Stale"));
 });
@@ -524,9 +532,17 @@ test("explicit same-day headings generate focused actions in both generation pat
     configuredScenarios("appointment-booking", "Booking", p, defaultModuleSettings()),
     practiceScenarios("appointment-booking", "Booking", p, {}),
   ]) {
-    const child = scenarios.find((s) => s.patientQuote.includes("3-year-old"));
+    const child = scenarios.find(
+      (s) =>
+        s.patientQuote.includes("3-year-old") ||
+        /under-5 illness/i.test(s.question) ||
+        /unwell young child/i.test(s.title),
+    );
     assert.ok(child?.kind === "mcq");
-    assert.equal(child.options[child.correctIndex], "Arrange a same-day GP appointment");
+    assert.equal(
+      child.options[child.correctIndex].replace(/\.$/, ""),
+      "Arrange a same-day GP appointment",
+    );
     assert.ok(
       !JSON.stringify(scenarios.map((s) => [s.patientQuote, s.question])).match(
         /Which response follows|recorded guidance|saved responsibilities/,
@@ -534,7 +550,11 @@ test("explicit same-day headings generate focused actions in both generation pat
     );
     assert.ok(!child.options.some((o) => o.includes("safeguarding")));
     assert.ok(scenarios.every((s) => s.status === "draft"));
-    assert.ok(!JSON.stringify(scenarios).includes("chest pain (after 999)"));
+    assert.ok(
+      !JSON.stringify(
+        scenarios.map((q) => [q.patientQuote, q.question, q.kind === "mcq" ? q.options : []]),
+      ).includes("chest pain (after 999)"),
+    );
   }
 });
 

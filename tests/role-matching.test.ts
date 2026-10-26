@@ -128,12 +128,14 @@ test("diagnostics distinguish missing seed roles, confirmation and unsafe custom
   assert.equal(roleMatchingScenario(customConflict), undefined);
 });
 
-test("qualifying Learn generation inserts exactly one matching in ten, retaining Core and local MCQs", () => {
+test("qualifying Learn generation combines matching, capabilities and Core without padding", () => {
   const m = moduleFor();
-  assert.equal(m.scenarios.length, 10);
+  assert.ok(m.scenarios.length <= 10);
   assert.equal(m.scenarios.filter((s) => s.kind === "matching").length, 1);
   assert.equal(m.scenarios.filter((s) => s.provenance?.kind === "core").length, 3);
-  assert.equal(m.scenarios.filter((s) => s.kind === "mcq" && !s.provenance).length, 6);
+  assert.ok(
+    m.scenarios.some((s) => s.kind === "mcq" && s.generationObjective?.skill === "capability"),
+  );
   for (const count of [3, 5, 20, 30]) {
     const all = generateConfiguredModule("appointment-booking", "Booking", practice(), {
       ...m.settings!,
@@ -156,11 +158,15 @@ test("qualifying Learn generation inserts exactly one matching in ten, retaining
   );
 });
 
-test("ineligible matching preserves local MCQ capacity", () => {
+test("ineligible matching uses role capabilities instead of repeated routing MCQs", () => {
   const m = moduleFor(practice([[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]));
-  assert.equal(m.scenarios.length, 10);
+  assert.ok(m.scenarios.length <= 10);
   assert.equal(m.scenarios.filter((s) => s.kind === "matching").length, 0);
-  assert.equal(m.scenarios.filter((s) => !s.provenance).length, 7);
+  assert.equal(
+    m.scenarios.filter((s) => s.kind === "mcq" && s.generationObjective?.skill === "capability")
+      .length,
+    1,
+  );
 });
 
 test("pairing cards supports selecting, moving, unpairing and changing without answer keys", () => {
@@ -261,7 +267,7 @@ test("card UI uses keyboard buttons, has no correctness data/selectors, and revi
   assert.ok(review.includes("Board pair:"));
 });
 
-test("documented four-role visual fixture generates ten mixed questions without employees or module answers", () => {
+test("documented four-role visual fixture generates mixed questions without employees, module answers or padding", () => {
   const fixture = practice([
     [0, 4, 8],
     [1, 5, 9],
@@ -270,10 +276,12 @@ test("documented four-role visual fixture generates ten mixed questions without 
   ]);
   const m = moduleFor(fixture);
   assert.equal(fixture.staff.length, 0);
-  assert.equal(m.scenarios.length, 10);
+  assert.ok(m.scenarios.length <= 10);
   assert.equal(m.scenarios.filter((s) => s.provenance?.kind === "core").length, 3);
   assert.equal(m.scenarios.filter((s) => s.kind === "matching").length, 1);
-  assert.equal(m.scenarios.filter((s) => s.kind === "mcq" && !s.provenance).length, 6);
+  assert.ok(
+    m.scenarios.some((s) => s.kind === "mcq" && s.generationObjective?.skill === "capability"),
+  );
 });
 
 test("committed pairings survive navigating between different scenarios and cannot be replaced after reload", () => {
