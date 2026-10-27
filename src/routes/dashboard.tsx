@@ -20,6 +20,10 @@ const bigButton =
 const plainButton =
   "inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-5 py-2.5 text-base font-semibold hover:bg-surface disabled:opacity-50";
 
+// Long module lists scroll inside their card so the page stays short.
+const scrollList =
+  "mt-4 max-h-[32rem] divide-y divide-border overflow-y-auto pr-2 focus-visible:outline-2 focus-visible:outline-primary";
+
 function Dashboard() {
   useLiveWorkspace();
   const sessions = useConnection((s) => s.sessions);
@@ -206,72 +210,88 @@ function Dashboard() {
         </ul>
       </Card>
 
-      <Card className="mt-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-xl font-semibold">Your training modules</h2>
-          <Link to="/modules/create" className={plainButton}>
-            + Create a module
-          </Link>
-        </div>
-        {modules.length === 0 && (
-          <p className="mt-4 text-base text-muted-foreground">
-            No modules yet. Press &ldquo;Create a module&rdquo; to make your first one.
-          </p>
-        )}
-        <ul className="mt-4 divide-y divide-border">
-          {published.map((m) => (
-            <li key={m.id} className="py-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="mt-8 grid gap-6 lg:grid-cols-2">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold">
+              Ready to assign ({published.length})
+            </h2>
+          </div>
+          {published.length === 0 && (
+            <p className="mt-4 text-base text-muted-foreground">
+              No modules ready yet. Publish a draft to assign it to staff.
+            </p>
+          )}
+          <ul tabIndex={0} aria-label="Modules ready to assign" className={scrollList}>
+            {published.map((m) => (
+              <li key={m.id} className="py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold">{m.title}</p>
+                    <p className="text-base text-muted-foreground">
+                      {primaryScenarios(m).length} questions ·{" "}
+                      {m.needsReview ? (
+                        <span className="text-[color:var(--warning-foreground)]">
+                          Paused — needs checking
+                        </span>
+                      ) : (
+                        "Ready to use"
+                      )}
+                    </p>
+                  </div>
+                  <Link to="/modules/review" search={{ id: m.id }} className={plainButton}>
+                    Open
+                  </Link>
+                </div>
+                <AssignControl moduleId={m.id} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold">Drafts ({draftModules.length})</h2>
+            <Link to="/modules/create" className={plainButton}>
+              + Create a module
+            </Link>
+          </div>
+          {draftModules.length === 0 && (
+            <p className="mt-4 text-base text-muted-foreground">
+              No drafts. Press &ldquo;Create a module&rdquo; to make a new one.
+            </p>
+          )}
+          <ul tabIndex={0} aria-label="Draft modules" className={scrollList}>
+            {draftModules.map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div>
                   <p className="text-lg font-semibold">{m.title}</p>
                   <p className="text-base text-muted-foreground">
-                    {primaryScenarios(m).length} questions ·{" "}
-                    {m.needsReview ? (
-                      <span className="text-[color:var(--warning-foreground)]">
-                        Paused — needs checking
-                      </span>
-                    ) : (
-                      "Ready to use"
-                    )}
+                    {m.scenarios.length} questions · Draft — not visible to staff yet
                   </p>
                 </div>
-                <Link to="/modules/review" search={{ id: m.id }} className={plainButton}>
-                  Open
-                </Link>
-              </div>
-              <AssignControl moduleId={m.id} />
-            </li>
-          ))}
-          {draftModules.map((m) => (
-            <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-              <div>
-                <p className="text-lg font-semibold">{m.title}</p>
-                <p className="text-base text-muted-foreground">
-                  {m.scenarios.length} questions · Draft — not visible to staff yet
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Link to="/modules/review" search={{ id: m.id }} className={bigButton}>
-                  Review draft
-                </Link>
-                <button
-                  type="button"
-                  disabled={action.saving}
-                  onClick={() => {
-                    if (window.confirm(`Delete the draft "${m.title}"? This cannot be undone.`))
-                      void action.run({ kind: "delete-draft", moduleId: m.id });
-                  }}
-                  className={`${plainButton} text-destructive`}
-                >
-                  {action.pending?.kind === "delete-draft" && action.pending.moduleId === m.id
-                    ? "Deleting…"
-                    : "Delete draft"}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Card>
+                <div className="flex flex-wrap gap-3">
+                  <Link to="/modules/review" search={{ id: m.id }} className={bigButton}>
+                    Review draft
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={action.saving}
+                    onClick={() => {
+                      if (window.confirm(`Delete the draft "${m.title}"? This cannot be undone.`))
+                        void action.run({ kind: "delete-draft", moduleId: m.id });
+                    }}
+                    className={`${plainButton} text-destructive`}
+                  >
+                    {action.pending?.kind === "delete-draft" && action.pending.moduleId === m.id
+                      ? "Deleting…"
+                      : "Delete draft"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </section>
 
       <Card className="mt-8">
         <h2 className="font-display text-xl font-semibold">Recently completed</h2>
