@@ -50,8 +50,8 @@ function PrivacyPage() {
               procedures and training modules entered by managers.
             </li>
             <li>
-              <strong>Training activity:</strong> modules assigned, answers given, scores, progress
-              and completion dates.
+              <strong>Training activity:</strong> modules assigned, answers given, scores, progress,
+              when each module was started and finished, and when you sign in.
             </li>
             <li>
               <strong>Enquiries:</strong> your name, email address, practice and the content of any
@@ -134,8 +134,10 @@ function PrivacyPage() {
           </ul>
           <p>
             Within a practice, managers can see the account details and training activity of staff
-            in their practice. We may also share information where required by law, or to protect
-            the rights, safety or property of PracticeReady, our users or others.
+            in their practice, including sign-in times and how long modules took. A small number of
+            PracticeReady staff can see the same reports for every practice to support and run the
+            service. We may also share information where required by law, or to protect the rights,
+            safety or property of PracticeReady, our users or others.
           </p>
 
           <h2>International transfers</h2>
@@ -156,6 +158,7 @@ function PrivacyPage() {
               deleted within 90 days of the account closing unless the practice asks us to delete
               them sooner.
             </li>
+            <li>Sign-in history: 13 months.</li>
             <li>Contact enquiries: up to 24 months after we last correspond with you.</li>
             <li>Security and server logs: up to 90 days.</li>
             <li>

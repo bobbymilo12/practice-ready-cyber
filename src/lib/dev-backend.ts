@@ -320,6 +320,38 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
   if (role === "trainee" && workspace.trainees.find((t) => t.id === account.id)?.inactiveAt)
     throw new Error("Your practice access is inactive. Contact your practice manager.");
   if (action === "remove-trainee") throw new Error("Use Deactivate. No history was deleted.");
+  if (action === "analytics") {
+    // Mock sign-ins: real ones come from the auth.sessions trigger.
+    const now = Date.now();
+    const staff = [{ id: account.id!, name: account.name }, ...workspace.trainees];
+    return {
+      practices: [{ id: "dev-practice", name: "Mock practice — visual testing only" }],
+      staff: staff.map((t, i) => ({
+        id: t.id,
+        name: t.name,
+        role: i ? "trainee" : "manager",
+        inactiveAt: "inactiveAt" in t ? t.inactiveAt : undefined,
+      })),
+      logins: staff.flatMap((t, i) =>
+        Array.from({ length: 30 - i * 8 }, (_, n) => ({
+          userId: t.id,
+          at: now - (n * (i + 2) + i) * 86400000,
+        })),
+      ),
+      modules: state.modules.map((m) => ({ id: m.id, title: m.title })),
+      assignments: state.assignments,
+      attempts: workspace.sessions.map((s) => ({
+        traineeId: s.traineeId,
+        assignmentId: s.assignmentId,
+        moduleId: s.moduleId,
+        startedAt: s.startedAt,
+        completedAt: s.result?.completedAt,
+        correct: s.result?.correct,
+        total: s.result?.total,
+        supersededAt: s.supersededAt,
+      })),
+    };
+  }
   if (action === "load") {
     // Explicit opt-in only, inside the existing localhost development mock boundary.
     if (

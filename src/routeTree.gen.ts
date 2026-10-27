@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccessibilityRouteImport } from './routes/accessibility'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CookiesRouteImport } from './routes/cookies'
@@ -47,6 +48,11 @@ const AboutRoute = AboutRouteImport.update({
 const AccessibilityRoute = AccessibilityRouteImport.update({
   id: '/accessibility',
   path: '/accessibility',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -159,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/accessibility': typeof AccessibilityRoute
+  '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
@@ -185,6 +192,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/accessibility': typeof AccessibilityRoute
+  '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/accessibility': typeof AccessibilityRoute
+  '/analytics': typeof AnalyticsRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
@@ -240,6 +249,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/accessibility'
+    | '/analytics'
     | '/auth'
     | '/contact'
     | '/cookies'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/accessibility'
+    | '/analytics'
     | '/auth'
     | '/contact'
     | '/cookies'
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/accessibility'
+    | '/analytics'
     | '/auth'
     | '/contact'
     | '/cookies'
@@ -319,6 +331,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AccessibilityRoute: typeof AccessibilityRoute
+  AnalyticsRoute: typeof AnalyticsRoute
   AuthRoute: typeof AuthRoute
   ContactRoute: typeof ContactRoute
   CookiesRoute: typeof CookiesRoute
@@ -363,6 +376,13 @@ declare module '@tanstack/react-router' {
       path: '/accessibility'
       fullPath: '/accessibility'
       preLoaderRoute: typeof AccessibilityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -519,6 +539,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AccessibilityRoute: AccessibilityRoute,
+  AnalyticsRoute: AnalyticsRoute,
   AuthRoute: AuthRoute,
   ContactRoute: ContactRoute,
   CookiesRoute: CookiesRoute,

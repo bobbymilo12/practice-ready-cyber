@@ -23,6 +23,9 @@ Review whenever a table, supplier or free-text field is added.
 | App role (manager/trainee) | `profiles.role` | Access control | As above | As above |
 | Password | Supabase Auth only (hashed). Never in our tables | Authentication | Contract | Until user deleted |
 | Assigned modules, progress, answers, scores, confidence | `training_sessions`, `practices.state` | The service itself; manager monitors progress | As above | Until practice deleted |
+| Sign-in times (user, practice, time) | `login_events` (trigger on `auth.sessions`) | Manager / platform-admin analytics: last sign-in, activity trends | Practice's legitimate interests (training oversight) | 13 months (purge function); removed on person or practice erasure |
+| Module start and finish times | `training_sessions.data` (`startedAt`, `result.completedAt`) | Time-to-complete analytics | As above | Until practice deleted |
+| Platform-admin flag | `profiles.platform_admin` | Lets PracticeReady staff view analytics for every practice | Legitimate interests | Until user deleted |
 | Practice settings, roles, local procedures | `practice_*` tables | Generate training | Contract | Until practice deleted |
 | Staff names in `practice_staff` (name, role, clinics, legacy `notes`) | `practice_staff` | Legacy team list; **names appear in generated scenarios** | Legitimate interests | Until practice deleted |
 | Enquiry name, email, message | `contact_messages` | Reply to enquiries | Legitimate interests | 24 months (purge function) |

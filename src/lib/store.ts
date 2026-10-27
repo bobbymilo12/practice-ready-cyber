@@ -49,6 +49,8 @@ export interface Account {
   id?: string;
   practiceId?: string;
   mustResetPassword?: boolean;
+  // May view analytics for every practice.
+  platformAdmin?: boolean;
   role: AccountRole;
 }
 

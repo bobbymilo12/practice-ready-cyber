@@ -61,6 +61,12 @@ function Dashboard() {
           </Link>
 
           <Link
+            to="/analytics"
+            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
+          >
+            Analytics
+          </Link>
+          <Link
             to="/data-hub"
             className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
           >
