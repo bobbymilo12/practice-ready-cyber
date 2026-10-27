@@ -54,6 +54,8 @@ export interface TrainingSession {
   index: number;
   answers: SavedAnswer[];
   updatedAt: number;
+  // Missing on attempts started before analytics tracking.
+  startedAt?: number;
   review?: boolean;
   result?: TrainingResult;
   // Missing on legacy attempts: their overwritten first responses cannot be reconstructed.
@@ -86,6 +88,7 @@ export function startSession(module: Module, assignment: Assignment, id: string)
     answers: [],
     answerFlow: "check",
     updatedAt: Date.now(),
+    startedAt: Date.now(),
   };
 }
 

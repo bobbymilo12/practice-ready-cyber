@@ -120,6 +120,7 @@ Deno.serve(async (request) => {
       phone: "",
       role: profile.role,
       mustResetPassword: profile.must_reset_password,
+      platformAdmin: profile.platform_admin || undefined,
     };
     // Best-effort: the action has already committed, so a logging failure must not report it as failed.
     const audit = async (events: { action: string; target: string }[]) => {
@@ -180,6 +181,76 @@ Deno.serve(async (request) => {
       if (action === "load")
         return reply({ account, version: practice.version, state: {}, sessions: [], trainees: [] });
       return reply({ error: "Change your temporary password before starting training." }, 403);
+    }
+
+    if (action === "analytics") {
+      if (!manager) fail("Only managers can view analytics.");
+      const target =
+        typeof body.practiceId === "string" && body.practiceId
+          ? body.practiceId
+          : profile.practice_id;
+      if (target !== profile.practice_id && !profile.platform_admin)
+        return reply({ error: "You can only view your own practice." }, 403);
+      const [people, logins, sessionRows, targetPractice, moduleList] = await Promise.all([
+        admin
+          .from("profiles")
+          .select("id,name,role,job_role,inactive_at")
+          .eq("practice_id", target),
+        // Retention (13 months) bounds this; see 202610280001_analytics.sql.
+        admin.from("login_events").select("user_id,created_at").eq("practice_id", target),
+        admin.from("training_sessions").select("trainee_id,data").eq("practice_id", target),
+        admin.from("practices").select("state").eq("id", target).maybeSingle(),
+        admin.rpc("load_practice_modules", { p_practice: target }),
+      ]);
+      for (const r of [people, logins, sessionRows, targetPractice, moduleList]) check(r.error);
+      if (!targetPractice.data) fail("Practice not found.");
+      let practices: { id: string; name: string }[] | undefined;
+      if (profile.platform_admin) {
+        const [all, names] = await Promise.all([
+          admin.from("practices").select("id"),
+          admin.from("practice_settings").select("practice_id,practice_name"),
+        ]);
+        check(all.error);
+        check(names.error);
+        const nameOf = new Map((names.data ?? []).map((n) => [n.practice_id, n.practice_name]));
+        practices = (all.data ?? [])
+          .map((p) => ({ id: p.id, name: nameOf.get(p.id) || "Unnamed practice" }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }
+      return reply({
+        practices,
+        staff: (people.data ?? []).map((p) => ({
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          jobRole: p.job_role,
+          inactiveAt: p.inactive_at ?? undefined,
+        })),
+        logins: (logins.data ?? []).map((l) => ({
+          userId: l.user_id,
+          at: Date.parse(l.created_at),
+        })),
+        modules: ((moduleList.data ?? []) as Module[]).map((m) => ({ id: m.id, title: m.title })),
+        assignments: ((targetPractice.data.state.assignments ?? []) as Assignment[]).map((a) => ({
+          id: a.id,
+          traineeId: a.traineeId,
+          moduleId: a.moduleId,
+          assignedAt: a.assignedAt,
+          dueDate: a.dueDate,
+          withdrawnAt: a.withdrawnAt,
+        })),
+        // trainee_id (not data.traineeId) so erased people stay unlinked.
+        attempts: (sessionRows.data ?? []).map(({ trainee_id, data: s }) => ({
+          traineeId: trainee_id ?? undefined,
+          assignmentId: s.assignmentId,
+          moduleId: s.moduleId,
+          startedAt: s.startedAt,
+          completedAt: s.result?.completedAt,
+          correct: s.result?.correct,
+          total: s.result?.total,
+          supersededAt: s.supersededAt,
+        })),
+      });
     }
 
     if (action === "load") {
