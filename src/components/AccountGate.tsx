@@ -63,6 +63,8 @@ export function AccountGate({ children }: { children: ReactNode }) {
   if (!publicPage && !account) return <Navigate to="/auth" />;
   if (account?.mustResetPassword && path !== "/auth") return <Navigate to="/auth" />;
   if (!publicPage && !traineePage && account?.role === "trainee") return <Navigate to="/staff" />;
+  if (!publicPage && account?.platformAdmin && !["/admin", "/analytics"].includes(path))
+    return <Navigate to="/admin" />;
   return (
     <>
       {connection.ready && devRole() && (

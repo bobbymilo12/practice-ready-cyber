@@ -154,3 +154,54 @@ export function summarise(data: AnalyticsData, now = Date.now()) {
     staffRows,
   };
 }
+
+export interface OverviewInput {
+  practices: { id: string; name: string }[];
+  people: {
+    practiceId: string;
+    role: string;
+    email: string;
+    inactiveAt?: string;
+    platformAdmin?: boolean;
+  }[];
+  logins: { practiceId: string; at: number }[];
+  completions: { practiceId: string; at: number }[];
+}
+export type PracticeOverview = ReturnType<typeof practiceOverview>;
+
+/** One row per practice for the platform admin page. */
+export function practiceOverview(input: OverviewInput, now = Date.now()) {
+  // Each admin sign-up provisions an empty practice; hide those.
+  const adminOnly = (id: string) => {
+    const people = input.people.filter((p) => p.practiceId === id);
+    return people.length > 0 && people.every((p) => p.platformAdmin);
+  };
+  const rows = input.practices
+    .filter((p) => !adminOnly(p.id))
+    .map((p) => {
+      const people = input.people.filter((x) => x.practiceId === p.id);
+      const logins = input.logins.filter((l) => l.practiceId === p.id).map((l) => l.at);
+      const done = input.completions.filter((c) => c.practiceId === p.id).map((c) => c.at);
+      return {
+        id: p.id,
+        name: p.name,
+        managers: people.filter((x) => x.role === "manager").map((x) => x.email),
+        activeStaff: people.filter((x) => x.role === "trainee" && !x.inactiveAt).length,
+        lastLogin: logins.length ? Math.max(...logins) : undefined,
+        logins30: logins.filter((t) => t >= now - 30 * DAY).length,
+        completed30: done.filter((t) => t >= now - 30 * DAY).length,
+        completedTotal: done.length,
+      };
+    })
+    .sort((a, b) => (b.lastLogin ?? 0) - (a.lastLogin ?? 0));
+  const ids = new Set(rows.map((r) => r.id));
+  return {
+    totals: {
+      practices: rows.length,
+      activeStaff: rows.reduce((n, r) => n + r.activeStaff, 0),
+      logins7: input.logins.filter((l) => ids.has(l.practiceId) && l.at >= now - 7 * DAY).length,
+      completed30: rows.reduce((n, r) => n + r.completed30, 0),
+    },
+    practices: rows,
+  };
+}

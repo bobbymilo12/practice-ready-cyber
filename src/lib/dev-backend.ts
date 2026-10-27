@@ -12,6 +12,7 @@ import {
 } from "./store";
 import type { PracticeState, Snapshot } from "./backend";
 import { devRole } from "./dev-mode";
+import { practiceOverview } from "./analytics";
 import { copyPublicModule, type PublicModuleSummary } from "./shared-modules";
 import { practiceScenarios } from "./practice-scenarios";
 import {
@@ -320,6 +321,31 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
   if (role === "trainee" && workspace.trainees.find((t) => t.id === account.id)?.inactiveAt)
     throw new Error("Your practice access is inactive. Contact your practice manager.");
   if (action === "remove-trainee") throw new Error("Use Deactivate. No history was deleted.");
+  if (action === "admin_overview") {
+    const now = Date.now();
+    return practiceOverview(
+      {
+        practices: [{ id: "dev-practice", name: "Mock practice — visual testing only" }],
+        people: [
+          { practiceId: "dev-practice", role: "manager", email: account.email },
+          ...workspace.trainees.map((t) => ({
+            practiceId: "dev-practice",
+            role: "trainee",
+            email: t.email,
+            inactiveAt: t.inactiveAt,
+          })),
+        ],
+        logins: Array.from({ length: 12 }, (_, i) => ({
+          practiceId: "dev-practice",
+          at: now - i * 2 * 86400000,
+        })),
+        completions: workspace.sessions
+          .filter((s) => s.result)
+          .map((s) => ({ practiceId: "dev-practice", at: s.result!.completedAt })),
+      },
+      now,
+    );
+  }
   if (action === "analytics") {
     // Mock sign-ins: real ones come from the auth.sessions trigger.
     const now = Date.now();

@@ -8,7 +8,13 @@ export function Shell({ children, className = "" }: { children: ReactNode; class
   const [error, setError] = useState("");
   const saving = useConnection((s) => s.saving);
   const account = useApp((s) => s.account);
-  const dashboardPath = account ? (account.role === "manager" ? "/dashboard" : "/staff") : "/auth";
+  const dashboardPath = account
+    ? account.platformAdmin
+      ? "/admin"
+      : account.role === "manager"
+        ? "/dashboard"
+        : "/staff"
+    : "/auth";
 
   return (
     <div className={`min-h-screen bg-background text-foreground ${className}`}>
