@@ -22,6 +22,9 @@ import { api } from "@/lib/backend";
 import { useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/analytics")({
+  validateSearch: (s: Record<string, unknown>): { practice?: string } => ({
+    practice: typeof s.practice === "string" ? s.practice : undefined,
+  }),
   head: () => ({ meta: [{ title: "Analytics — PracticeReady" }] }),
   component: Analytics,
 });
@@ -43,7 +46,8 @@ const shortWeek = (w: string) => w.slice(8, 10) + "/" + w.slice(5, 7);
 
 function Analytics() {
   const own = useApp((s) => s.account?.practiceId);
-  const [practiceId, setPracticeId] = useState(own);
+  const platformAdmin = useApp((s) => s.account?.platformAdmin);
+  const [practiceId, setPracticeId] = useState(Route.useSearch().practice ?? own);
   const [data, setData] = useState<AnalyticsData>();
   const [error, setError] = useState("");
 
@@ -64,8 +68,11 @@ function Analytics() {
     <Shell>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <Link to="/dashboard" className="text-sm text-muted-foreground hover:underline">
-            ← Manager dashboard
+          <Link
+            to={platformAdmin ? "/admin" : "/dashboard"}
+            className="text-sm text-muted-foreground hover:underline"
+          >
+            {platformAdmin ? "← All practices" : "← Manager dashboard"}
           </Link>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">Analytics</h1>
         </div>

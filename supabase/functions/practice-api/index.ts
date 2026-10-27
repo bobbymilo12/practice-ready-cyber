@@ -14,6 +14,7 @@ import {
   startSession,
   submitSession,
 } from "../../../src/lib/training.ts";
+import { practiceOverview } from "../../../src/lib/analytics.ts";
 import type { Assignment, Module } from "../../../src/lib/training-types.ts";
 import type { TrainingSession } from "../../../src/lib/training.ts";
 
@@ -181,6 +182,45 @@ Deno.serve(async (request) => {
       if (action === "load")
         return reply({ account, version: practice.version, state: {}, sessions: [], trainees: [] });
       return reply({ error: "Change your temporary password before starting training." }, 403);
+    }
+
+    if (action === "admin_overview") {
+      if (!profile.platform_admin) return reply({ error: "Only PracticeReady admins." }, 403);
+      // shortcut: loads every practice's 13 months of sign-ins; aggregate in SQL if this grows large.
+      const [all, names, people, logins, done] = await Promise.all([
+        admin.from("practices").select("id"),
+        admin.from("practice_settings").select("practice_id,practice_name"),
+        admin.from("profiles").select("practice_id,role,email,inactive_at,platform_admin"),
+        admin.from("login_events").select("practice_id,created_at"),
+        admin
+          .from("training_sessions")
+          .select("practice_id,completedAt:data->result->completedAt")
+          .not("data->result", "is", null),
+      ]);
+      for (const r of [all, names, people, logins, done]) check(r.error);
+      const nameOf = new Map((names.data ?? []).map((n) => [n.practice_id, n.practice_name]));
+      return reply(
+        practiceOverview({
+          practices: (all.data ?? []).map((p) => ({
+            id: p.id,
+            name: nameOf.get(p.id) || "Unnamed practice",
+          })),
+          people: (people.data ?? []).map((p) => ({
+            practiceId: p.practice_id,
+            role: p.role,
+            email: p.email,
+            inactiveAt: p.inactive_at ?? undefined,
+            platformAdmin: p.platform_admin,
+          })),
+          logins: (logins.data ?? []).map((l) => ({
+            practiceId: l.practice_id,
+            at: Date.parse(l.created_at),
+          })),
+          completions: (done.data ?? [])
+            .filter((s) => typeof s.completedAt === "number")
+            .map((s) => ({ practiceId: s.practice_id, at: s.completedAt as number })),
+        }),
+      );
     }
 
     if (action === "analytics") {

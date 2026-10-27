@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignmentStatus, summarise, weekOf, weeklyCounts } from "../src/lib/analytics.ts";
+import {
+  assignmentStatus,
+  practiceOverview,
+  summarise,
+  weekOf,
+  weeklyCounts,
+} from "../src/lib/analytics.ts";
 import type { AnalyticsData } from "../src/lib/analytics.ts";
 
 const now = Date.parse("2026-10-28T12:00:00Z"); // a Wednesday
@@ -70,4 +76,49 @@ test("summary skips durations without startedAt and flags dormant staff", () => 
   assert.equal(sam.assigned, 1);
   assert.equal(sam.dormant, true);
   assert.equal(gone.dormant, false);
+});
+
+test("practice overview hides admin-only practices and counts recent activity", () => {
+  const o = practiceOverview(
+    {
+      practices: [
+        { id: "a", name: "Alpha" },
+        { id: "b", name: "Beta" },
+        { id: "admin", name: "Unnamed practice" },
+      ],
+      people: [
+        { practiceId: "a", role: "manager", email: "m@a.test" },
+        { practiceId: "a", role: "trainee", email: "t1@a.test" },
+        { practiceId: "a", role: "trainee", email: "t2@a.test", inactiveAt: "2026-10-01" },
+        { practiceId: "b", role: "manager", email: "m@b.test" },
+        { practiceId: "admin", role: "manager", email: "admin@x.test", platformAdmin: true },
+      ],
+      logins: [
+        { practiceId: "a", at: now - 40 * day },
+        { practiceId: "b", at: now - 2 * day },
+        { practiceId: "b", at: now - 10 * day },
+        { practiceId: "admin", at: now },
+      ],
+      completions: [
+        { practiceId: "a", at: now - 5 * day },
+        { practiceId: "a", at: now - 60 * day },
+      ],
+    },
+    now,
+  );
+  assert.deepEqual(
+    o.practices.map((p) => p.name),
+    ["Beta", "Alpha"],
+  );
+  assert.deepEqual(o.practices[1], {
+    id: "a",
+    name: "Alpha",
+    managers: ["m@a.test"],
+    activeStaff: 1,
+    lastLogin: now - 40 * day,
+    logins30: 0,
+    completed30: 1,
+    completedTotal: 2,
+  });
+  assert.deepEqual(o.totals, { practices: 2, activeStaff: 1, logins7: 1, completed30: 1 });
 });
