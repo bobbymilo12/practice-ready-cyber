@@ -19,7 +19,7 @@ export function SequenceBoard({
   const move = (from: number, to: number) => {
     if (disabled || from === to) return;
     const next = moveSequence(value, from, to);
-    onChange(next); // The training screen keeps rearrangements as drafts until Check answer.
+    onChange(next); // The training screen keeps rearrangements as drafts until Continue.
     cards.current[value[from]]?.focus();
     setAnnouncement(`Step moved to position ${to + 1}.`);
     setDragged(undefined);

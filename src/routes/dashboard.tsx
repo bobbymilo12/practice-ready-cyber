@@ -1,9 +1,10 @@
 import { NeedsSupport } from "@/components/NeedsSupport";
 import { useManagerAction } from "@/hooks/use-manager-action";
+import { useLiveWorkspace } from "@/hooks/use-live-workspace";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Shell, Card, Badge } from "@/components/Shell";
-import { flushPractice, loadWorkspace, useConnection } from "@/lib/backend";
+import { useState, type ReactNode } from "react";
+import { Shell, Card } from "@/components/Shell";
+import { useConnection } from "@/lib/backend";
 import { assignmentProgress, primaryScenarios } from "@/lib/training";
 import { useApp } from "@/lib/store";
 
@@ -14,8 +15,17 @@ export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 });
 
+const bigButton =
+  "inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-base font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50";
+const plainButton =
+  "inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-5 py-2.5 text-base font-semibold hover:bg-surface disabled:opacity-50";
+
+// Long module lists scroll inside their card so the page stays short.
+const scrollList =
+  "mt-4 max-h-[32rem] divide-y divide-border overflow-y-auto pr-2 focus-visible:outline-2 focus-visible:outline-primary";
+
 function Dashboard() {
-  const [importError, setImportError] = useState("");
+  useLiveWorkspace();
   const sessions = useConnection((s) => s.sessions);
   const modules = useApp((s) => s.modules);
   const results = useApp((s) => s.results);
@@ -25,61 +35,108 @@ function Dashboard() {
   const assignments = useApp((s) => s.assignments);
   const setupComplete = useApp((s) => s.setupComplete);
 
-  const drafts = modules.flatMap((m) => m.scenarios.filter((s) => s.status === "draft"));
   const published = modules.filter((m) => m.published);
   const draftModules = modules.filter((m) => !m.published);
   const needsReview = modules.filter((m) => m.needsReview);
+  const traineeName = (id?: string) => {
+    const t = trainees.find((t) => t.id === id);
+    return t ? t.name || t.email : "";
+  };
 
   return (
     <Shell>
       {action.error && (
-        <p role="alert" className="mb-4 text-sm text-destructive">
+        <p role="alert" className="mb-4 text-base text-destructive">
           {action.error}
         </p>
       )}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm text-muted-foreground">{practiceData.practiceName}</p>
+          <p className="text-base text-muted-foreground">{practiceData.practiceName}</p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">Manager dashboard</h1>
+          <p className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-base">
+            <Link to="/analytics" className="font-semibold text-primary underline">
+              Analytics
+            </Link>
+            <Link to="/data-hub" className="font-semibold text-primary underline">
+              Practice information
+            </Link>
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() =>
-              void flushPractice()
-                .then(() => loadWorkspace())
-                .catch((e) => setImportError(e.message))
-            }
-            className="rounded-xl border border-border px-4 py-2.5 text-sm"
-          >
-            Refresh progress
-          </button>
-          <Link
-            to="/trainees/invite"
-            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
-          >
-            Invite trainees
+        <div className="flex flex-wrap gap-3">
+          <Link to="/trainees/invite" className={plainButton}>
+            Invite staff
           </Link>
-
-          <Link
-            to="/analytics"
-            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
-          >
-            Analytics
-          </Link>
-          <Link
-            to="/data-hub"
-            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-surface"
-          >
-            Practice Information
-          </Link>
-          <Link
-            to="/modules/create"
-            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
-          >
-            + Create new module
+          <Link to="/modules/create" className={bigButton}>
+            + Create a module
           </Link>
         </div>
       </div>
+
+      <Card className="mt-8 border-primary/30 bg-primary/5">
+        <h2 className="font-display text-xl font-semibold">What needs your attention</h2>
+        <ul className="mt-4 space-y-3">
+          {!setupComplete && (
+            <AttentionItem
+              text="Finish setting up your practice. Add your team and local procedures to get starter training."
+              action={
+                <Link to="/practice/setup" className={bigButton}>
+                  Continue setup
+                </Link>
+              }
+            />
+          )}
+          {needsReview.map((m) => (
+            <AttentionItem
+              key={`review-${m.id}`}
+              text={
+                <>
+                  <strong>{m.title}</strong> — your practice information changed. Check it before
+                  staff can carry on.
+                  <span className="mt-1 block whitespace-pre-line text-muted-foreground">
+                    {m.reviewReason ??
+                      "Practice data changed — questions may contain outdated information."}
+                  </span>
+                </>
+              }
+              action={
+                <Link to="/modules/review" search={{ id: m.id }} className={bigButton}>
+                  Check module
+                </Link>
+              }
+            />
+          ))}
+          {draftModules.map((m) => (
+            <AttentionItem
+              key={`draft-${m.id}`}
+              text={
+                <>
+                  <strong>{m.title}</strong> is a draft with {m.scenarios.length} questions. Check
+                  it and publish it so you can assign it.
+                </>
+              }
+              action={
+                <Link to="/modules/review" search={{ id: m.id }} className={bigButton}>
+                  Review draft
+                </Link>
+              }
+            />
+          ))}
+          {setupComplete && !trainees.length && (
+            <AttentionItem
+              text="You haven't invited any staff yet."
+              action={
+                <Link to="/trainees/invite" className={bigButton}>
+                  Invite staff
+                </Link>
+              }
+            />
+          )}
+          {setupComplete && !needsReview.length && !draftModules.length && trainees.length > 0 && (
+            <li className="text-base">Nothing needs your attention right now.</li>
+          )}
+        </ul>
+      </Card>
 
       <NeedsSupport
         trainees={trainees}
@@ -88,297 +145,204 @@ function Dashboard() {
         sessions={sessions}
       />
 
-      {importError && (
-        <p role="alert" className="mt-4 text-sm text-destructive">
-          {importError}
-        </p>
-      )}
-      <Card className="mt-6 border-primary/20 bg-primary/5">
-        <h2 className="font-display text-lg font-semibold">
-          {!setupComplete
-            ? "Start with your practice setup"
-            : draftModules.length
-              ? "Next: review your draft modules"
-              : !trainees.length
-                ? "Next: invite your team"
-                : "Your team’s training"}
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {!setupComplete
-            ? "Add your team and local procedures to create starter training drafts."
-            : draftModules.length
-              ? "Check the scenarios, then publish and assign the modules."
-              : !trainees.length
-                ? "Send invitations and assign your published modules."
-                : "Review progress below or create additional training."}
-        </p>
-        {!setupComplete ? (
-          <Link to="/practice/setup" className="mt-4 inline-block font-semibold text-primary">
-            Continue setup →
+      <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Draft modules to review" value={draftModules.length} />
+        <Stat label="Modules ready to use" value={published.length} />
+        <Stat label="Staff invited" value={trainees.length} />
+        <Stat label="Modules completed by staff" value={results.length} />
+      </section>
+
+      <Card className="mt-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-xl font-semibold">Your team</h2>
+          <Link to="/trainees/invite" className={plainButton}>
+            + Invite staff
           </Link>
-        ) : draftModules[0] ? (
-          <Link
-            to="/modules/review"
-            search={{ id: draftModules[0].id }}
-            className="mt-4 inline-block font-semibold text-primary"
-          >
-            Review a draft →
-          </Link>
-        ) : (
-          <Link to="/trainees/invite" className="mt-4 inline-block font-semibold text-primary">
-            Invite trainees →
-          </Link>
+        </div>
+        {trainees.length === 0 && (
+          <p className="mt-4 text-base text-muted-foreground">
+            No staff yet. Press &ldquo;Invite staff&rdquo; to add someone.
+          </p>
         )}
+        <ul className="mt-4 divide-y divide-border">
+          {trainees.map((t) => {
+            const mine = assignments.filter((a) => a.traineeId === t.id && !a.withdrawnAt);
+            const progress = mine.map((a) =>
+              assignmentProgress(
+                a,
+                sessions,
+                modules.find((m) => m.id === a.moduleId),
+              ),
+            );
+            const finished = progress.filter((p) => p.completed).length;
+            const pct = mine.length
+              ? Math.round((progress.reduce((sum, p) => sum + p.fraction, 0) / mine.length) * 100)
+              : 0;
+            return (
+              <li key={t.id} className="flex flex-wrap items-center gap-4 py-4">
+                <div className="min-w-48 flex-1">
+                  <p className="text-lg font-semibold">{t.name || t.email}</p>
+                  <p className="text-base text-muted-foreground">
+                    {t.inactiveAt
+                      ? "No longer active"
+                      : t.status === "invited"
+                        ? "Invited — not signed in yet"
+                        : mine.length
+                          ? `Finished ${finished} of ${mine.length} modules`
+                          : "No training assigned yet"}
+                  </p>
+                </div>
+                <div className="flex min-w-48 flex-1 items-center gap-3">
+                  <progress
+                    aria-label={`${t.name || t.email} training progress`}
+                    value={pct}
+                    max={100}
+                    className="h-3 w-full accent-primary"
+                  />
+                  <span className="w-12 text-right text-base tabular-nums">{pct}%</span>
+                </div>
+                <Link to="/trainees/$id" params={{ id: t.id }} className={plainButton}>
+                  View
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </Card>
 
-      {/* Modules needing review */}
-      {needsReview.length > 0 && (
-        <Card className="mt-6 border-warning/40 bg-warning/5">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-base font-semibold">Modules needing review</h3>
-            <Badge tone="draft">Local knowledge changed</Badge>
+      <section className="mt-8 grid gap-6 lg:grid-cols-2">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold">
+              Ready to assign ({published.length})
+            </h2>
           </div>
-          <div className="mt-3 space-y-2">
-            {needsReview.map((m) => (
-              <div
-                key={m.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background p-3 text-sm"
-              >
-                <div>
-                  <div className="font-medium">{m.title}</div>
-                  <div className="whitespace-pre-line text-xs text-muted-foreground">
-                    {m.reviewReason ??
-                      "Practice data changed — scenarios may contain outdated information."}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Link
-                    to="/modules/review"
-                    search={{ id: m.id }}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-                  >
-                    Review / confirm
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      <section className="mt-8 grid gap-4 md:grid-cols-4">
-        <Stat label="Draft scenarios" value={drafts.length} tone="draft" />
-        <Stat label="Modules published" value={published.length} tone="approved" />
-        <Stat label="Trainees invited" value={trainees.length} tone="info" />
-        <Stat label="Completions logged" value={results.length} tone="info" />
-      </section>
-
-      <section className="mt-10 grid gap-6 md:grid-cols-3">
-        <Link to="/modules/create" className="group">
-          <Card className="h-full transition hover:border-primary/40 hover:shadow-md">
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
-              +
-            </div>
-            <h3 className="mt-4 font-display text-lg font-semibold">Create new module</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Choose a topic, add local details and review the draft scenarios.
+          {published.length === 0 && (
+            <p className="mt-4 text-base text-muted-foreground">
+              No modules ready yet. Publish a draft to assign it to staff.
             </p>
-          </Card>
-        </Link>
-
-        <Card>
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-lg font-semibold">Draft modules</h3>
-            <Badge tone="draft">Awaiting review</Badge>
-          </div>
-          <div className="mt-4 space-y-3">
-            {draftModules.length === 0 && (
-              <p className="text-sm text-muted-foreground">No drafts right now.</p>
-            )}
-            {draftModules.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm"
-              >
-                <Link
-                  to="/modules/review"
-                  search={{ id: m.id }}
-                  className="min-w-0 flex-1 hover:text-primary"
-                >
-                  <div className="font-medium">{m.title}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {m.scenarios.length} scenarios · manager review required
-                  </div>
-                </Link>
-                <button
-                  type="button"
-                  disabled={action.saving}
-                  onClick={() => {
-                    if (window.confirm("Delete this draft module?"))
-                      void action.run({ kind: "delete-draft", moduleId: m.id });
-                  }}
-                  className="shrink-0 text-xs text-destructive hover:underline"
-                >
-                  {action.pending?.kind === "delete-draft" && action.pending.moduleId === m.id
-                    ? "Deleting…"
-                    : "Delete draft"}
-                </button>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-lg font-semibold">Published modules</h3>
-            <Badge tone="approved">
-              {published.filter((m) => !m.needsReview && primaryScenarios(m).length > 0).length}{" "}
-              available
-            </Badge>
-          </div>
-          <div className="mt-4 space-y-3">
+          )}
+          <ul tabIndex={0} aria-label="Modules ready to assign" className={scrollList}>
             {published.map((m) => (
-              <div key={m.id} className="rounded-lg border border-border p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{m.title}</div>
-                  <Link
-                    to="/modules/review"
-                    search={{ id: m.id }}
-                    className="text-xs font-medium text-primary hover:underline"
-                  >
-                    Open →
+              <li key={m.id} className="py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold">{m.title}</p>
+                    <p className="text-base text-muted-foreground">
+                      {primaryScenarios(m).length} questions ·{" "}
+                      {m.needsReview ? (
+                        <span className="text-[color:var(--warning-foreground)]">
+                          Paused — needs checking
+                        </span>
+                      ) : (
+                        "Ready to use"
+                      )}
+                    </p>
+                  </div>
+                  <Link to="/modules/review" search={{ id: m.id }} className={plainButton}>
+                    Open
                   </Link>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {m.scenarios.length} approved scenarios
-                  {m.needsReview && (
-                    <span className="ml-2 text-[color:var(--warning-foreground)]">
-                      · Needs review — training paused
-                    </span>
-                  )}
                 </div>
                 <AssignControl moduleId={m.id} />
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </Card>
-      </section>
-
-      <section className="mt-10 grid gap-6 md:grid-cols-2">
         <Card>
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-lg font-semibold">Trainee progress</h3>
-            <Link
-              to="/trainees/invite"
-              className="text-xs font-medium text-primary hover:underline"
-            >
-              + Invite
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold">Drafts ({draftModules.length})</h2>
+            <Link to="/modules/create" className={plainButton}>
+              + Create a module
             </Link>
           </div>
-          <div className="mt-5 space-y-3">
-            {trainees.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No trainees yet. Use &ldquo;Invite trainees&rdquo; to invite one.
-              </p>
-            )}
-            {trainees.map((t) => {
-              const mine = assignments.filter((a) => a.traineeId === t.id && !a.withdrawnAt);
-              const done = new Set(
-                results.filter((r) => r.traineeId === t.id).map((r) => r.moduleId),
-              );
-              const pct =
-                mine.length === 0
-                  ? 0
-                  : Math.round(
-                      (mine.reduce(
-                        (sum, a) =>
-                          sum +
-                          assignmentProgress(
-                            a,
-                            sessions,
-                            modules.find((m) => m.id === a.moduleId),
-                          ).fraction,
-                        0,
-                      ) /
-                        mine.length) *
-                        100,
-                    );
-              return (
-                <Link
-                  key={t.id}
-                  to="/trainees/$id"
-                  params={{ id: t.id }}
-                  className="grid grid-cols-[1fr_2fr_auto] items-center gap-4 rounded-lg p-2 hover:bg-surface"
-                >
-                  <div>
-                    <div className="text-sm font-medium">{t.name || t.email}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {t.inactiveAt ? "Inactive" : t.status === "invited" ? "Invited" : "Active"} ·{" "}
-                      {mine.length} assigned
-                    </div>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="w-10 text-right text-sm tabular-nums text-muted-foreground">
-                    {pct}%
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </Card>
-
-        <Card>
-          <h3 className="font-display text-lg font-semibold">Recent training activity</h3>
-          <div className="mt-4 space-y-2">
-            {results.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No completions yet. Once trainees finish a module, results appear here.
-              </p>
-            )}
-            {results.slice(0, 6).map((r, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
-              >
+          {draftModules.length === 0 && (
+            <p className="mt-4 text-base text-muted-foreground">
+              No drafts. Press &ldquo;Create a module&rdquo; to make a new one.
+            </p>
+          )}
+          <ul tabIndex={0} aria-label="Draft modules" className={scrollList}>
+            {draftModules.map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div>
-                  <div className="font-medium">{r.moduleTitle}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(r.completedAt).toLocaleString()}
-                    {r.confidence ? ` · confidence ${r.confidence}/5` : ""}
-                  </div>
+                  <p className="text-lg font-semibold">{m.title}</p>
+                  <p className="text-base text-muted-foreground">
+                    {m.scenarios.length} questions · Draft — not visible to staff yet
+                  </p>
                 </div>
-                <div className="text-sm tabular-nums">
-                  {r.correct}/{r.total}
+                <div className="flex flex-wrap gap-3">
+                  <Link to="/modules/review" search={{ id: m.id }} className={bigButton}>
+                    Review draft
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={action.saving}
+                    onClick={() => {
+                      if (window.confirm(`Delete the draft "${m.title}"? This cannot be undone.`))
+                        void action.run({ kind: "delete-draft", moduleId: m.id });
+                    }}
+                    className={`${plainButton} text-destructive`}
+                  >
+                    {action.pending?.kind === "delete-draft" && action.pending.moduleId === m.id
+                      ? "Deleting…"
+                      : "Delete draft"}
+                  </button>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </Card>
       </section>
+
+      <Card className="mt-8">
+        <h2 className="font-display text-xl font-semibold">Recently completed</h2>
+        {results.length === 0 && (
+          <p className="mt-4 text-base text-muted-foreground">
+            Nothing completed yet. When staff finish a module, it shows here.
+          </p>
+        )}
+        <ul className="mt-4 divide-y divide-border">
+          {results.slice(0, 6).map((r, i) => (
+            <li key={i} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <div>
+                <p className="text-base font-semibold">
+                  {traineeName(r.traineeId) || "A staff member"} finished {r.moduleTitle}
+                </p>
+                <p className="text-base text-muted-foreground">
+                  {new Date(r.completedAt).toLocaleString("en-GB", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  {r.confidence ? ` · Felt ${r.confidence} out of 5 confident` : ""}
+                </p>
+              </div>
+              <p className="text-base font-semibold tabular-nums">
+                {r.correct} of {r.total} correct
+              </p>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </Shell>
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "draft" | "approved" | "info";
-}) {
+function AttentionItem({ text, action }: { text: ReactNode; action: ReactNode }) {
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background p-4">
+      <p className="min-w-60 flex-1 text-base">{text}</p>
+      {action}
+    </li>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
   return (
     <Card>
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <Badge tone={tone}>
-          {tone === "draft" ? "Review" : tone === "approved" ? "Live" : "Team"}
-        </Badge>
-      </div>
-      <p className="mt-3 font-display text-3xl font-bold">{value}</p>
+      <p className="text-base text-muted-foreground">{label}</p>
+      <p className="mt-2 font-display text-3xl font-bold">{value}</p>
     </Card>
   );
 }
@@ -392,44 +356,63 @@ function AssignControl({ moduleId }: { moduleId: string }) {
   if (trainees.length === 0) return null;
 
   return (
-    <div className="mt-2">
+    <div className="mt-3">
       {action.error && (
-        <p role="alert" className="mb-2 text-xs text-destructive">
+        <p role="alert" className="mb-2 text-base text-destructive">
           {action.error}
         </p>
       )}
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:bg-surface"
-      >
-        Assign to employees
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className={bigButton}>
+        {open ? "Close staff list" : "Assign to staff"}
       </button>
       {open && (
-        <div className="mt-2 space-y-1">
+        <ul className="mt-3 divide-y divide-border rounded-xl border border-border">
           {trainees.map((t) => {
             const assigned = assignments.some(
               (a) => a.traineeId === t.id && a.moduleId === moduleId && !a.withdrawnAt,
             );
             return (
-              <div key={t.id} className="flex items-center justify-between gap-2 text-xs">
-                <span>{t.name || t.email}</span>
-                <button
-                  disabled={assigned || action.saving}
-                  onClick={() => void action.run({ kind: "assign", traineeId: t.id, moduleId })}
-                  className="rounded-md bg-primary px-2 py-1 font-medium text-primary-foreground disabled:opacity-40"
-                >
-                  {action.pending &&
-                  "traineeId" in action.pending &&
-                  action.pending.traineeId === t.id
-                    ? "Assigning…"
-                    : assigned
-                      ? "Assigned"
+              <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-2">
+                <span className="text-base">{t.name || t.email}</span>
+                {assigned ? (
+                  <span className="flex flex-wrap items-center justify-end gap-3">
+                    <span className="text-base font-semibold text-[color:var(--success)]">
+                      ✓ Assigned
+                    </span>
+                    <button
+                      disabled={action.saving}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Ask ${t.name || t.email} to do this module again from the start? Their earlier results are kept.`,
+                          )
+                        )
+                          void action.run({ kind: "reassign", traineeId: t.id, moduleId });
+                      }}
+                      className={plainButton}
+                    >
+                      {action.pending?.kind === "reassign" && action.pending.traineeId === t.id
+                        ? "Reassigning…"
+                        : "Reassign"}
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    disabled={action.saving}
+                    onClick={() => void action.run({ kind: "assign", traineeId: t.id, moduleId })}
+                    className={plainButton}
+                  >
+                    {action.pending &&
+                    "traineeId" in action.pending &&
+                    action.pending.traineeId === t.id
+                      ? "Assigning…"
                       : "Assign"}
-                </button>
-              </div>
+                  </button>
+                )}
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

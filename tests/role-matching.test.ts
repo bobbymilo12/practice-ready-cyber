@@ -195,7 +195,7 @@ test("partial checks are rejected; one-to-one validated; navigation and submissi
     /Match every/,
   );
   session = JSON.parse(JSON.stringify(session));
-  assert.throws(() => advanceSession(session, m.title), /Check answer/);
+  assert.throws(() => advanceSession(session, m.title), /before continuing/);
   assert.throws(() =>
     answerSession(session, { [s.items[0].id]: s.targets[0].id, [s.items[1].id]: s.targets[0].id }),
   );
@@ -318,6 +318,6 @@ test("committed pairings survive navigating between different scenarios and cann
 
 test("training distinguishes unchecked edits from saved checked answers", () => {
   const source = readFileSync(new URL("../src/routes/train.tsx", import.meta.url), "utf8");
-  assert.ok(source.includes("Checked answers saved · unchecked edits stay on this page"));
-  assert.ok(source.includes("Your checked answer is recorded and cannot be changed."));
+  assert.ok(source.includes("Answers save when you press Continue"));
+  assert.ok(source.includes("Your answer is saved and cannot be changed."));
 });

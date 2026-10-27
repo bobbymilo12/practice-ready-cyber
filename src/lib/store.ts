@@ -1972,7 +1972,7 @@ export const useApp = create<AppState>()((set, get) => ({
               ...m,
               scenarios,
               needsReview: true,
-              reviewReason: `Staff changed: "${trimmedOld}" → "${trimmedNew}". Re-check scenarios still reflect current practice.`,
+              reviewReason: `Staff changed: "${trimmedOld}" → "${trimmedNew}". Re-check questions still reflect current practice.`,
             }
           : { ...m, scenarios };
       });

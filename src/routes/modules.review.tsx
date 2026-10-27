@@ -83,12 +83,12 @@ function Review() {
                 : ""}
             </p>
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
-              {module.published ? "Review training" : "Review draft scenarios"}
+              {module.published ? "Review training" : "Review draft questions"}
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               {module.published
                 ? "Review all questions and their saved answers below. No answers or training attempt are required."
-                : "Manager review required. Approve every scenario, then publish the module for staff."}
+                : "Manager review required. Approve every question, then publish the module for staff."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -263,8 +263,8 @@ function Review() {
             {pendingReviews.length
               ? "Review and approve the required questions before republishing."
               : allApproved
-                ? "All scenarios approved — ready to publish to staff."
-                : "Approve every scenario above before publishing."}
+                ? "All questions approved — ready to publish to staff."
+                : "Approve every question above before publishing."}
           </div>
           <button
             onClick={publish}

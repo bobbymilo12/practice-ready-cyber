@@ -151,7 +151,8 @@ export function loadWorkspace(): Promise<void> {
 async function fetchWorkspace() {
   const ticket = generation;
   useConnection.setState({
-    loading: devRole() ? !useConnection.getState().ready : true,
+    // Background refreshes keep the page on screen instead of flashing the loading view.
+    loading: !useConnection.getState().ready,
     error: "",
   });
   try {

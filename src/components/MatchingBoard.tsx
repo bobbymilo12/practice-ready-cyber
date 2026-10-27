@@ -26,7 +26,7 @@ export function MatchingBoard({
     <div className="mt-4">
       <p className="mb-3 text-sm text-muted-foreground">
         {instructions ??
-          "Select a patient request, then select the matching practice role. You can change your matches before checking."}
+          "Select a patient request, then select the matching practice role. You can change your matches until you press Continue."}
       </p>
       <div className="grid grid-cols-2 gap-3 sm:gap-6">
         <div className="space-y-2">
