@@ -6,6 +6,7 @@ import * as training from "../src/lib/training.ts";
 import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import * as managerActions from "../src/lib/manager-actions.ts";
 import * as sharedModules from "../src/lib/shared-modules.ts";
+import * as analytics from "../src/lib/analytics.ts";
 import { suggestedRole, normaliseRoleRequestCategories } from "../src/lib/role-requests.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -216,6 +217,7 @@ test("save/reload uses whole-practice storage; failed/stale saves leave confirme
     "./dev-mode": { devRole: () => "manager" },
     "./local-procedures.ts": procedures,
     "./practice-scenarios": {},
+    "./analytics": analytics,
     "./training": training,
   });
   const backend = compile("../src/lib/backend.ts", {
@@ -501,6 +503,7 @@ test("fresh Mock Manager loads the requested baseline once; real sessions cannot
       "./dev-mode": { devRole: () => role },
       "./local-procedures.ts": procedures,
       "./practice-scenarios": {},
+      "./analytics": analytics,
       "./training": training,
     });
     const loaded = await devApi("load", {});
@@ -726,6 +729,7 @@ test("mock membership deactivation retains attempts and reactivation leaves hist
       "./dev-mode": { devRole: () => role },
       "./local-procedures.ts": procedures,
       "./practice-scenarios": {},
+      "./analytics": analytics,
       "./training": training,
     });
     await devApi("load", {});
