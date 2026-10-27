@@ -1,4 +1,4 @@
-# GDPR compliance record
+Accepted |
 
 Working record of how PracticeReady meets UK GDPR / DPA 2018. Items marked **TODO (owner)** need a
 human decision or a real-world action; everything else describes what the code does today.
@@ -63,9 +63,7 @@ staff names in scenarios, legacy staff notes, contact form message (max 2000 cha
 - Known weakness (design trade-off): because the Edge Function uses the service role, RLS is not
   the second line of defence for practice isolation. TODO (owner): consider per-practice RLS
   policies (`practice_id = auth.jwt() -> app_metadata -> practice_id`) if direct client access is ever added.
-- **Security risk to fix:** invitation emails contain a temporary password in plaintext (forced
-  change on first login, 7-day expiry). Prefer Supabase `inviteUserByEmail` / magic link so no
-  password travels by email. TODO (dev).
+- Invitations email a one-time set-password link (R1); no password travels by email. Older invitations that carry a temporary password stay valid until the 7-day expiry.
 - TODO (owner): confirm in Supabase/Vercel dashboards: HTTPS-only, secrets only in function/Vercel
   env (never `VITE_`), automatic backups enabled and their retention, MFA on supplier accounts.
 
@@ -128,8 +126,8 @@ Reference it from the Terms (`/terms`, still a draft).
 
 | Supplier | Purpose | Location | TODO (owner) |
 | --- | --- | --- | --- |
-| Supabase | DB, auth, edge functions | Project region unrecorded here | Check dashboard region; prefer London (`eu-west-2`); sign Supabase DPA |
-| Vercel | App hosting, logs | Global; US parent | Accept Vercel DPA; choose a UK/EU function region |
+| Supabase | DB, auth, edge functions | Ireland (`eu-west-1`), EEA, covered by UK adequacy | Sign Supabase DPA |
+| Vercel | App hosting, logs | London (`eu-west-2`, `lhr1`); US parent | Accept Vercel DPA; confirm logs and Analytics processing stay in region |
 | Resend | Invitation and contact email | US/EU | Accept Resend DPA; confirm region |
 | Google (Gmail) | Inbound contact mail | US/EU | Covered by Google Workspace terms |
 
@@ -148,3 +146,62 @@ record the registration number here. **Registration number: ______**
 
 Privacy notice (`/privacy`), cookie policy and consent log, this record, supplier DPAs, DPIA,
 breach and DSR procedures, RLS/isolation tests (`npm test`), ICO registration number.
+
+## 13. Risk register
+
+Raised by the GDPR check on 2026-10-26. Update **Status** as each one is closed; add new risks at the
+bottom. Items already tracked as TODOs above are cross-referenced, not duplicated.
+
+| ID | Sev | Risk | Article | Fix | Status |
+| --- | --- | --- | --- | --- | --- |
+| R1 | High | Invitation email contains a temporary password in plaintext (`practice-api/index.ts`, section 4) | 5(1)(f), 25, 32 | Invite email now carries a one-time set-password link; no password is sent. New `activate` action in `practice-api`. Deploy the function and set Supabase Auth email link expiry (Auth > Email) to 24h. Old invitations with temporary passwords still work until they expire | Fixed in code, deploy pending |
+| R2 | High | No Art. 28 DPA with practices; Terms still a draft (section 9) | 28(3) | Draft written at `docs/DPA-draft.md`. Solicitor review, then link from `/terms` and sign before first real practice | Draft ready |
+| R3 | High | Supplier DPAs and transfer terms unconfirmed (section 10) | 28, 44-46 | Regions confirmed 2026-10-27 (Vercel London, Supabase Ireland) and `/privacy` updated. Still to do: sign Supabase, Vercel and Resend DPAs, confirm Resend region, add sub-processor list | Partly done |
+| R4 | High | No per-person erasure or anonymisation; deactivated staff keep name, email and answers until practice deleted (sections 2, 5) | 17, 18 | `erase-staff` action and Erase button (deactivated staff only, type ERASE). Deletes login and profile; training rows stay, unlinked. Apply `202610270002_staff_erasure.sql` first | Fixed in code, migration pending |
+| R5 | High | `purge_expired_personal_data()` not scheduled, so published retention limits are not enforced (section 5) | 5(1)(e) | Migration `202610270001_schedule_retention_purge.sql` written. Apply it to live, then check `cron.job` | Ready to apply |
+| R6 | Med | Data-subject requests are fully manual; no requester verification step for practice closure (sections 5, 6) | 12, 15, 20 | Export script added at `scripts/dsar-export.sql`; identity check is step 2 of section 6. Still to do: verify the requester is the practice manager before a closure (section 5) | Partly done |
+| R7 | Med | Manager sees staff scores/answers; DPIA not completed and staff not told (section 8) | 35, 13, 88 | Trainee notice added to the results page. Still to do: complete ICO DPIA template | Partly done |
+| R8 | Med | Free-text fields (`practice_staff.notes`, local procedures) may hold patient or unintended personal data (section 3) | 5(1)(c), 9 | Terms, privacy notice and contact form already carry the no-patient-data line. `scripts/dsar-export.sql` has the query to find non-empty `notes`; clear them, and add the clause to the DPA | Partly done |
+| R9 | Med | No rate limiting on contact, consent and page-view endpoints; any UUID accepted as `visitorId` | 32 | DB triggers cap page views, consents and enquiries (`202610270003_public_endpoint_limits.sql`). Turnstile on the contact form not added yet (needs a site key) | Partly done |
+| R10 | Med | Backup and log retention unrecorded; `/privacy` says logs up to 90 days without evidence | 5(1)(e), 13 | Supabase Free has no backups; `/privacy` now says so. Any manual `supabase db dump` is a backup: store encrypted and delete within a set period (decide N). Moving to Pro would need the notice changed | Partly done |
+| R11 | Med | ICO fee registration number blank (section 11) | DPA 2018 charges regs | Self-assess, pay, record number | Open |
+| R12 | Low | `<Analytics />` (Vercel) loads regardless of banner choice while banner says analytics need permission (`__root.tsx`, `CookieBanner.tsx`) | PECR reg. 6, 5(1)(a) | Vercel Analytics now loads only after Accept all; `/cookies` and `/privacy` updated to match | Fixed |
+| R13 | Low | Consent log links `visitor_id` to accept/withdraw events | 7(1) | Accept; note in RoPA | Accepted |
+| R14 | Low | Sidebar UI cookie (`ui/sidebar.tsx`) may not be listed in the `/cookies` essential table | PECR reg. 6 | `SidebarProvider` is not used anywhere, so no cookie is set. Delete the file if never needed | Closed (not in use) |
+| R15 | Low | `audit_events` kept until practice deleted, no stated period | 5(1)(e) | Kept until the practice is deleted, as an accountability record. Stated in section 2 | Accepted |
+| R16 | Low | Legacy `practice-ready-store` localStorage import still in `backend.ts` | 5(1)(c) | Import code, dashboard button and `/cookies` row removed | Fixed |
+
+Order of work: R1, R2, R3, R5 before any real practice joins; R4 and R7 next; the rest during the pilot.
+
+## 14. Remaining checklist
+
+Updated 2026-10-27. Tick items as they are done and update the risk register (section 13) to match.
+
+### Before any real practice joins
+- [ ] Confirm the live Supabase project (only one is visible, "COMP3000 Cyber", paused) and restore it if needed
+- [ ] Take a manual `supabase db dump` first (Free plan has no backups); store it encrypted outside the repo
+- [ ] Apply migrations 11-13 in order (`docs/SECURITY.md` section 2): purge schedule, staff erasure, public rate limits
+- [ ] Check the purge job exists: `select * from cron.job`
+- [ ] Deploy `practice-api` (new `activate` and `erase-staff` actions) and the web app
+- [ ] Set Supabase Auth email link expiry to 24h (Auth > Email)
+- [ ] Test one real invite end to end: email arrives, link sets a password, login works, expired link is resent. Check an email scanner does not consume the link
+- [ ] Test Erase on a deactivated test user: login gone, training rows remain unlinked
+- [ ] Have a solicitor review `docs/DPA-draft.md`, fill the brackets, link it from `/terms`, and finish the Terms
+- [ ] Sign the Supabase, Vercel and Resend DPAs; confirm Resend's region; add a sub-processor list
+- [ ] Confirm Vercel log and Analytics processing stays in the UK/EU region
+- [ ] Pay the ICO fee and record the registration number in section 11
+
+### During the pilot
+- [ ] Complete the ICO DPIA using this file as the data map; keep it with the evidence pack
+- [ ] Run the `practice_staff.notes` query in `scripts/dsar-export.sql` and clear any content
+- [ ] Decide how long manual database dumps are kept, then state it in `/privacy`
+- [ ] Add Cloudflare Turnstile to the contact form (needs a site key)
+- [ ] Add the no-patient-data clause to the DPA once drafted
+- [ ] Add a requester check before closing a practice account (section 5)
+- [ ] Rerun `scripts/security-check.mjs` after deploy; run the manual items in `docs/SECURITY.md` section 4
+- [ ] Remove the "Temporary password" login branch in `auth.tsx` once all old invitations have expired (7 days after deploy)
+- [ ] Delete `src/components/ui/sidebar.tsx` if it stays unused
+
+### Review
+- [ ] Re-run `/gdpr-check` after any new table, supplier or free-text field
+- [ ] Review this register and the cookie policy version at least yearly

@@ -88,9 +88,9 @@ function PrivacyPage() {
               <tr>
                 <td>
                   Measuring overall website use with cookieless, aggregated statistics (Vercel Web
-                  Analytics)
+                  Analytics), if you accept optional analytics
                 </td>
-                <td>Legitimate interests</td>
+                <td>Consent</td>
               </tr>
               <tr>
                 <td>Counting page visits with a random ID, if you accept optional analytics</td>
@@ -140,10 +140,13 @@ function PrivacyPage() {
 
           <h2>International transfers</h2>
           <p>
-            Some of our providers may store or access data outside the UK, including in the European
-            Economic Area and the United States. Where this happens we rely on UK adequacy
-            regulations, the UK International Data Transfer Agreement, or the UK Addendum to the EU
-            Standard Contractual Clauses to keep your information protected.
+            Our application is hosted in London (Vercel) and our database and sign-in service are
+            hosted in Ireland (Supabase). The UK treats the European Economic Area as adequate, so
+            no extra safeguard is needed for that storage. Some providers, or their parent
+            companies, may access data from outside the UK and the EEA, including in the United
+            States. Where this happens we rely on UK adequacy regulations, the UK International Data
+            Transfer Agreement, or the UK Addendum to the EU Standard Contractual Clauses to keep
+            your information protected.
           </p>
 
           <h2>How long we keep information</h2>
@@ -155,6 +158,10 @@ function PrivacyPage() {
             </li>
             <li>Contact enquiries: up to 24 months after we last correspond with you.</li>
             <li>Security and server logs: up to 90 days.</li>
+            <li>
+              Backups: we do not currently keep automated database backups, so deleted information
+              is removed from our live database straight away.
+            </li>
           </ul>
           <p>
             We may keep information longer where the law requires it or where it is needed to
@@ -200,8 +207,8 @@ function PrivacyPage() {
           <h2>Cookies</h2>
           <p>
             We use essential cookies and similar storage, plus first-party analytics only if you
-            accept them. Our hosting provider also collects cookieless, aggregated website
-            statistics that do not store anything on your device. See our{" "}
+            accept them. If you accept, our hosting provider also collects cookieless, aggregated
+            website statistics that do not store anything on your device. See our{" "}
             <a href="/cookies">Cookie Policy</a> for details.
           </p>
 

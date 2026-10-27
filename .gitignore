@@ -45,3 +45,6 @@ graphify-out/cache/
 
 # Vercel
 .vercel/
+
+# Local database dumps (contain personal data)
+*.sql.bak

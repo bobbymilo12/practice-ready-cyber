@@ -8,10 +8,9 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { type ReactNode } from "react";
-import { Analytics } from "@vercel/analytics/react";
 
 import { AccountGate } from "@/components/AccountGate";
-import { CookieBanner } from "@/components/CookieBanner";
+import { ConsentedAnalytics, CookieBanner } from "@/components/CookieBanner";
 
 import appCss from "../styles.css?url";
 
@@ -130,7 +129,7 @@ function RootComponent() {
         <Outlet />
       </AccountGate>
       <CookieBanner />
-      <Analytics />
+      <ConsentedAnalytics />
     </QueryClientProvider>
   );
 }

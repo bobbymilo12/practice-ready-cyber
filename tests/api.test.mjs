@@ -10,6 +10,7 @@ const tables = {};
 let user = null;
 let handler;
 let createUserError = null;
+const deletedUsers = [];
 const writes = [];
 function query(table) {
   const filters = [];
@@ -126,7 +127,14 @@ const mockClient = {
         tables.profiles.push({ id: "invited", practice_id: "stray", role: "manager" });
         return { data: { user: { id: "invited" } }, error: null };
       },
-      deleteUser: async () => ({ error: null }),
+      generateLink: async () => ({
+        data: { properties: { action_link: "https://test.supabase.co/auth/v1/verify?token=x" } },
+        error: null,
+      }),
+      deleteUser: async (id) => {
+        deletedUsers.push(id);
+        return { error: null };
+      },
     },
   },
 };
@@ -633,6 +641,20 @@ test("staff deactivation and reactivation preserve history and do not restore wi
   );
   user = { id: "bob" };
   assert.equal((await call({ action: "start", assignmentId: "a2" })).status, 403);
+});
+
+test("erasing a person needs a manager, a deactivated member and typed confirmation", async () => {
+  reset();
+  assert.equal((await call({ action: "erase-staff", id: "bob", confirm: "ERASE" })).status, 403);
+  reset("manager");
+  deletedUsers.length = 0;
+  assert.equal((await call({ action: "erase-staff", id: "bob", confirm: "ERASE" })).status, 400);
+  assert.equal((await call({ action: "set-staff-active", id: "bob", active: false })).status, 200);
+  assert.equal((await call({ action: "erase-staff", id: "bob" })).status, 400);
+  assert.equal((await call({ action: "erase-staff", id: "bob", confirm: "ERASE" })).status, 200);
+  assert.deepEqual(deletedUsers, ["bob"]);
+  assert.equal(tables.audit_events.at(-1).action, "staff.erased");
+  assert.equal((await call({ action: "erase-staff", id: "external", confirm: "ERASE" })).status, 400);
 });
 
 test("staff lifecycle is restricted to managers and their own practice", async () => {

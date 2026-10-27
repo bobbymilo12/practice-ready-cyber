@@ -22,6 +22,7 @@ export async function finishPasswordRecovery(
   password: string,
   confirm: string,
   account: () => Promise<{ mustResetPassword?: boolean }>,
+  activate: () => Promise<unknown> = async () => {},
 ) {
   if (!recoveryUserId)
     throw new Error("This reset link is invalid or has expired. Request a new link.");
@@ -30,13 +31,12 @@ export async function finishPasswordRecovery(
   const { data, error } = await auth.getUser();
   if (error || data.user?.id !== recoveryUserId)
     throw new Error("This reset link is invalid or has expired. Request a new link.");
-  if ((await account()).mustResetPassword)
-    throw new Error(
-      "This account still needs its invitation. Ask your manager to resend it, then use the temporary-password sign-in.",
-    );
+  // An invited account is activated by this verified link: the emailed link is how they get in.
+  const invited = Boolean((await account()).mustResetPassword);
   const result = await auth.updateUser({ password });
   if (result.error)
     throw new Error(
       "Your password could not be updated. Check the password requirements or request a new reset link.",
     );
+  if (invited) await activate();
 }

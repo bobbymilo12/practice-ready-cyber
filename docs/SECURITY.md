@@ -44,6 +44,9 @@ password-recovery detail), `docs/BACKEND-MAP.md`.
 | 8 | `202610190001_staff_lifecycle.sql` | Required before deploying the current `practice-api` |
 | 9 | `202610220001_revoke_analytics_client_grants.sql` | Defence in depth |
 | 10 | `202610220002_audit_events.sql` | Required before deploying the current `practice-api` |
+| 11 | `202610270001_schedule_retention_purge.sql` | Schedules the daily purge with pg_cron |
+| 12 | `202610270002_staff_erasure.sql` | Required before deploying the `erase-staff` action |
+| 13 | `202610270003_public_endpoint_limits.sql` | Rate-limit triggers on public tables |
 
 Before applying to the live project:
 1. Check `supabase migration list` against this table.

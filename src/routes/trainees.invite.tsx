@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
-import { api, flushPractice, loadWorkspace, setStaffActive } from "@/lib/backend";
+import { api, eraseStaff, flushPractice, loadWorkspace, setStaffActive } from "@/lib/backend";
 import { devRole } from "@/lib/dev-mode";
 import { useApp, TRAINEE_ROLE_OPTIONS } from "@/lib/store";
 
@@ -95,6 +95,29 @@ function InvitePage() {
     }
   }
 
+  async function erase(id: string) {
+    if (lifecycleLock.current || busy) return;
+    if (
+      window.prompt(
+        "Permanently erase this person? Their login, name and email are deleted and cannot be restored. Their training records stay, with no name attached. Type ERASE to confirm.",
+      ) !== "ERASE"
+    )
+      return;
+    lifecycleLock.current = true;
+    setPendingMember(id);
+    setBusy(true);
+    setError("");
+    try {
+      await eraseStaff(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not erase this person. Please retry.");
+    } finally {
+      lifecycleLock.current = false;
+      setPendingMember(null);
+      setBusy(false);
+    }
+  }
+
   return (
     <Shell>
       <div className="mx-auto max-w-2xl">
@@ -166,8 +189,8 @@ function InvitePage() {
                   `${sentTo} was added to the mock team. No email was sent.`
                 ) : (
                   <>
-                    {sentTo} has been added to your team. The email contains their login link and
-                    temporary password. They must change it before training.
+                    {sentTo} has been added to your team. The email contains a link for them to set
+                    their own password. No password is sent.
                   </>
                 )}
               </p>
@@ -238,6 +261,15 @@ function InvitePage() {
                           ? "Reactivate"
                           : "Deactivate"}
                     </button>
+                    {t.inactiveAt && (
+                      <button
+                        disabled={busy}
+                        onClick={() => void erase(t.id)}
+                        className="text-xs text-destructive hover:underline"
+                      >
+                        Erase
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

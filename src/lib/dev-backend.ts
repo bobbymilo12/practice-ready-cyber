@@ -354,6 +354,7 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
     } satisfies Snapshot;
   }
   let result: unknown = { ok: true };
+  if (action === "erase-staff") throw new Error("Erasing people is not available in mock mode.");
   if (["save-practice", "invite", "set-staff-active"].includes(action)) {
     if (role !== "manager") throw new Error("Manager access required.");
     if (action === "save-practice") {

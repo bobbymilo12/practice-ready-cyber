@@ -36,8 +36,8 @@ function CookiesPage() {
             session secure and remember your cookie choice. Under PECR, strictly necessary storage
             does not require consent, but we still tell you about it. We also use one{" "}
             <strong>optional analytics</strong> item, which is only set if you choose &quot;Accept
-            all&quot;. Separately, our hosting provider collects cookieless, aggregated website
-            statistics, described below.
+            all&quot;. If you accept, our hosting provider also collects cookieless, aggregated
+            website statistics, described below.
           </p>
           <table>
             <thead>
@@ -59,15 +59,6 @@ function CookiesPage() {
                 <td>cookie-consent</td>
                 <td>Local storage</td>
                 <td>Remembers your choice on the cookie banner so we don&apos;t ask every visit</td>
-                <td>Until you clear it</td>
-              </tr>
-              <tr>
-                <td>practice-ready-store</td>
-                <td>Local storage</td>
-                <td>
-                  Read only, to move practice data saved by an older version of PracticeReady into
-                  your account
-                </td>
                 <td>Until you clear it</td>
               </tr>
             </tbody>
@@ -113,7 +104,7 @@ function CookiesPage() {
           <p>
             Our hosting provider, Vercel, gives us aggregated visitor statistics such as page views,
             referring websites, country, browser and device type. Vercel Web Analytics does not set
-            cookies or store anything on your device, so it runs whether or not you accept optional
+            cookies or store anything on your device, and it only runs if you accept optional
             analytics. Vercel identifies a visit using a hash of the request (including the IP
             address and browser details) that is discarded after 24 hours, and we only see totals,
             never individual visitors. Vercel acts as our processor. See our{" "}

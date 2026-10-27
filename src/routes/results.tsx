@@ -71,6 +71,11 @@ function Results() {
         <Badge tone="approved">Module completed</Badge>
         <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">{r.moduleTitle}</h1>
 
+        <p className="mt-2 text-sm text-muted-foreground">
+          Your practice manager can see your scores and answers. Training results are not used for
+          automated decisions about you.
+        </p>
+
         <Card className="mt-6">
           <div className="grid gap-6 sm:grid-cols-3">
             <div>

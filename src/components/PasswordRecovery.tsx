@@ -44,6 +44,7 @@ export function PasswordRecovery({ reset }: { reset: boolean }) {
           password,
           confirm,
           async () => (await api<{ account: Account }>("load")).account,
+          () => api("activate"),
         );
         setPassword("");
         setConfirm("");

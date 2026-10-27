@@ -3,13 +3,7 @@ import { useManagerAction } from "@/hooks/use-manager-action";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
-import {
-  flushPractice,
-  importLegacyPractice,
-  loadWorkspace,
-  readLegacyPractice,
-  useConnection,
-} from "@/lib/backend";
+import { flushPractice, loadWorkspace, useConnection } from "@/lib/backend";
 import { assignmentProgress, primaryScenarios } from "@/lib/training";
 import { useApp } from "@/lib/store";
 
@@ -21,11 +15,7 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function Dashboard() {
-  const [legacyAvailable, setLegacyAvailable] = useState(false);
   const [importError, setImportError] = useState("");
-  useEffect(() => {
-    setLegacyAvailable(Boolean(readLegacyPractice()));
-  }, []);
   const sessions = useConnection((s) => s.sessions);
   const modules = useApp((s) => s.modules);
   const results = useApp((s) => s.results);
@@ -92,26 +82,6 @@ function Dashboard() {
         sessions={sessions}
       />
 
-      {legacyAvailable && modules.length === 0 && (
-        <Card className="mt-6">
-          <h2 className="font-semibold">Keep your existing practice setup</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This browser has a saved demo practice. Import its practice information and modules into
-            this new account. Invite trainees again to create real accounts; demo passwords and
-            results are not imported.
-          </p>
-          <button
-            onClick={() =>
-              void importLegacyPractice()
-                .then(() => setLegacyAvailable(false))
-                .catch((e) => setImportError(e.message))
-            }
-            className="mt-3 rounded-xl border border-border px-4 py-2 text-sm"
-          >
-            Import saved demo practice
-          </button>
-        </Card>
-      )}
       {importError && (
         <p role="alert" className="mt-4 text-sm text-destructive">
           {importError}

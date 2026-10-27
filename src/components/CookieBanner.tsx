@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { Analytics } from "@vercel/analytics/react";
 import { useEffect, useRef, useState } from "react";
 import { COOKIE_POLICY_VERSION } from "@/lib/cookie-data";
 import { recordConsent, recordPageView } from "@/lib/cookie-data.functions";
@@ -6,6 +7,7 @@ import { recordConsent, recordPageView } from "@/lib/cookie-data.functions";
 const KEY = "cookie-consent";
 const VISITOR_KEY = "analytics-visitor-id";
 export const OPEN_COOKIE_SETTINGS = "open-cookie-settings";
+const CONSENT_CHANGED = "cookie-consent-changed";
 
 function read(): { choice?: string; version?: string } | null {
   try {
@@ -21,6 +23,23 @@ function visitorId() {
   } catch {
     return null;
   }
+}
+
+function hasConsent() {
+  const c = read();
+  return c?.choice === "accepted" && c.version === COOKIE_POLICY_VERSION;
+}
+
+// Vercel Analytics is cookieless but still follows the visitor's choice, as the banner promises.
+export function ConsentedAnalytics() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const sync = () => setOn(hasConsent());
+    sync();
+    window.addEventListener(CONSENT_CHANGED, sync);
+    return () => window.removeEventListener(CONSENT_CHANGED, sync);
+  }, []);
+  return on ? <Analytics /> : null;
 }
 
 // Analytics runs only after "Accept all". Rejecting (or withdrawing) deletes the visitor id.
@@ -72,6 +91,7 @@ export function CookieBanner() {
       // Storage blocked: hide for this page view only, and nothing is tracked.
       id = null;
     }
+    window.dispatchEvent(new Event(CONSENT_CHANGED));
     recordConsent({ data: { visitorId: id, choice } }).catch(() => {});
     setOpen(false);
     if (choice === "accepted" && id) {

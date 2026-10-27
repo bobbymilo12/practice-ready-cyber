@@ -41,7 +41,7 @@ test("password requests return the same response for existing, unknown and rejec
   );
 });
 
-test("recovery requires a verified recovery session and never clears invited-user activation", async () => {
+test("recovery requires a verified recovery session and activates an invited user only after the password is set", async () => {
   let updated = 0;
   const auth: any = {
     getUser: async () => ({ data: { user: { id: "person" } }, error: null }),
@@ -59,17 +59,25 @@ test("recovery requires a verified recovery session and never clears invited-use
     finishPasswordRecovery(auth, "someone-else", password, password, async () => ({})),
     /invalid or has expired/,
   );
-  await assert.rejects(
-    finishPasswordRecovery(auth, "person", password, password, async () => ({
-      mustResetPassword: true,
-    })),
-    /temporary-password/,
-  );
   assert.equal(updated, 0);
+  let activated = 0;
+  await finishPasswordRecovery(
+    auth,
+    "person",
+    password,
+    password,
+    async () => ({ mustResetPassword: true }),
+    async () => {
+      activated++;
+    },
+  );
+  assert.equal(updated, 1);
+  assert.equal(activated, 1);
   await finishPasswordRecovery(auth, "person", password, password, async () => ({
     mustResetPassword: false,
   }));
-  assert.equal(updated, 1);
+  assert.equal(updated, 2);
+  assert.equal(activated, 1);
   await assert.rejects(
     finishPasswordRecovery(auth, "person", password, "different", async () => ({})),
     /match/,

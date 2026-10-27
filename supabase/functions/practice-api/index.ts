@@ -163,6 +163,18 @@ Deno.serve(async (request) => {
       // the client signs in again with the new password.
       return reply({ ok: true });
     }
+    if (action === "activate") {
+      // Called after the invitee set their own password through the emailed recovery link.
+      if (!profile.must_reset_password) return reply({ ok: true });
+      if (Date.now() - Date.parse(profile.invited_at) > 7 * 86400000)
+        fail("This invitation expired. Ask your manager to resend it.");
+      const { error } = await admin
+        .from("profiles")
+        .update({ must_reset_password: false, invite_status: "active" })
+        .eq("id", profile.id);
+      check(error);
+      return reply({ ok: true });
+    }
     if (profile.must_reset_password) {
       if (action === "load")
         return reply({ account, version: practice.version, state: {}, sessions: [], trainees: [] });
@@ -366,6 +378,7 @@ Deno.serve(async (request) => {
         fail("Reactivate this staff member before resending an invitation.");
       if (existing?.last_invite_at && Date.now() - Date.parse(existing.last_invite_at) < 60000)
         fail("Please wait one minute before resending this invitation.");
+      // Nobody is ever told this password. The invitee sets their own through an emailed link.
       const password = `Pr!${crypto.randomUUID()}${crypto.randomUUID().slice(0, 8)}`;
       let traineeId = existing?.id;
       let strayPractice: string | undefined;
@@ -472,6 +485,16 @@ Deno.serve(async (request) => {
       const practiceName = String((await loadPracticeData())?.practiceName || "your GP practice");
       let sent = false;
       let deliveryMessage = "The invitation email could not be sent.";
+      const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+        type: "recovery",
+        email,
+        options: { redirectTo: new URL("/auth?mode=recovery", appUrl).toString() },
+      });
+      const setPasswordUrl = link?.properties?.action_link;
+      if (linkError || !setPasswordUrl) {
+        await admin.from("profiles").update({ invite_status: "failed" }).eq("id", traineeId);
+        fail("Could not create the invitation link. Please try again.");
+      }
       try {
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -484,8 +507,8 @@ Deno.serve(async (request) => {
             from,
             to: [email],
             subject: `Your PracticeReady invitation — ${practiceName}`,
-            html: `<h1>Welcome to PracticeReady</h1><p>Hello ${escapeHtml(name)},</p><p>${escapeHtml(practiceName)} has invited you to your practice training.</p><p><a href="${escapeHtml(loginUrl.toString())}">Log in to PracticeReady</a></p><p>Username: ${escapeHtml(email)}</p><p>Temporary password: <strong>${escapeHtml(password)}</strong></p><p>Log in within 7 days. You must choose a new password before accessing training.</p>`,
-            text: `Hello ${name},\n${practiceName} has invited you to PracticeReady.\n${loginUrl}\nUsername: ${email}\nTemporary password: ${password}\nLog in within 7 days and choose a new password before training.`,
+            html: `<h1>Welcome to PracticeReady</h1><p>Hello ${escapeHtml(name)},</p><p>${escapeHtml(practiceName)} has invited you to your practice training.</p><p><a href="${escapeHtml(setPasswordUrl)}">Set your password</a></p><p>Your username is ${escapeHtml(email)}. After setting a password, <a href="${escapeHtml(loginUrl.toString())}">log in to PracticeReady</a>.</p><p>Use the link within 7 days. If it has expired, ask your manager to resend the invitation.</p>`,
+            text: `Hello ${name},\n${practiceName} has invited you to PracticeReady.\n${loginUrl}\nSet your password: ${setPasswordUrl}\nYour username is ${email}. Then log in at the address above.\nUse the link within 7 days; if it has expired, ask your manager to resend.`,
           }),
           signal: AbortSignal.timeout(15000),
         });
@@ -539,6 +562,26 @@ Deno.serve(async (request) => {
       await audit([
         { action: body.active ? "staff.reactivated" : "staff.deactivated", target: body.id },
       ]);
+      return reply({ ok: true });
+    }
+
+    if (action === "erase-staff") {
+      if (!manager) return reply({ error: "Manager access required." }, 403);
+      if (body.confirm !== "ERASE" || typeof body.id !== "string")
+        fail("Type ERASE to confirm.");
+      const { data: member, error: memberError } = await admin
+        .from("profiles")
+        .select("id,inactive_at")
+        .eq("id", body.id)
+        .eq("practice_id", profile.practice_id)
+        .eq("role", "trainee")
+        .maybeSingle();
+      check(memberError);
+      if (!member) fail("Staff member not found.");
+      if (!member.inactive_at) fail("Deactivate this staff member before erasing them.");
+      // Deleting the login removes the profile (name, email); training rows stay, unlinked from them.
+      check((await admin.auth.admin.deleteUser(member.id)).error);
+      await audit([{ action: "staff.erased", target: member.id }]);
       return reply({ ok: true });
     }
 
