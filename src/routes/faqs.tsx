@@ -114,7 +114,7 @@ function FaqsPage() {
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               {account
-                ? "Head to your dashboard to review scenarios and assign modules."
+                ? "Head to your dashboard to review questions and assign modules."
                 : "We’re working with primary care teams on pilots — start an account to explore the platform."}
             </p>
           </div>

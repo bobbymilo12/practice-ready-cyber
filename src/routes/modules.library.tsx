@@ -74,7 +74,7 @@ function LibraryPage() {
                   <span className="block font-medium">{m.title}</span>
                   <span className="block text-xs text-muted-foreground">
                     {TOPICS.find((t) => t.key === m.topicKey)?.title ?? m.type} · {m.scenarioCount}{" "}
-                    scenarios
+                    questions
                   </span>
                 </span>
                 <button

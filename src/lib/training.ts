@@ -159,7 +159,7 @@ export function answerSession(session: TrainingSession, value: unknown): Trainin
   if (session.review) throw new Error("Review your answers before submitting the module.");
   const scenarioId = session.queue[session.index];
   const scenario = session.scenarios.find((s) => s.id === scenarioId);
-  if (!scenario) throw new Error("Scenario not found.");
+  if (!scenario) throw new Error("Question not found.");
   if (committedAnswer(session, scenario)) return session;
   const correct = evaluateAnswer(scenario, value);
   // Old matching edits could have queued recovery before the board was complete.
@@ -209,7 +209,7 @@ export function advanceSession(session: TrainingSession, moduleTitle: string): T
   if (session.review) return session;
   const scenario = session.scenarios.find((s) => s.id === session.queue[session.index]);
   if (!scenario || !committedAnswer(session, scenario))
-    throw new Error("Answer this scenario first using Check answer.");
+    throw new Error("Answer this question before continuing.");
   if (session.index + 1 < session.queue.length)
     return { ...session, index: session.index + 1, updatedAt: Date.now() };
   return { ...session, review: true, updatedAt: Date.now() };

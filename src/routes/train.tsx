@@ -1,5 +1,5 @@
 import { SequenceBoard } from "@/components/SequenceBoard";
-import { orderKey, orderLabels } from "@/lib/sequence";
+import { orderLabels } from "@/lib/sequence";
 import { MatchingBoard } from "@/components/MatchingBoard";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -13,9 +13,7 @@ import {
   type TrainingSession,
   type AnswerValue,
   isMatchingAnswer,
-  matchingFeedback,
   answerIsComplete,
-  evaluateAnswer,
   primaryScenarios,
 } from "@/lib/training";
 
@@ -78,8 +76,10 @@ function Training({ id }: { id: string }) {
         await loadWorkspace();
       setSession(next);
       if (next.result) await nav({ to: "/results" });
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your progress. Please retry.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -116,8 +116,8 @@ function Training({ id }: { id: string }) {
           <p className="mt-3 text-sm text-muted-foreground">
             {updatedTraining &&
               "Your training has been updated. Start the updated module below; your earlier answers are kept in your history. "}
-            {primaryScenarios(module).length} scenarios. Each checked answer saves automatically. If
-            you miss a topic, you may receive an approved follow-up scenario for extra practice.
+            {primaryScenarios(module).length} questions. Each answer saves when you press Continue.
+            If you miss a topic, you may receive an approved follow-up question for extra practice.
           </p>
           {error && (
             <p role="alert" className="mt-3 text-destructive">
@@ -143,8 +143,8 @@ function Training({ id }: { id: string }) {
           </Link>
           <h1 className="mt-5 font-display text-2xl font-bold">Review your answers</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Review your checked answers before submitting this module. Your score is based on the
-            first answer you checked for each main question; follow-up practice does not change it.
+            Review your answers before submitting this module. Your score is based on the first
+            answer you gave for each main question; follow-up practice does not change it.
           </p>
           <Card className="mt-6">
             <ol className="space-y-4">
@@ -206,7 +206,7 @@ function Training({ id }: { id: string }) {
     return (
       <Shell>
         <Card>
-          <p>No approved scenarios to preview.</p>
+          <p>No approved questions to preview.</p>
           <Link to="/dashboard">Back to dashboard</Link>
         </Card>
       </Shell>
@@ -226,12 +226,12 @@ function Training({ id }: { id: string }) {
               ? "Manager preview · no results recorded"
               : busy
                 ? "Saving…"
-                : "Checked answers saved · unchecked edits stay on this page"}
+                : "Answers save when you press Continue"}
           </span>
         </div>
         <h1 className="mt-5 font-display text-2xl font-bold">{module.title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {state.practiceData.practiceName} · Scenario {index + 1} of {total}
+          {state.practiceData.practiceName} · Question {index + 1} of {total}
         </p>
         <progress
           aria-label="Module progress"
@@ -264,7 +264,7 @@ function Training({ id }: { id: string }) {
           answer={answer}
           busy={busy}
           preview={preview}
-          onAnswer={(value) => void act("answer", value)}
+          onAnswer={(value) => void act("answer", value).then((saved) => saved && act("continue"))}
           onContinue={() => {
             if (preview) {
               if (previewIndex + 1 < total) setPreviewIndex((i) => i + 1);
@@ -303,12 +303,8 @@ function ScenarioBlock({
   isFirst: boolean;
   isLast: boolean;
 }) {
-  const [localAnswer, setLocalAnswer] = useState<SavedAnswer>();
-  const committed = preview
-    ? localAnswer
-    : answer && answerIsComplete(scenario, answer.value)
-      ? answer
-      : undefined;
+  const committed =
+    !preview && answer && answerIsComplete(scenario, answer.value) ? answer : undefined;
   const [draft, setDraft] = useState<AnswerValue | undefined>(() => {
     if (answer) return answer.value;
     if (scenario.kind === "matching") return {};
@@ -323,16 +319,10 @@ function ScenarioBlock({
   const edit = (value: AnswerValue) => {
     if (!locked) setDraft(value);
   };
-  const check = () => {
-    if (locked || !answerIsComplete(scenario, draft)) return;
-    if (preview)
-      setLocalAnswer({
-        scenarioId: scenario.id,
-        title: scenario.title,
-        value: structuredClone(draft),
-        correct: evaluateAnswer(scenario, draft),
-      });
-    else onAnswer(draft);
+  // Continue saves a new answer (the parent then moves on); saved answers and previews just move on.
+  const next = () => {
+    if (committed || preview) onContinue();
+    else if (!busy && answerIsComplete(scenario, draft)) onAnswer(draft);
   };
   const items = Array.isArray(selected) ? selected : [];
   const move = (index: number, direction: number) => {
@@ -401,7 +391,7 @@ function ScenarioBlock({
       ) : (
         <>
           <p className="mt-2 text-xs text-muted-foreground">
-            Use the arrows to arrange the steps, then check your answer.
+            Use the arrows to arrange the steps, then press Continue.
           </p>
           <ol className="mt-4 space-y-2">
             {items.map((step, i) => (
@@ -434,59 +424,11 @@ function ScenarioBlock({
           </ol>
         </>
       )}
-      {committed ? (
-        <div role="status" className="mt-6 rounded-xl bg-surface p-4 text-sm">
-          <p className="font-semibold">{committed.correct ? "Correct." : "Incorrect."}</p>
-          {scenario.kind === "mcq" && (
-            <p className="mt-2">
-              Correct answer:{" "}
-              {(scenario.correctIndices ?? [scenario.correctIndex])
-                .map((i) => scenario.options[i])
-                .join("; ")}
-            </p>
-          )}
-          {scenario.kind === "order" && (
-            <p className="mt-2">
-              Correct order: {orderLabels(scenario, orderKey(scenario)).join(" → ")}
-            </p>
-          )}
-          {scenario.kind === "matching" && (
-            <ul className="mt-2 space-y-1">
-              {matchingFeedback(scenario, committed.value).map((item) => (
-                <li key={item.id}>
-                  {item.label}: {item.correct ? "Correct" : "Incorrect"} ·{" "}
-                  {scenario.targets
-                    .filter((t) => item.validTargets.includes(t.id))
-                    .map((t) => t.label)
-                    .join(" or ")}
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="mt-2 whitespace-pre-line">{scenario.learningPoint}</p>
-          {scenario.managerNote && (
-            <p className="mt-2">From your manager: {scenario.managerNote}</p>
-          )}
-          <p className="mt-3">
-            Your checked answer is recorded and cannot be changed. Follow-up practice does not
-            change your first-answer score.
-          </p>
-        </div>
-      ) : (
-        <>
-          <p className="mt-6 text-sm">
-            You can change your answer before checking. Unchecked edits are not saved when you leave
-            or refresh this page.
-          </p>
-          <button
-            disabled={busy || !answerIsComplete(scenario, draft)}
-            onClick={check}
-            className="mt-4 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-          >
-            Check answer
-          </button>
-        </>
-      )}
+      <p className="mt-6 text-sm">
+        {committed
+          ? "Your answer is saved and cannot be changed. You'll see how you did at the end."
+          : "You can change your answer until you press Continue."}
+      </p>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <button
           disabled={busy || isFirst}
@@ -496,8 +438,8 @@ function ScenarioBlock({
           ← Previous question
         </button>
         <button
-          disabled={busy || !committed}
-          onClick={onContinue}
+          disabled={busy || (!committed && !answerIsComplete(scenario, draft))}
+          onClick={next}
           className="ml-auto rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
         >
           {isLast ? (preview ? "Finish preview" : "Review answers →") : "Continue →"}

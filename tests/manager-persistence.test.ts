@@ -797,7 +797,7 @@ test("merge requires fresh approval for paused sources, even when duplicated by 
         { kind: "publish", moduleId: "merged" },
         { id: "publish", at: 2 },
       ),
-    /Approve every scenario/,
+    /Approve every question/,
   );
   next.modules = next.modules.map((m: any) =>
     m.id === "merged"

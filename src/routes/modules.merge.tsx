@@ -49,7 +49,7 @@ function MergePage() {
         <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">Merge modules</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Pick two or more modules to combine. The new module starts as a draft so you can review
-          the full set of scenarios before publishing. Questions from paused modules require fresh
+          the full set of questions before publishing. Questions from paused modules require fresh
           approval.
         </p>
 
@@ -101,7 +101,7 @@ function MergePage() {
             <p className="mt-3 text-xs text-muted-foreground">
               {picked.length < 2
                 ? "Select at least two modules."
-                : `${total} scenarios will be combined (duplicates removed).`}
+                : `${total} questions will be combined (duplicates removed).`}
             </p>
 
             <button

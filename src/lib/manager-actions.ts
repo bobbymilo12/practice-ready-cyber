@@ -105,7 +105,7 @@ export function managerActionPatch(
       !confirmedFrom &&
       (!module.scenarios.length || module.scenarios.some((s) => s.status !== "approved"))
     )
-      throw new Error("Approve every scenario before publishing.");
+      throw new Error("Approve every question before publishing.");
     if (reviewed.needsReview) {
       if (
         (!confirmedFrom && pendingQuestionReviews(reviewed, practice).length > 0) ||

@@ -375,7 +375,7 @@ export function PredefinedModuleSetup({
                   )}
                   {!validCount && <p role="alert">Choose a whole number from 1 to 100.</p>}
                   <p className="text-sm">
-                    {Math.min(pool.length, settings.count)} distinct scenarios available for this
+                    {Math.min(pool.length, settings.count)} distinct questions available for this
                     module.
                     {!settings.trainingLevel &&
                       topic !== "appointment-booking" &&
@@ -389,7 +389,7 @@ export function PredefinedModuleSetup({
                   )}
                   {existing && (
                     <p className="text-sm">
-                      Regeneration replaces this module’s scenarios and requires a fresh manager
+                      Regeneration replaces this module’s questions and requires a fresh manager
                       review. Existing results and training packages are retained.
                     </p>
                   )}

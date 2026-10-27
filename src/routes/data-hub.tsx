@@ -429,8 +429,8 @@ function DataHub() {
                 const touched = replaceStaffName(replaceOld, replaceNew, true);
                 setReplaceMsg(
                   touched === 0
-                    ? "Name updated. No existing scenarios mentioned that name."
-                    : `Updated ${touched} scenario${touched === 1 ? "" : "s"}. Affected modules are flagged for manager review.`,
+                    ? "Name updated. No existing questions mentioned that name."
+                    : `Updated ${touched} question${touched === 1 ? "" : "s"}. Affected modules are flagged for manager review.`,
                 );
                 setReplaceOld("");
                 setReplaceNew("");

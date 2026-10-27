@@ -355,8 +355,26 @@ function AssignControl({ moduleId }: { moduleId: string }) {
               <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-2">
                 <span className="text-base">{t.name || t.email}</span>
                 {assigned ? (
-                  <span className="text-base font-semibold text-[color:var(--success)]">
-                    ✓ Assigned
+                  <span className="flex flex-wrap items-center justify-end gap-3">
+                    <span className="text-base font-semibold text-[color:var(--success)]">
+                      ✓ Assigned
+                    </span>
+                    <button
+                      disabled={action.saving}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Ask ${t.name || t.email} to do this module again from the start? Their earlier results are kept.`,
+                          )
+                        )
+                          void action.run({ kind: "reassign", traineeId: t.id, moduleId });
+                      }}
+                      className={plainButton}
+                    >
+                      {action.pending?.kind === "reassign" && action.pending.traineeId === t.id
+                        ? "Reassigning…"
+                        : "Reassign"}
+                    </button>
                   </span>
                 ) : (
                   <button

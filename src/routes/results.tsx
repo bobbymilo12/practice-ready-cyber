@@ -133,7 +133,7 @@ function Results() {
                       </h3>
                       <p className="mt-2 text-sm">
                         {feedback.filter((item) => item.correct).length} of {feedback.length}{" "}
-                        matches correct · {answer.correct ? "Correct" : "Incorrect"} scenario
+                        matches correct · {answer.correct ? "Correct" : "Incorrect"} question
                       </p>
                       <ul className="mt-3 space-y-3 text-sm">
                         {feedback.map((item) => (

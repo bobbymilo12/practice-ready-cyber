@@ -166,23 +166,22 @@ function harness(scenario: Scenario, preview = false) {
   };
 }
 
-test("MCQ edits are drafts; wrong then correct before Check records a correct first response", () => {
+test("MCQ edits are drafts; wrong then correct before Continue records a correct first response", () => {
   const h = harness(mcq);
+  assert.equal(h.button("Continue →").props.disabled, true);
   h.choice(0).props.onClick();
   assert.equal(h.calls, 0);
   assert.deepEqual(h.session.answers, []);
   assert.deepEqual(h.session.queue, [mcq.id]);
-  assert.equal(h.button("Continue →").props.disabled, true);
   h.choice(1).props.onClick();
   assert.equal(h.calls, 0);
-  h.button("Check answer").props.onClick();
+  h.button("Continue →").props.onClick();
   assert.equal(h.calls, 1);
   assert.equal(h.session.answers[0].value, 1);
   assert.equal(h.session.answers[0].correct, true);
   assert.deepEqual(h.session.queue, [mcq.id]);
   assert.equal(h.button("Continue →").props.disabled, false);
   assert.equal(h.choice(0).props.disabled, true);
-  assert.ok(!h.button("Check answer"));
   assert.equal(
     training.submitSession(training.advanceSession(h.session, h.module.title), h.module.title)
       .result?.correct,
@@ -190,11 +189,11 @@ test("MCQ edits are drafts; wrong then correct before Check records a correct fi
   );
 });
 
-test("incorrect Check locks the first response, schedules recovery once and survives reload/retry", () => {
+test("incorrect answer locks the first response, schedules recovery once and survives reload/retry", () => {
   const h = harness(mcq);
   h.choice(0).props.onClick();
-  h.button("Check answer").props.onClick();
-  assert.ok(h.render().some((node) => node.props?.children === "Incorrect."));
+  h.button("Continue →").props.onClick();
+  assert.ok(!h.render().some((node) => node.props?.children === "Incorrect."), "no feedback shown");
   let session = JSON.parse(JSON.stringify(h.session));
   assert.deepEqual(session.queue, [mcq.id, "recovery"]);
   const recorded = JSON.stringify(session);
@@ -217,13 +216,13 @@ test("matching pair edits do not score or recover until the whole answer is chec
   const h = harness(matching);
   const board = () => h.render().find((node) => node.type === "MatchingBoard");
   board().props.onChange({ a: "x" });
-  assert.equal(h.button("Check answer").props.disabled, true);
+  assert.equal(h.button("Continue →").props.disabled, true);
   assert.throws(() => training.answerSession(h.session, { a: "x" }), /Match every/);
   board().props.onChange({ a: "y", b: "x" });
   assert.equal(h.calls, 0);
   assert.deepEqual(h.session.queue, [matching.id]);
   board().props.onChange({ a: "x", b: "y" });
-  h.button("Check answer").props.onClick();
+  h.button("Continue →").props.onClick();
   assert.equal(h.session.answers[0].correct, true);
   assert.equal(board().props.disabled, true);
   assert.deepEqual(h.session.queue, [matching.id]);
@@ -235,7 +234,7 @@ test("matching pair edits do not score or recover until the whole answer is chec
   assert.deepEqual(training.answerSession(wrong, { a: "x", b: "y" }), wrong);
 });
 
-test("structured ordering movements remain drafts until Check answer", () => {
+test("structured ordering movements remain drafts until Continue", () => {
   const scenario = sequencePreviewModule().scenarios[0];
   assert.ok(scenario.kind === "order" && scenario.sequence);
   const h = harness(scenario);
@@ -245,20 +244,20 @@ test("structured ordering movements remain drafts until Check answer", () => {
   assert.deepEqual(h.session.answers, []);
   assert.deepEqual(h.session.queue, [scenario.id]);
   board().props.onChange(scenario.sequence.correctOrder);
-  h.button("Check answer").props.onClick();
+  h.button("Continue →").props.onClick();
   assert.equal(h.session.answers[0].correct, true);
   assert.equal(board().props.disabled, true);
   assert.deepEqual(h.session.queue, [scenario.id]);
 });
 
-test("legacy ordering arrows edit locally and Check commits one complete order", () => {
+test("legacy ordering arrows edit locally and Continue commits one complete order", () => {
   const h = harness(legacyOrder);
   const arrow = (label: string) => h.render().find((node) => node.props?.["aria-label"] === label);
   arrow("Move step 3 up").props.onClick();
   arrow("Move step 2 up").props.onClick();
   assert.equal(h.calls, 0);
   assert.deepEqual(h.session.answers, []);
-  h.button("Check answer").props.onClick();
+  h.button("Continue →").props.onClick();
   assert.equal(h.calls, 1);
   assert.equal(h.session.answers[0].correct, true);
   assert.equal(arrow("Move step 2 up").props.disabled, true);
@@ -273,7 +272,7 @@ test("legacy complete answers are retained and incomplete matching remains check
   ];
   assert.equal(training.committedAnswer(session, matching), undefined);
   assert.equal(training.assignmentProgress(assignment, [session]).fraction, 0);
-  assert.throws(() => training.advanceSession(session, module.title), /Check answer/);
+  assert.throws(() => training.advanceSession(session, module.title), /before continuing/);
   session = training.answerSession(session, { a: "x", b: "y" });
   const saved = JSON.stringify(session);
   assert.equal(JSON.stringify(training.answerSession(session, { a: "y", b: "x" })), saved);
@@ -283,27 +282,26 @@ test("legacy complete answers are retained and incomplete matching remains check
   assert.deepEqual(training.submitSession(session, module.title), session);
 });
 
-test("manager preview checks and shows feedback without recording trainee results", () => {
+test("manager preview continues without recording trainee results", () => {
   const h = harness(mcq, true);
   h.choice(1).props.onClick();
-  h.button("Check answer").props.onClick();
-  assert.equal(h.calls, 0);
-  assert.ok(h.render().some((node) => node.props?.children === "Correct."));
   assert.equal(h.button("Continue →").props.disabled, false);
+  h.button("Continue →").props.onClick();
+  assert.equal(h.calls, 0);
   assert.deepEqual(h.session.answers, []);
 });
 
-test("failed persistence keeps the draft editable and Check can be retried", () => {
+test("failed persistence keeps the draft editable and Continue can be retried", () => {
   const h = harness(mcq);
   h.choice(1).props.onClick();
   h.failNextCheck();
-  h.button("Check answer").props.onClick();
+  h.button("Continue →").props.onClick();
   assert.deepEqual(h.session.answers, []);
   assert.deepEqual(h.session.queue, [mcq.id]);
   assert.equal(h.choice(1).props["aria-pressed"], true);
   assert.equal(h.choice(0).props.disabled, false);
-  assert.equal(h.button("Continue →").props.disabled, true);
-  h.button("Check answer").props.onClick();
+  assert.equal(h.button("Continue →").props.disabled, false);
+  h.button("Continue →").props.onClick();
   assert.equal(h.session.answers[0].correct, true);
 });
 
@@ -377,7 +375,7 @@ test("an incorrect checked ordering response schedules recovery once and freezes
   h.render()
     .find((node) => node.type === "SequenceBoard")
     .props.onChange(wrong);
-  h.button("Check answer").props.onClick();
+  h.button("Continue →").props.onClick();
   assert.equal(h.session.answers[0].correct, false);
   assert.deepEqual(h.session.queue, [scenario.id, "recovery"]);
   const saved = JSON.stringify(h.session);
@@ -458,7 +456,7 @@ test("training screen offers updated content without resuming or rewriting the o
   assert.deepEqual(old, history);
 });
 
-test("multi-select edits stay draft, exact-set Check commits once and all correct choices appear in feedback", () => {
+test("multi-select edits stay draft, exact-set Continue commits once and the answer locks", () => {
   const question: Scenario = {
     ...mcq,
     options: ["First method", "Second method", "Unsupported method"],
@@ -472,15 +470,14 @@ test("multi-select edits stay draft, exact-set Check commits once and all correc
   assert.equal(h.calls, 0);
   assert.deepEqual(h.session.queue, [question.id]);
   h.choice(1).props.onClick();
-  h.button("Check answer").props.onClick();
+  h.button("Continue →").props.onClick();
   assert.equal(h.calls, 1);
   assert.equal(h.session.answers[0].correct, true);
   assert.deepEqual(h.session.answers[0].value, ["0", "1"]);
-  assert.match(JSON.stringify(h.render()), /First method; Second method/);
   assert.equal(h.choice(2).props.disabled, true);
   const wrong = harness(question);
   wrong.choice(0).props.onClick();
-  wrong.button("Check answer").props.onClick();
+  wrong.button("Continue →").props.onClick();
   assert.equal(wrong.session.answers[0].correct, false);
   assert.deepEqual(wrong.session.queue, [question.id, "recovery"]);
   assert.deepEqual(
