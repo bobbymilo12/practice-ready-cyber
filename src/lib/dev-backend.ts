@@ -12,6 +12,7 @@ import {
 } from "./store";
 import type { PracticeState, Snapshot } from "./backend";
 import { devRole } from "./dev-mode";
+import { copyPublicModule, type PublicModuleSummary } from "./shared-modules";
 import { practiceScenarios } from "./practice-scenarios";
 import {
   startSession,
@@ -199,6 +200,19 @@ function managerSeed(): Workspace {
     version: 0,
   };
 }
+// Built from the default fictional practice, standing in for another practice's data.
+const demoSharedModule = (): Module => ({
+  id: "dev-shared-module",
+  type: "Demo training",
+  title: "Demo shared reception onboarding",
+  topicKey: "first-week",
+  published: true,
+  visibility: "public",
+  createdAt: Date.now(),
+  scenarios: practiceScenarios("first-week", "Demo training", defaultPracticeData, {})
+    .slice(0, 3)
+    .map((s) => ({ ...s, status: "approved" })),
+});
 function seed(): Workspace {
   const practiceData = structuredClone(defaultPracticeData);
   practiceData.practiceName = "Demo Willow Practice (fictional)";
@@ -355,6 +369,26 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
   }
   let result: unknown = { ok: true };
   if (action === "erase-staff") throw new Error("Erasing people is not available in mock mode.");
+  if (action === "list-public-modules" || action === "copy-public-module") {
+    if (role !== "manager") throw new Error("Manager access required.");
+    // Mock mode has one practice, so the library shows a fictional other practice's module.
+    const source = demoSharedModule();
+    if (action === "list-public-modules")
+      return {
+        modules: [
+          {
+            practiceId: "dev-other-practice",
+            id: source.id,
+            title: source.title,
+            topicKey: source.topicKey,
+            type: source.type,
+            scenarioCount: source.scenarios.length,
+          },
+        ] satisfies PublicModuleSummary[],
+      };
+    if (body.moduleId !== source.id) throw new Error("This module is no longer shared.");
+    return { module: copyPublicModule(source, crypto.randomUUID(), Date.now()) };
+  }
   if (["save-practice", "invite", "set-staff-active"].includes(action)) {
     if (role !== "manager") throw new Error("Manager access required.");
     if (action === "save-practice") {

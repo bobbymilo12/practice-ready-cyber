@@ -120,6 +120,34 @@ function Review() {
           </div>
         </div>
 
+        {module.published && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+            <button
+              type="button"
+              aria-pressed={module.visibility === "public"}
+              disabled={action.saving || (module.visibility !== "public" && !!module.needsReview)}
+              onClick={() =>
+                void action.run({
+                  kind: "share",
+                  moduleId: module.id,
+                  shared: module.visibility !== "public",
+                })
+              }
+              className="rounded-xl border border-border px-4 py-2 font-semibold hover:bg-muted disabled:opacity-40"
+            >
+              {action.pending?.kind === "share"
+                ? "Saving…"
+                : module.visibility === "public"
+                  ? "Stop sharing with other practices"
+                  : "Share with other practices"}
+            </button>
+            <span className="text-muted-foreground">
+              Shared modules can be copied by other practice managers. Check it contains no patient
+              or staff details first.
+            </span>
+          </div>
+        )}
+
         {module.needsReview && (
           <Card className="mt-6 border-warning/40 bg-warning/5">
             <h2 className="font-semibold">Needs review — training paused</h2>

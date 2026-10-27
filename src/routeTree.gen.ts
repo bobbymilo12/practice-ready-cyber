@@ -26,6 +26,7 @@ import { Route as TrainRouteImport } from './routes/train'
 import { Route as ApiContactRouteImport } from './routes/api.contact'
 import { Route as ApiResendReceivingRouteImport } from './routes/api.resend-receiving'
 import { Route as ModulesCreateRouteImport } from './routes/modules.create'
+import { Route as ModulesLibraryRouteImport } from './routes/modules.library'
 import { Route as ModulesMergeRouteImport } from './routes/modules.merge'
 import { Route as ModulesReviewRouteImport } from './routes/modules.review'
 import { Route as ModulesSetupRouteImport } from './routes/modules.setup'
@@ -118,6 +119,11 @@ const ModulesCreateRoute = ModulesCreateRouteImport.update({
   path: '/modules/create',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ModulesLibraryRoute = ModulesLibraryRouteImport.update({
+  id: '/modules/library',
+  path: '/modules/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModulesMergeRoute = ModulesMergeRouteImport.update({
   id: '/modules/merge',
   path: '/modules/merge',
@@ -167,6 +173,7 @@ export interface FileRoutesByFullPath {
   '/api/contact': typeof ApiContactRoute
   '/api/resend-receiving': typeof ApiResendReceivingRoute
   '/modules/create': typeof ModulesCreateRoute
+  '/modules/library': typeof ModulesLibraryRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/api/contact': typeof ApiContactRoute
   '/api/resend-receiving': typeof ApiResendReceivingRoute
   '/modules/create': typeof ModulesCreateRoute
+  '/modules/library': typeof ModulesLibraryRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
@@ -218,6 +226,7 @@ export interface FileRoutesById {
   '/api/contact': typeof ApiContactRoute
   '/api/resend-receiving': typeof ApiResendReceivingRoute
   '/modules/create': typeof ModulesCreateRoute
+  '/modules/library': typeof ModulesLibraryRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
   '/modules/setup': typeof ModulesSetupRoute
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/api/contact'
     | '/api/resend-receiving'
     | '/modules/create'
+    | '/modules/library'
     | '/modules/merge'
     | '/modules/review'
     | '/modules/setup'
@@ -270,6 +280,7 @@ export interface FileRouteTypes {
     | '/api/contact'
     | '/api/resend-receiving'
     | '/modules/create'
+    | '/modules/library'
     | '/modules/merge'
     | '/modules/review'
     | '/modules/setup'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/api/contact'
     | '/api/resend-receiving'
     | '/modules/create'
+    | '/modules/library'
     | '/modules/merge'
     | '/modules/review'
     | '/modules/setup'
@@ -321,6 +333,7 @@ export interface RootRouteChildren {
   ApiContactRoute: typeof ApiContactRoute
   ApiResendReceivingRoute: typeof ApiResendReceivingRoute
   ModulesCreateRoute: typeof ModulesCreateRoute
+  ModulesLibraryRoute: typeof ModulesLibraryRoute
   ModulesMergeRoute: typeof ModulesMergeRoute
   ModulesReviewRoute: typeof ModulesReviewRoute
   ModulesSetupRoute: typeof ModulesSetupRoute
@@ -450,6 +463,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ModulesCreateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/modules/library': {
+      id: '/modules/library'
+      path: '/modules/library'
+      fullPath: '/modules/library'
+      preLoaderRoute: typeof ModulesLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/modules/merge': {
       id: '/modules/merge'
       path: '/modules/merge'
@@ -513,6 +533,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiContactRoute: ApiContactRoute,
   ApiResendReceivingRoute: ApiResendReceivingRoute,
   ModulesCreateRoute: ModulesCreateRoute,
+  ModulesLibraryRoute: ModulesLibraryRoute,
   ModulesMergeRoute: ModulesMergeRoute,
   ModulesReviewRoute: ModulesReviewRoute,
   ModulesSetupRoute: ModulesSetupRoute,

@@ -178,6 +178,10 @@ const js = ts
   .replace(
     '"../../../src/lib/practice-change-tracking.ts"',
     JSON.stringify(new URL("../src/lib/practice-change-tracking.ts", import.meta.url).href),
+  )
+  .replace(
+    '"../../../src/lib/shared-modules.ts"',
+    JSON.stringify(new URL("../src/lib/shared-modules.ts", import.meta.url).href),
   );
 await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
 
@@ -654,7 +658,10 @@ test("erasing a person needs a manager, a deactivated member and typed confirmat
   assert.equal((await call({ action: "erase-staff", id: "bob", confirm: "ERASE" })).status, 200);
   assert.deepEqual(deletedUsers, ["bob"]);
   assert.equal(tables.audit_events.at(-1).action, "staff.erased");
-  assert.equal((await call({ action: "erase-staff", id: "external", confirm: "ERASE" })).status, 400);
+  assert.equal(
+    (await call({ action: "erase-staff", id: "external", confirm: "ERASE" })).status,
+    400,
+  );
 });
 
 test("staff lifecycle is restricted to managers and their own practice", async () => {

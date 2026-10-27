@@ -25,6 +25,10 @@ function CreateModule() {
           <Link to="/modules/merge" className="text-primary underline">
             combine existing modules
           </Link>{" "}
+          or{" "}
+          <Link to="/modules/library" className="text-primary underline">
+            copy a module another practice shared
+          </Link>{" "}
           instead?
         </p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
