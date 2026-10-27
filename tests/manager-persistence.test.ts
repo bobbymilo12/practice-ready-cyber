@@ -249,6 +249,7 @@ async function harness(assigned = false, published = assigned) {
     };
     const hook = compile("../src/hooks/use-manager-action.ts", imports);
     imports["@/hooks/use-manager-action"] = hook;
+    imports["@/hooks/use-live-workspace"] = { useLiveWorkspace: () => {} };
     const path =
       kind === "merge"
         ? "../src/routes/modules.merge.tsx"
@@ -338,19 +339,22 @@ test("failed publish stays on review, remains unpublished, and can retry without
   await spin(() => ui.navigation.length === 1);
 });
 
+const assigned = (ui: any) =>
+  ui.render().filter((n: any) => n.props?.children === "✓ Assigned").length;
+
 test("assignment UI shows Assigned only after confirmation and ignores double clicks", async () => {
   const h = await harness(false, true);
   const ui = h.ui("assign");
-  ui.button("Assign to employees").props.onClick();
+  ui.button("Assign to staff").props.onClick();
   const button = ui.button("Assign");
   button.props.onClick();
   button.props.onClick();
   await spin(() => h.requests.length === 1);
   assert.deepEqual(h.useApp.getState().assignments, []);
   assert.equal(ui.button("Assigning…").props.disabled, true);
-  assert.equal(ui.buttons("Assigned").length, 0);
+  assert.equal(assigned(ui), 0);
   h.succeed(0);
-  await spin(() => ui.buttons("Assigned").length === 1);
+  await spin(() => assigned(ui) === 1);
   assert.equal(h.useApp.getState().assignments.length, 1);
   await h.backend.confirmManagerAction({ kind: "assign", moduleId: "draft", traineeId: "trainee" });
   assert.equal(h.requests.length, 1);
@@ -359,13 +363,13 @@ test("assignment UI shows Assigned only after confirmation and ignores double cl
 test("failed assignment remains available and an unrelated autosave cannot apply the rejected assignment", async () => {
   const h = await harness(false, true);
   const ui = h.ui("assign");
-  ui.button("Assign to employees").props.onClick();
+  ui.button("Assign to staff").props.onClick();
   ui.button("Assign").props.onClick();
   await spin(() => h.requests.length === 1);
   h.fail(0);
   await spin(() => ui.alerts().includes("Save rejected"));
   assert.deepEqual(h.useApp.getState().assignments, []);
-  assert.equal(ui.buttons("Assigned").length, 0);
+  assert.equal(assigned(ui), 0);
   assert.equal(ui.button("Assign").props.disabled, false);
   h.useApp.setState((s: any) => ({
     practiceData: { ...s.practiceData, practiceName: "Edited practice" },
@@ -721,7 +725,7 @@ test("dashboard opens published modules in scrollable manager review without att
     const sessions = JSON.stringify(h.backend.useConnection.getState().sessions);
     const requests = h.requests.length;
     const dashboard = h.ui("dashboard");
-    const open = dashboard.render().find((n) => n.type === "a" && n.props.children === "Open →");
+    const open = dashboard.render().find((n) => n.type === "a" && n.props.children === "Open");
     assert.equal(open.props.to, "/modules/review");
     assert.deepEqual(open.props.search, { id: "draft" });
     const review = h.ui("review");
@@ -970,6 +974,7 @@ test("assignment choices exclude inactive staff and withdrawn work is shown only
   const imports: any = {
     react: { useState: () => [true, () => {}] },
     "@/hooks/use-manager-action": { useManagerAction: () => ({ saving: false }) },
+    "@/hooks/use-live-workspace": { useLiveWorkspace: () => {} },
     "@tanstack/react-router": { createFileRoute: () => () => ({}), Link: "a" },
     "@/components/Shell": { Shell: "main", Card: "section", Badge: "span" },
     "@/lib/backend": { useConnection: (select: any) => select(connection) },
@@ -986,9 +991,9 @@ test("assignment choices exclude inactive staff and withdrawn work is shown only
   assert.doesNotMatch(choices, /Inactive person/);
   const staff = compile("../src/routes/staff.tsx", imports, "\nexports.Staff = Staff;");
   const screen = JSON.stringify(staff.Staff());
-  assert.match(screen, /Withdrawn training/);
-  assert.match(screen, /View completed result/);
-  assert.doesNotMatch(screen, /Start module|Continue module|Practise again/);
+  assert.match(screen, /Training you no longer need to do/);
+  assert.match(screen, /See result/);
+  assert.doesNotMatch(screen, /"Start"|"Carry on"|Practise again/);
 });
 
 test("manager review displays every correct multi-select choice without starting an attempt", () => {

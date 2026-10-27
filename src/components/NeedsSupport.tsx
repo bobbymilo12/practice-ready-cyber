@@ -25,12 +25,12 @@ export function NeedsSupport({
   return (
     <Card className="mt-6 border-primary/25">
       <h2 className="font-display text-xl font-semibold">Needs support</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="mt-1 text-base text-muted-foreground">
         Current training information to help you decide who to check in with. Completion and manager
         sign-off are separate.
       </p>
       {!rows.length ? (
-        <p className="mt-4 text-sm">
+        <p className="mt-4 text-base">
           No current support signals in the recorded training. This does not confirm understanding
           or replace a conversation with your team.
         </p>
@@ -43,13 +43,13 @@ export function NeedsSupport({
                 <Link
                   to="/trainees/$id"
                   params={{ id: trainee.id }}
-                  className="text-sm font-semibold text-primary underline"
+                  className="text-base font-semibold text-primary underline"
                 >
                   View trainee and results
                 </Link>
               </div>
               {support.map((item) => (
-                <div key={item.assignmentId} className="mt-2 text-sm">
+                <div key={item.assignmentId} className="mt-2 text-base">
                   <p className="font-medium">{item.moduleTitle}</p>
                   <ul className="mt-1 list-disc pl-5 text-muted-foreground">
                     {item.reasons.map((reason) => (
@@ -57,7 +57,7 @@ export function NeedsSupport({
                     ))}
                   </ul>
                   {item.practising && (
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-base text-muted-foreground">
                       Another attempt is in progress; the latest completed result is shown.
                     </p>
                   )}
