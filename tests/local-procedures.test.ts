@@ -5,6 +5,7 @@ import * as staffLifecycle from "../src/lib/staff-lifecycle.ts";
 import * as training from "../src/lib/training.ts";
 import * as changeTracking from "../src/lib/practice-change-tracking.ts";
 import * as managerActions from "../src/lib/manager-actions.ts";
+import * as sharedModules from "../src/lib/shared-modules.ts";
 import { suggestedRole, normaliseRoleRequestCategories } from "../src/lib/role-requests.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -169,7 +170,9 @@ function compile(path: string, imports: Record<string, unknown>) {
   const exports: Record<string, any> = {};
   new Function("require", "exports", code)(
     (id: string) =>
-      imports[id] ?? (id === "@/lib/question-quality" ? questionQuality : require(id)),
+      imports[id] ??
+      { "@/lib/question-quality": questionQuality, "./shared-modules": sharedModules }[id] ??
+      require(id),
     exports,
   );
   return exports;

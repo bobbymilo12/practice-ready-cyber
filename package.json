@@ -24,7 +24,7 @@
     "test:same-day-requests": "node --experimental-strip-types tests/same-day-requests.test.ts",
     "test:local-procedure-sequences": "node --experimental-strip-types tests/local-procedure-sequences.test.ts",
     "test:appointment-quality": "node --experimental-strip-types tests/appointment-quality.test.ts",
-    "test:module-creation": "node --experimental-strip-types tests/shared-module-creation.test.ts && node --experimental-strip-types tests/confirmed-practice-items.test.ts",
+    "test:module-creation": "node --experimental-strip-types tests/shared-module-creation.test.ts && node --experimental-strip-types tests/confirmed-practice-items.test.ts && node --experimental-strip-types tests/shared-module-library.test.ts",
     "test:copy": "node --experimental-strip-types tests/training-copy.test.ts",
     "test:account-lifecycle": "node --experimental-strip-types tests/account-lifecycle.test.ts",
     "test:support": "node --experimental-strip-types tests/training-support.test.ts",

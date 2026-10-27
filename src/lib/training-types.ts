@@ -143,6 +143,8 @@ export interface Module {
   title: string;
   topicKey: string;
   published: boolean;
+  /** "public" lets managers in other practices copy this module; absent means private. */
+  visibility?: "public";
   scenarios: Scenario[];
   createdAt: number;
   difficulty?: Difficulty;

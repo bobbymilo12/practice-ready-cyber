@@ -4,6 +4,7 @@ import {
   enforceReviewDecisions,
 } from "../../../src/lib/practice-change-tracking.ts";
 import { validateLocalProcedures } from "../../../src/lib/local-procedures.ts";
+import { copyPublicModule, shareable } from "../../../src/lib/shared-modules.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
   advanceSession,
@@ -285,6 +286,8 @@ Deno.serve(async (request) => {
           (!m.scenarios.length || m.scenarios.some((s) => s.status !== "approved"))
         )
           fail("Approve every scenario before publishing.");
+        // A module paused for review stays shared but is hidden from the library until republished.
+        if (m.visibility && !m.published) delete m.visibility;
       }
       const previousPractice = await loadPracticeData();
       try {
@@ -338,6 +341,12 @@ Deno.serve(async (request) => {
               !modules.some((o) => o.id === m.id && o.published && !o.needsReview),
           )
           .map((m) => ({ action: "module.published", target: m.id })),
+        ...(next.modules as Module[])
+          .filter((m) => !!m.visibility !== !!modules.find((o) => o.id === m.id)?.visibility)
+          .map((m) => ({
+            action: m.visibility ? "module.shared" : "module.unshared",
+            target: m.id,
+          })),
       ]);
       return reply({
         version: data,
@@ -347,6 +356,49 @@ Deno.serve(async (request) => {
             .map((m: Module) => [m.id, m.reviewConfirmations]),
         ),
       });
+    }
+
+    if (action === "list-public-modules") {
+      if (!manager) return reply({ error: "Manager access required." }, 403);
+      // shortcut: unindexed jsonb filter and no paging; add an expression index + paging past a few hundred public modules.
+      const { data, error } = await admin
+        .from("practice_modules")
+        .select(
+          "practice_id,id,title:data->>title,topicKey:data->>topicKey,type:data->>type,needsReview:data->needsReview,scenarios:data->scenarios",
+        )
+        .eq("data->>visibility", "public")
+        .eq("data->>published", "true")
+        .neq("practice_id", profile.practice_id)
+        .limit(200);
+      check(error);
+      return reply({
+        modules: (data ?? [])
+          .filter((r) => r.title && r.needsReview !== true)
+          .map((r) => ({
+            practiceId: r.practice_id,
+            id: r.id,
+            title: r.title,
+            topicKey: r.topicKey,
+            type: r.type,
+            scenarioCount: Array.isArray(r.scenarios) ? r.scenarios.length : 0,
+          })),
+      });
+    }
+    if (action === "copy-public-module") {
+      if (!manager) return reply({ error: "Manager access required." }, 403);
+      if (typeof body.practiceId !== "string" || typeof body.moduleId !== "string")
+        fail("Choose a shared module.");
+      const { data, error } = await admin
+        .from("practice_modules")
+        .select("data")
+        .eq("practice_id", body.practiceId)
+        .eq("id", body.moduleId)
+        .maybeSingle();
+      check(error);
+      const source = data?.data as Module | undefined;
+      if (!source || source.visibility !== "public" || !shareable(source))
+        fail("This module is no longer shared.");
+      return reply({ module: copyPublicModule(source, crypto.randomUUID(), Date.now()) });
     }
 
     if (action === "invite") {
@@ -567,8 +619,7 @@ Deno.serve(async (request) => {
 
     if (action === "erase-staff") {
       if (!manager) return reply({ error: "Manager access required." }, 403);
-      if (body.confirm !== "ERASE" || typeof body.id !== "string")
-        fail("Type ERASE to confirm.");
+      if (body.confirm !== "ERASE" || typeof body.id !== "string") fail("Type ERASE to confirm.");
       const { data: member, error: memberError } = await admin
         .from("profiles")
         .select("id,inactive_at")

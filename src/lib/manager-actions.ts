@@ -1,14 +1,18 @@
 import { scenarioContent } from "./training-content.ts";
 import { stableValue } from "./practice-change-tracking.ts";
 import { pendingQuestionReviews, reviewKey } from "./practice-change-tracking.ts";
+import { shareable } from "./shared-modules.ts";
 import type { AppState } from "./store";
+import type { Module } from "./training-types.ts";
 
 export type ManagerAction =
   | { kind: "withdraw"; moduleId: string; traineeId: string; assignmentId: string }
   | { kind: "publish"; moduleId: string; reviewKey?: string }
   | { kind: "delete-draft"; moduleId: string }
   | { kind: "merge"; moduleId: string; moduleIds: string[]; title: string }
-  | { kind: "assign" | "reassign"; moduleId: string; traineeId: string };
+  | { kind: "assign" | "reassign"; moduleId: string; traineeId: string }
+  | { kind: "share"; moduleId: string; shared: boolean }
+  | { kind: "copy"; moduleId: string; module: Module };
 export const managerActionKey = (action: ManagerAction) =>
   `${action.kind}:${action.moduleId}:${"traineeId" in action ? action.traineeId : ""}`;
 type ManagerPatch = Partial<
@@ -83,6 +87,10 @@ export function managerActionPatch(
       currentDraftId: action.moduleId,
     };
   }
+  if (action.kind === "copy") {
+    if (state.modules.some((m) => m.id === action.moduleId)) return {};
+    return { modules: [...state.modules, action.module], currentDraftId: action.moduleId };
+  }
   if ((action as { kind: string }).kind === "confirm-review")
     throw new Error("Review the questions and publish the reviewed module.");
   const module = state.modules.find((m) => m.id === action.moduleId);
@@ -146,6 +154,15 @@ export function managerActionPatch(
     return {
       modules: state.modules.map((m) =>
         m.id === module.id ? { ...m, published: true, needsReview: changed } : m,
+      ),
+    };
+  }
+  if (action.kind === "share") {
+    if (action.shared && !shareable(module))
+      throw new Error("Publish this module before sharing it with other practices.");
+    return {
+      modules: state.modules.map((m) =>
+        m.id === module.id ? { ...m, visibility: action.shared ? "public" : undefined } : m,
       ),
     };
   }
