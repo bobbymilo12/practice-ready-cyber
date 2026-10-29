@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { approvedTestSequence, sequencePreviewModule } from "./fixtures/sequence.ts";
-import { empty } from "./fixtures/role-matching.ts";
 import {
   createSequenceScenario,
   createTestSequenceScenario,
@@ -17,13 +15,6 @@ import {
   previousSession,
   submitSession,
 } from "../src/lib/training.ts";
-import {
-  generateConfiguredModule,
-  defaultModuleSettings,
-  reviseConfiguredScenario,
-  regenerateConfiguredScenario,
-} from "../src/lib/module-config.ts";
-import { practiceScenarios } from "../src/lib/practice-scenarios.ts";
 import type { Assignment } from "../src/lib/training-types.ts";
 
 const assignment: Assignment = {
@@ -120,7 +111,7 @@ test("first checked order survives navigation/reload; exact order counts as one 
   assert.notDeepEqual(session.scenarios[0], scenario);
 });
 
-test("review displays labels, manager edits preserve the key/provenance, regeneration cannot replace the source", () => {
+test("review displays step labels in the stored order", () => {
   const module = sequencePreviewModule();
   const scenario = module.scenarios[0];
   if (scenario.kind !== "order" || !scenario.sequence) throw new Error("fixture");
@@ -128,35 +119,6 @@ test("review displays labels, manager edits preserve the key/provenance, regener
     orderLabels(scenario, scenario.sequence.correctOrder),
     approvedTestSequence.steps.map((s) => s.label),
   );
-  const altered = {
-    ...scenario,
-    sequence: { ...scenario.sequence, correctOrder: [...scenario.sequence.correctOrder].reverse() },
-    title: "Reviewed",
-  };
-  const reviewed = reviseConfiguredScenario(module, altered).scenarios[0];
-  assert.ok(reviewed.kind === "order" && reviewed.sequence);
-  assert.deepEqual(reviewed.sequence.correctOrder, scenario.sequence.correctOrder);
-  assert.equal(reviewed.provenance.managerModified, true);
-  assert.deepEqual(regenerateConfiguredScenario(module, scenario.id, empty()), module);
-});
-
-test("normal generation cannot discover test fixtures or derive a sequence from unordered data", () => {
-  const p = empty();
-  p.prescriptionOrdering = "Use the online form";
-  for (const topic of ["appointment-booking", "prescriptions", "custom"]) {
-    const scenarios = generateConfiguredModule(topic, topic, p, defaultModuleSettings());
-    assert.ok(scenarios.every((s) => s.kind !== "order"));
-    assert.ok(!JSON.stringify(scenarios).includes(approvedTestSequence.id));
-  }
-  assert.ok(practiceScenarios("custom", "Custom", p, {}).every((s) => s.kind !== "order"));
-  const store = readFileSync(new URL("../src/lib/store.ts", import.meta.url), "utf8");
-  const conversion = store.slice(
-    store.indexOf("export function draftsForTopic"),
-    store.indexOf("// ------------- Seeded example module"),
-  );
-  assert.ok(!conversion.includes('kind: "order"'));
-  assert.ok(!conversion.includes("steps: ["));
-  assert.ok(conversion.includes('if (s.kind !== "mcq") return s'));
 });
 
 test("legacy ordering strings remain valid and score exactly as before", () => {

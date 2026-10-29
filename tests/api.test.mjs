@@ -159,7 +159,6 @@ const source = await readFile(
   new URL("../supabase/functions/practice-api/index.ts", import.meta.url),
   "utf8",
 );
-const proceduresUrl = new URL("../src/lib/local-procedures.ts", import.meta.url).href;
 const trainingUrl = new URL("../src/lib/training.ts", import.meta.url).href;
 const sdk =
   "data:text/javascript," +
@@ -169,7 +168,6 @@ const js = ts
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   })
   .outputText.replace('"npm:@supabase/supabase-js@2.57.4"', JSON.stringify(sdk))
-  .replace('"../../../src/lib/local-procedures.ts"', JSON.stringify(proceduresUrl))
   .replace('"../../../src/lib/training.ts"', JSON.stringify(trainingUrl))
   .replace(
     '"../../../src/lib/staff-lifecycle.ts"',
@@ -239,7 +237,6 @@ function reset(role = "trainee", mustReset = false) {
       { id: "m2", published: true, scenarios: [] },
     ],
   };
-  tables.role_templates = [];
   tables.audit_events = [];
   tables.training_sessions = [
     {
@@ -468,11 +465,11 @@ test("API flags published training on practice changes and refuses a boolean-onl
   const state = structuredClone(tables.practices[0].state);
   state.modules = [structuredClone(tables.practice_modules.oak[0])];
   state.assignments = [{ id: "review-assignment", moduleId: "m1", traineeId: "bob" }];
-  state.practiceData = { ...tables.practice_data.oak, repeatTurnaround: "72 working hours" };
+  state.practiceData = { ...tables.practice_data.oak, hours: "07:00–19:00" };
   assert.equal((await call({ action: "save-practice", state, version: 1 })).status, 200);
   const flagged = tables.practice_modules.oak[0];
   assert.equal(flagged.needsReview, true);
-  assert.match(flagged.reviewReason, /Prescription turnaround/);
+  assert.match(flagged.reviewReason, /Opening hours/);
   const dismissed = structuredClone(tables.practices[0].state);
   dismissed.practiceData = tables.practice_data.oak;
   dismissed.modules = structuredClone(tables.practice_modules.oak);

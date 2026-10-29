@@ -3,7 +3,6 @@ import {
   flagPracticeChanges,
   enforceReviewDecisions,
 } from "../../../src/lib/practice-change-tracking.ts";
-import { validateLocalProcedures } from "../../../src/lib/local-procedures.ts";
 import { copyPublicModule, shareable } from "../../../src/lib/shared-modules.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
@@ -94,17 +93,6 @@ Deno.serve(async (request) => {
       });
       check(error);
       return data ?? undefined;
-    };
-    const loadRoleTemplates = async () => {
-      const { data, error } = await admin.from("role_templates").select("*").order("position");
-      check(error);
-      return (data ?? []).map((t) => ({
-        id: t.id,
-        version: t.version,
-        label: t.label,
-        aliases: t.aliases,
-        suggestions: { status: t.suggestions_status, selectedRequestIds: t.selected_request_ids },
-      }));
     };
     // Modules live in practice_modules (see 202610100003_practice_modules.sql), not in state.
     const { data: moduleRows, error: modulesError } = await admin.rpc("load_practice_modules", {
@@ -311,7 +299,6 @@ Deno.serve(async (request) => {
       return reply({
         account,
         version: practice.version,
-        roleTemplates: manager ? await loadRoleTemplates() : undefined,
         state: manager
           ? { ...state, modules, practiceData: await loadPracticeData() }
           : {
@@ -364,7 +351,6 @@ Deno.serve(async (request) => {
         !next.practiceData
       )
         fail("Invalid practice data.");
-      validateLocalProcedures(next.practiceData.localProcedures);
       if (JSON.stringify(next).length > 2000000) fail("Practice data is too large.");
       const { data: people, error: peopleError } = await admin
         .from("profiles")

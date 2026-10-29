@@ -67,7 +67,6 @@ report's legal, social, ethical and professional (LSEP) section.
 - [Backend map](docs/BACKEND-MAP.md)
 - [Setup and deployment](docs/SETUP.md), including local development without Supabase
 - [Security](docs/SECURITY.md) and [GDPR](docs/GDPR.md)
-- [Core training library](docs/CORE-TRAINING.md) and [predefined module creation](docs/predefined-module-creation.md)
 - [Product review](docs/PRODUCT-REVIEW.md)
 
 ## Running it locally

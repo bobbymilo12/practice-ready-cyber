@@ -2,6 +2,109 @@
 
 Newest entries first.
 
+## 2026-10-29: Bring the journey browser test up to date; fix header overflow on phones
+
+**Files:** `tests/browser/journey.spec.ts`, `src/components/Shell.tsx`
+
+**What changed**
+- `journey.spec.ts` was written before the Oct 27 changes to the staff dashboard (`797fa03`) and
+  the training flow (`c7868cf`), so all 4 tests failed. They now follow the current flow:
+  - the trainee home shows "Hello, <name>" and a **Start training →** link;
+  - there is no **Check answer** step: **Continue** / **Review answers →** saves the answer and
+    moves on;
+  - a wrong first answer adds the approved follow-up, and feedback appears only on the results
+    page;
+  - the empty home shows "No training yet".
+- The mock Supabase route now also answers `/auth/v1/token`. After a password change the page
+  signs in again with the new password, because the change revokes every session.
+- The 390px "no horizontal scroll" check measured overflow with `innerWidth`, which includes the
+  scrollbar. It now uses `clientWidth`.
+- The check then found a real bug: on a 390px screen, the app header's Dashboard/Log out buttons
+  ran 33px off the right edge. The header row in `Shell.tsx` now wraps (`flex-wrap`, with gaps),
+  so the buttons move to a second line instead of causing a horizontal scroll.
+
+**Why**
+The browser tests should check how the app behaves now, and a phone-width horizontal scroll is
+an accessibility problem.
+
+**How it works**
+The tests still check the same guarantees:
+- answers survive reload and Previous;
+- a saved answer can't be changed;
+- the score uses the first answer, and a follow-up doesn't change it;
+- a failed save keeps the trainee on the question so they can retry;
+- trainees can't open manager pages.
+
+The marketing specs still fail on Windows because of the 15px scrollbar width (hero width 375
+vs 390) and the contact-form submission. Neither is related to this change.
+
+## 2026-10-29: Remove the GP module creation system
+
+**Files**
+- Deleted generators (`src/lib/`): `module-config.ts`, `module-config-legacy.ts`,
+  `scenario-applications.ts`, `practice-scenarios.ts`, `module-presentation.ts`, `core-*.ts`,
+  `appointment-local-scenarios.ts`, `local-procedure-sequences.ts`, `role-matching.ts`,
+  `role-question-presentation.ts`, `question-quality.ts`, `training-copy.ts`,
+  `procedure-generation-diagnostics.ts`, `dev-procedure-diagnostics.ts`.
+- Deleted the practice-setup layer: `src/lib/` `practice-config.ts`, `role-requests.ts`,
+  `role-templates.ts`, `local-procedures.ts`, `practice-requests.ts`,
+  `appointment-capabilities.ts` and `practice-setup.ts`. Also deleted 13 setup components
+  (`TeamFields`, `RolesStep`, `LocalProcedures`, `PredefinedModuleSetup`…) and the routes
+  `/practice/setup`, `/data-hub` and `/modules/setup`.
+- Edited `store.ts`, `training-types.ts`, `practice-change-tracking.ts`, `backend.ts`,
+  `dev-backend.ts`, `sequence.ts` and `matching-interaction.ts` in `src/lib/`; the routes
+  `modules.create`, `modules.review`, `modules.library`, `dashboard`, `auth` and `train`;
+  `src/routeTree.gen.ts` (regenerated); and `supabase/functions/practice-api/index.ts`.
+- Tests: deleted 16 generator/setup unit tests and 9 Playwright files. Pruned `training`,
+  `sequence`, `matching-board`, `manager-persistence`, `practice-change-tracking`, `api` and
+  `dev-auth`. Replaced `tests/fixtures/role-matching.ts` with `tests/fixtures/practice.ts`.
+  Updated the `package.json` test chain.
+- Docs: deleted `CORE-TRAINING.md`, `SEQUENCING-STAGE1.md`, `MATCHING-LOCAL-CHECK.md`,
+  `generation-quality*.md` and `predefined-module-creation.md`. Updated `PROJECT-OVERVIEW.md`,
+  `SETUP.md`, `GDPR.md` and `README.md`.
+
+**What changed**
+- The GP question generators (Appointment Booking Core, topic pools, local procedures, role
+  matching) and the 8-step practice-setup wizard that fed them are gone. `PracticeData` is now
+  `practiceName`, `hours` and `address`.
+- `/modules/create` shows a "Cyber security modules are coming soon" card. The review page no
+  longer offers Regenerate, module settings or generation diagnostics. Approve, edit, delete,
+  publish, merge, the shared library, assignments, training, results, analytics and dev mode all
+  work as before.
+- Managers go straight to `/dashboard` after login, and the setup prompt is gone. The
+  `setupComplete` flag is still saved but no longer used.
+- Dev mode starts with no modules for either mock role, and its shared library is empty.
+
+**Why**
+This repo is becoming the cyber security version for the assignment. The cyber modules will be
+written here and later merged into the main repo, so everything outside module creation stays
+as it is to keep the two repos easy to merge.
+
+**How it works now**
+- **Module lifecycle (unchanged):** a module arrives whole as a `Scenario[]` (`mcq`, `order` or
+  `matching`) through `createDraftModule`, a merge, or a library copy. Then:
+  - a manager approves each question;
+  - `publishModule` and the Edge Function's `save-practice` refuse to publish until every
+    scenario is approved;
+  - `startSession` snapshots the approved scenarios, so later edits never change an attempt
+    that is already running.
+
+  Cyber generators should produce `Scenario[]` and call `createDraftModule`.
+- **Practice-change review is now generic.** `ScenarioProvenance` (`training-types.ts`) is
+  `{ kind, paths?, snapshot?, managerModified? }`.
+  - `practiceChanges` diffs `practiceData` key by key.
+  - `flagPracticeChanges` puts published modules into review when a change touches one of a
+    question's `paths`.
+  - If a question has no paths, or a manager edited it, any change sends the whole module for
+    review, which is the safe default.
+- **Approval rules are unchanged.** `enforceReviewDecisions` and the review keys still require
+  an explicit, server-stamped decision before a flagged module returns to trainees.
+- **Existing data is kept.** `practiceData` round-trips whole through
+  `load_practice_data`/`save_practice_data`, so older practices keep their staff, roles and
+  procedures in the database. The SQL migrations and the `role_templates` table are untouched.
+- **Moved helper:** `uniqueMatching` (the one-to-one board solver used on the review page) moved
+  from `role-matching.ts` to `matching-interaction.ts`.
+
 ## 2026-10-29: Assignment-focused README
 
 **Files:** `README.md`, `.gitignore`, `docs/CHANGELOG.md` (new), `docs/SETUP.md`

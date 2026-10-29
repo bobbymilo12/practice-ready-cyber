@@ -23,7 +23,6 @@ export function reviewKey(module: Module, practice: PracticeData): string {
     title: module.title,
     type: module.type,
     topicKey: module.topicKey,
-    settings: module.settings,
     scenarios: module.scenarios,
   });
   let a = 2166136261,
@@ -38,42 +37,11 @@ const labels: Record<string, string> = {
   practiceName: "Practice name",
   hours: "Opening hours",
   address: "Practice address",
-  outOfHoursTimes: "Out-of-hours process",
-  sameDayReasons: "Same-day request criteria",
-  prescriptionOrdering: "Prescription ordering",
-  dutyContact: "Escalation contact",
-  nominatedPharmacy: "Pharmacy information",
-  urgentNumbers: "Urgent contacts",
-  extras: "Additional practice information",
-  repeatOrderMethods: "Repeat prescription ordering",
-  repeatTurnaround: "Prescription turnaround",
-  repeatControlled: "Controlled prescription process",
-  repeatHighRisk: "High-risk prescription process",
-  repeatEmergency: "Urgent prescription process",
-  localSafeguarding: "Safeguarding procedure",
-  localComplaints: "Complaints procedure",
-  localDNA: "Missed appointment procedure",
-  localInterpreter: "Interpreter procedure",
-  localConfidentiality: "Confidentiality procedure",
-  bookingConfig: "Booking rules",
-  prescriptionConfig: "Prescription process",
-  safeguardingRoute: "Safeguarding contacts and process",
-  rolePolicies: "Role-specific booking policies",
-  practiceRequests: "Practice request catalogue",
-  topicSettings: "Shared reception procedures",
 };
 const scalar = (v: unknown) =>
   (typeof v === "string" || typeof v === "number") && String(v).length <= 500
     ? String(v)
     : undefined;
-const turnaround = (v: unknown) => {
-  const c = v as { id?: string; other?: string } | undefined;
-  return c?.id === "other"
-    ? scalar(c.other)
-    : c?.id && ["24", "48", "72"].includes(c.id)
-      ? `${c.id} working hours`
-      : c?.id;
-};
 function description(label: string, before?: string, after?: string): string {
   return before !== undefined && after !== undefined
     ? before === after
@@ -83,123 +51,34 @@ function description(label: string, before?: string, after?: string): string {
 }
 export function practiceChanges(before: PracticeData, after: PracticeData): ReviewChange[] {
   const changes: ReviewChange[] = [];
-  const add = (path: string, label: string, old: unknown, next: unknown, format = scalar) => {
-    if (stableValue(old) === stableValue(next)) return;
-    const from = format(old),
-      to = format(next);
-    changes.push({ path, label, before: from, after: to, reason: description(label, from, to) });
-  };
   for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    if (["localProcedures", "roleRequests", "staff"].includes(key)) continue;
-    if (key === "prescriptionConfig") {
-      const old = before.prescriptionConfig,
-        next = after.prescriptionConfig;
-      add(
-        "practiceData.prescriptionConfig.turnaround",
-        "Prescription turnaround",
-        old?.turnaround,
-        next?.turnaround,
-        turnaround,
-      );
-      const rest = (v: typeof old) =>
-        v ? Object.fromEntries(Object.entries(v).filter(([key]) => key !== "turnaround")) : v;
-      add("practiceData.prescriptionConfig", "Prescription process", rest(old), rest(next));
-    } else
-      add(
-        `practiceData.${key}`,
-        labels[key] ?? "Practice information",
-        (before as unknown as Record<string, unknown>)[key],
-        (after as unknown as Record<string, unknown>)[key],
-      );
-  }
-  for (const id of new Set([
-    ...Object.keys(before.localProcedures ?? {}),
-    ...Object.keys(after.localProcedures ?? {}),
-  ])) {
-    const old = before.localProcedures?.[id],
-      next = after.localProcedures?.[id];
-    // Confirmation/history metadata alone does not change what the procedure teaches.
-    const content = (v: typeof old) =>
-      v
-        ? {
-            requestLabel: v.requestLabelAtConfirmation,
-            status: v.status,
-            ...(v.status === "configured"
-              ? {
-                  steps: v.steps,
-                  stepOrder: v.stepOrder,
-                  appliesWhen: v.appliesWhen,
-                  orderRequirement: v.orderRequirement,
-                }
-              : {}),
-          }
-        : v;
-    add(
-      `practiceData.localProcedures[${id}]`,
-      `Local procedure: ${next?.requestLabelAtConfirmation ?? old?.requestLabelAtConfirmation ?? id}`,
-      content(old),
-      content(next),
-    );
-  }
-  for (const id of new Set([
-    ...Object.keys(before.roleRequests ?? {}),
-    ...Object.keys(after.roleRequests ?? {}),
-  ])) {
-    add(
-      `practiceData.roleRequests[${id}]`,
-      `Role responsibilities: ${after.roleRequests?.[id]?.label ?? before.roleRequests?.[id]?.label ?? id}`,
-      before.roleRequests?.[id],
-      after.roleRequests?.[id],
-    );
-  }
-  const oldStaff = new Map((before.staff ?? []).map((s) => [s.id, s]));
-  const newStaff = new Map((after.staff ?? []).map((s) => [s.id, s]));
-  for (const id of new Set([...oldStaff.keys(), ...newStaff.keys()])) {
-    const old = oldStaff.get(id),
-      next = newStaff.get(id);
-    add(
-      `practiceData.staff[${id}]`,
-      `Staff details or exceptions: ${next?.name ?? old?.name ?? id}`,
-      old,
-      next,
-    );
+    const old = (before as unknown as Record<string, unknown>)[key],
+      next = (after as unknown as Record<string, unknown>)[key];
+    if (stableValue(old) === stableValue(next)) continue;
+    const label = labels[key] ?? "Practice information",
+      from = scalar(old),
+      to = scalar(next);
+    changes.push({
+      path: `practiceData.${key}`,
+      label,
+      before: from,
+      after: to,
+      reason: description(label, from, to),
+    });
   }
   return changes;
 }
-function usesChange(scenario: Scenario, change: ReviewChange): boolean {
+function sourcePaths(scenario: Scenario): string[] | undefined {
   const source = scenario.provenance;
-  if (!source || source.managerModified) return true; // Unknown/manual dependencies: conservative module review.
-  if (source.kind === "sequence") {
-    if (!source.snapshot) return true;
-    if (source.sourceKind === "core_sequence") return false;
-    const requestId = source.snapshot?.localProcedure?.requestId;
-    if (change.path.startsWith("practiceData.localProcedures["))
-      return !requestId || change.path === `practiceData.localProcedures[${requestId}]`;
-    return true; // Free-text procedure steps may reference any local rule/contact.
-  }
-  if (source.kind === "core" && !Array.isArray(source.inputs)) return true;
-  if (
-    source.kind === "core" &&
-    source.inputs.some(
-      (input) => !input || !["practice_setup", "module_setup"].includes(input.source),
-    )
-  )
-    return true;
-  const inputs =
-    source.kind === "core" ? source.inputs.filter((i) => i.source === "practice_setup") : undefined;
-  const paths = inputs
-    ? inputs.flatMap((i) => i.paths ?? [])
-    : source.kind === "practice_role_matching" || source.kind === "configured_fact"
-      ? source.paths
-      : [];
-  if (!Array.isArray(paths) || (!paths.length && (source.kind !== "core" || inputs?.length)))
-    return true;
+  if (!source || source.managerModified || !("paths" in source)) return undefined;
+  return Array.isArray(source.paths) && source.paths.every((path) => typeof path === "string")
+    ? source.paths
+    : undefined;
+}
+function usesChange(scenario: Scenario, change: ReviewChange): boolean {
+  const paths = sourcePaths(scenario);
+  if (!paths?.length) return true; // Unknown/manual dependencies: conservative module review.
   return paths.some((path) => {
-    if (typeof path !== "string") return true;
-    const scoped = path.match(
-      /^practiceData\.(?:staff|localProcedures|roleRequests)\[[^\]]+\]/,
-    )?.[0];
-    if (scoped) return change.path === scoped;
     const root = path.match(/^practiceData\.([a-zA-Z]+)(?:\.|\[|$)/)?.[1];
     // Unrecognised bindings cannot prove a practice change irrelevant.
     return !root || change.path.startsWith(`practiceData.${root}`);
@@ -207,32 +86,15 @@ function usesChange(scenario: Scenario, change: ReviewChange): boolean {
 }
 /** Review hints only: absent or edited provenance never implies an exact question dependency. */
 export function recordedSourceChanges(scenario: Scenario, changes: ReviewChange[]): ReviewChange[] {
-  const source = scenario.provenance;
-  if (!source || source.managerModified) return [];
-  const requestId =
-    source.kind === "sequence" ? source.snapshot?.localProcedure?.requestId : undefined;
-  const paths =
-    source.kind === "sequence"
-      ? requestId
-        ? [`practiceData.localProcedures[${requestId}]`]
-        : []
-      : source.kind === "practice_role_matching" || source.kind === "configured_fact"
-        ? (source.paths ?? [])
-        : source.kind === "core"
-          ? (Array.isArray(source.inputs) ? source.inputs : [])
-              .filter((input) => input?.source === "practice_setup")
-              .flatMap((input) => input.paths ?? [])
-          : [];
-  if (!Array.isArray(paths)) return [];
+  const paths = sourcePaths(scenario) ?? [];
   return changes.filter((change) =>
     paths.some(
       (path) =>
-        typeof path === "string" &&
-        (path === change.path ||
-          path.startsWith(change.path + ".") ||
-          path.startsWith(change.path + "[") ||
-          change.path.startsWith(path + ".") ||
-          change.path.startsWith(path + "[")),
+        path === change.path ||
+        path.startsWith(change.path + ".") ||
+        path.startsWith(change.path + "[") ||
+        change.path.startsWith(path + ".") ||
+        change.path.startsWith(path + "["),
     ),
   );
 }

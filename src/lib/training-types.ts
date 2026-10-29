@@ -1,21 +1,10 @@
-export interface CoreScenarioProvenance {
-  kind: "core";
-  conceptId: string;
-  conceptVersion: number;
-  level: import("./core-training-types").TrainingLevel;
-  interaction: "single_choice";
-  recipe: import("./core-training-types").CoreRecipeId | "controlled_single_choice";
-  templateId?: string;
-  executableRecipeId?: string;
-  variationId?: string;
+/** Where a question came from. `paths` name the practiceData fields it depends on; without them
+ * any practice change sends the whole module for review. */
+export interface ScenarioProvenance {
+  kind: string;
+  paths?: string[];
+  snapshot?: unknown;
   managerModified?: boolean;
-  recipeVersion: 1 | 2;
-  inputs: {
-    bindingId: string;
-    source: "practice_setup" | "module_setup";
-    paths: string[];
-    snapshot: unknown;
-  }[];
 }
 
 export type ScenarioStatus = "draft" | "approved";
@@ -29,10 +18,7 @@ export interface MCQScenario {
   };
   // Structured classification; trainee-facing titles are not internal identifiers.
   localRoleRequestId?: string;
-  provenance?:
-    | CoreScenarioProvenance
-    | import("./sequence").SequenceProvenance
-    | { kind: "configured_fact"; paths: string[]; snapshot: unknown; managerModified?: boolean };
+  provenance?: ScenarioProvenance | import("./sequence").SequenceProvenance;
   // Optional generation metadata; old saved scenarios remain valid.
   followUpSituation?: string;
   kind: "mcq";
@@ -65,7 +51,7 @@ interface OrderScenarioBase {
 export interface LegacyOrderScenario extends OrderScenarioBase {
   steps: string[];
   sequence?: never;
-  provenance?: CoreScenarioProvenance;
+  provenance?: ScenarioProvenance;
 }
 export interface StructuredOrderScenario extends OrderScenarioBase {
   steps?: never;
@@ -74,7 +60,7 @@ export interface StructuredOrderScenario extends OrderScenarioBase {
     correctOrder: string[];
     presentationOrder: string[];
   };
-  provenance: import("./sequence").SequenceProvenance;
+  provenance?: ScenarioProvenance | import("./sequence").SequenceProvenance;
 }
 export type OrderScenario = LegacyOrderScenario | StructuredOrderScenario;
 
@@ -93,15 +79,7 @@ export interface MatchingScenario {
   status: ScenarioStatus;
   managerNote?: string;
   followUpFor?: string;
-  provenance: {
-    kind: "practice_role_matching";
-    generatorVersion: 1 | 2;
-    level: "learn";
-    managerModified?: boolean;
-    source: "practice_setup";
-    paths: string[];
-    snapshot: import("./role-requests").PracticeRoleRequests[];
-  };
+  provenance?: ScenarioProvenance;
 }
 
 export type Scenario = MCQScenario | OrderScenario | MatchingScenario;
@@ -149,7 +127,6 @@ export interface Module {
   createdAt: number;
   difficulty?: Difficulty;
   length?: ModuleLength;
-  settings?: import("./module-config").ModuleSettings;
   needsReview?: boolean;
   reviewReason?: string;
   reviewChanges?: ReviewChange[];

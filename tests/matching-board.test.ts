@@ -5,9 +5,8 @@ import { createRequire } from "node:module";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
-import { pairCards } from "../src/lib/matching-interaction.ts";
-import { roleMatchingScenario, uniqueMatching } from "../src/lib/role-matching.ts";
-import { practice } from "./fixtures/role-matching.ts";
+import { pairCards, uniqueMatching } from "../src/lib/matching-interaction.ts";
+import { matchingBoard } from "./fixtures/practice.ts";
 
 // Render the actual TSX component without a browser or a new test dependency.
 const require = createRequire(import.meta.url);
@@ -29,7 +28,7 @@ new Function("require", "exports", compiled)(
 );
 
 test("actual board renders two columns, eight keyboard buttons and saved pairs without answer feedback", () => {
-  const board = roleMatchingScenario(practice())!;
+  const board = matchingBoard();
   const solution = uniqueMatching(
     board.items.map((i) => i.id),
     board.targets.map((t) => t.id),

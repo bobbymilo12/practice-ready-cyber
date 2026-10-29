@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Shell, Card } from "@/components/Shell";
 import { api } from "@/lib/backend";
-import { TOPICS } from "@/lib/store";
 import type { Module } from "@/lib/training-types";
 import type { PublicModuleSummary } from "@/lib/shared-modules";
 import { useManagerAction } from "@/hooks/use-manager-action";
@@ -73,8 +72,7 @@ function LibraryPage() {
                 <span>
                   <span className="block font-medium">{m.title}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {TOPICS.find((t) => t.key === m.topicKey)?.title ?? m.type} · {m.scenarioCount}{" "}
-                    questions
+                    {m.type} · {m.scenarioCount} questions
                   </span>
                 </span>
                 <button

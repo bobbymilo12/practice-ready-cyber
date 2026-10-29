@@ -19,7 +19,7 @@ export function Shell({ children, className = "" }: { children: ReactNode; class
   return (
     <div className={`min-h-screen bg-background text-foreground ${className}`}>
       <header className="border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-3 px-6 py-4">
           <Link to="/" className="flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground font-display font-bold">
               P

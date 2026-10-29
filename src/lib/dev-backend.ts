@@ -1,20 +1,11 @@
 import { withdrawAssignments, validateAssignmentLifecycle } from "./staff-lifecycle.ts";
 import { flagPracticeChanges, enforceReviewDecisions } from "./practice-change-tracking.ts";
-import { suggestedRole } from "./role-requests.ts";
-import { confirmProcedure, procedureTargets, validateLocalProcedures } from "./local-procedures.ts";
 // Loaded dynamically only for a local development mock session. No network operations belong here.
-import {
-  defaultPracticeData,
-  type Account,
-  type Module,
-  type Trainee,
-  type TrainingPackage,
-} from "./store";
+import type { Account, Trainee } from "./store";
 import type { PracticeState, Snapshot } from "./backend";
 import { devRole } from "./dev-mode";
 import { practiceOverview } from "./analytics";
-import { copyPublicModule, type PublicModuleSummary } from "./shared-modules";
-import { practiceScenarios } from "./practice-scenarios";
+import type { PublicModuleSummary } from "./shared-modules";
 import {
   startSession,
   resumableAttempt,
@@ -41,153 +32,15 @@ type Workspace = {
   sessions: TrainingSession[];
   version: number;
 };
-/** User-supplied visual-test baseline only; never clinical guidance or a real practice default. */
-function managerSeed(): Workspace {
-  const practiceData = {
-    ...Object.fromEntries(Object.keys(defaultPracticeData).map((key) => [key, ""])),
-    practiceName: "Mock practice — visual testing only",
-    staff: [],
-    sameDayReasons: [],
-    rolePolicies: Object.fromEntries(
-      Object.keys(defaultPracticeData.rolePolicies).map((key) => [key, ""]),
-    ),
-  } as unknown as typeof defaultPracticeData;
-  const doctor = {
-    ...suggestedRole("Doctor"),
-    confirmed: true,
-    selectedRequestIds: [
-      "medication-reviews",
-      "prescription-queries",
-      "mental-health-appointments",
-      "utis",
-      "breast-examination",
-      "test-result-queries",
-    ],
-  };
-  const nurse = {
-    ...suggestedRole("Nurse Practitioner"),
-    confirmed: true,
-    selectedRequestIds: [
-      "chest-infections",
-      "coughs",
-      "sore-throats",
-      "ear-problems",
-      "minor-skin-problems",
-      "minor-injuries",
-      "eye-problems",
-    ],
-  };
-  practiceData.roleRequests = { [doctor.roleId]: doctor, [nurse.roleId]: nurse };
-  // Fictional local-development choices, never defaults for registered practices.
-  practiceData.address = "1 Example Lane, Demo Town";
-  practiceData.hours = "Monday to Friday, 08:00–18:30";
-  practiceData.localConfidentiality =
-    "Confirm the patient's full name and date of birth before sharing information. Check recorded consent for requests made on someone else's behalf.";
-  practiceData.prescriptionConfig = {
-    version: 1,
-    methods: ["nhs-app", "website", "paper"],
-    otherMethod: "",
-    orderingInstruction: "",
-    orderingInstructions: [
-      "Telephone ordering is available for patients aged 60 and over.",
-      "Include the patient's full name, date of birth and the medicines requested.",
-    ],
-    turnaround: { id: "48", other: "" },
-    turnaroundInstruction: "",
-    weekends: { id: "exclude", other: "" },
-    bankHolidays: { id: "exclude", other: "" },
-    urgentRoute: {
-      source: "separate",
-      route: {
-        contact: { kind: "role", role: doctor.label, roleId: doctor.roleId },
-        method: { id: "system", other: "" },
-        instruction: "Record the patient's request and callback number for the Doctor to review.",
-      },
-    },
-    urgentActions: ["system"],
-    otherAction: "",
-    urgentInstruction: "Do not promise that a prescription will be issued.",
-  };
-  // Existing Practice Setup topic settings; contacts/responsibilities still resolve through Roles.
-  practiceData.topicSettings = {
-    prescriptions: {
-      answers: {
-        acute: "Practice website / online form",
-        monitoring: "Offer a medication review appointment where the clinician has requested one",
-        chasing: "Check the request’s progress and explain any update to the patient",
-        pharmacyIssue:
-          "Check whether the prescription has been issued and which pharmacy it was sent to",
-      },
-      extra: "",
-    },
-    results: {
-      answers: {
-        release: "Only when marked as reviewed and authorised for reception to share",
-        pending: "Explain that the result needs clinician review before it can be shared",
-        followup: "Arrange the follow-up requested by the reviewing clinician",
-      },
-      extra: "",
-    },
-    vaccines: {
-      answers: { eligibility: "Check booking instructions provided by a clinician" },
-      extra: "",
-    },
-    "fit-notes": {
-      answers: {
-        request: "Practice website / online form",
-        delivery: "Secure digital message",
-        extension: "Use the same request pathway as a new fit note",
-      },
-      extra: "",
-    },
-    "home-visits": {
-      answers: { intake: "Clinical system task", review: "role:" + doctor.roleId },
-      extra: "",
-    },
-    difficult: {
-      answers: {
-        complaint: "Write to the practice",
-        record: "Practice incident reporting system",
-        phrasing: "Acknowledge the concern and explain what can happen next",
-      },
-      extra: "",
-    },
-    "first-week": {
-      answers: { supervision: "A supervisor observes them handling requests and gives feedback" },
-      extra: "",
-    },
-  };
-
-  const target = procedureTargets(practiceData).find((target) => target.id === "utis")!;
-  practiceData.localProcedures = {
-    utis: confirmProcedure(
-      target,
-      undefined,
-      {
-        steps: [
-          {
-            id: "sample",
-            text: "Receptionist asks the patient to come to the practice and drop off a urine sample at reception.",
-          },
-          {
-            id: "booking",
-            text: "Once the sample has been handed in, book the patient into a UTI slot with a GPA.",
-          },
-          {
-            id: "collection",
-            text: "Place the urine sample into the GPA urine sample collection box in reception.",
-          },
-        ],
-        stepOrder: ["sample", "booking", "collection"],
-        appliesWhen: "",
-        orderRequirement: "required_linear",
-      },
-      "dev-manager-morgan",
-    ),
-  };
+/** Fictional local-development practice with no modules until the cyber modules exist. */
+function seed(practiceName: string): Workspace {
   return {
     state: {
-      practiceData,
+      practiceData: {
+        practiceName,
+        address: "1 Example Lane, Demo Town",
+        hours: "Monday to Friday, 08:00–18:30",
+      },
       modules: [],
       packages: [],
       assignments: [],
@@ -197,93 +50,6 @@ function managerSeed(): Workspace {
       currentDraftId: null,
     },
     trainees: [mockTrainee()],
-    sessions: [],
-    version: 0,
-  };
-}
-// Built from the default fictional practice, standing in for another practice's data.
-const demoSharedModule = (): Module => ({
-  id: "dev-shared-module",
-  type: "Demo training",
-  title: "Demo shared reception onboarding",
-  topicKey: "first-week",
-  published: true,
-  visibility: "public",
-  createdAt: Date.now(),
-  scenarios: practiceScenarios("first-week", "Demo training", defaultPracticeData, {})
-    .slice(0, 3)
-    .map((s) => ({ ...s, status: "approved" })),
-});
-function seed(): Workspace {
-  const practiceData = structuredClone(defaultPracticeData);
-  practiceData.practiceName = "Demo Willow Practice (fictional)";
-  practiceData.address = "1 Example Lane, Demo Town";
-  practiceData.staff = [
-    {
-      id: "dev-doctor",
-      name: "Dr Alex Example",
-      role: "Doctor",
-      clinics: "Routine appointments and duty triage",
-    },
-  ];
-  const modules: Module[] = ["appointment-booking", "prescriptions", "first-week"].map(
-    (topic, i) => ({
-      id: `dev-module-${i}`,
-      type: "Demo training",
-      title: [
-        "Demo appointment booking",
-        "Demo prescription requests",
-        "Demo reception onboarding",
-      ][i],
-      topicKey: topic,
-      published: i < 2,
-      createdAt: Date.now(),
-      scenarios: practiceScenarios(topic, "Demo training", practiceData, {})
-        .slice(0, 4)
-        .map((s) => ({ ...s, status: i < 2 ? "approved" : "draft" })),
-    }),
-  );
-  const induction: TrainingPackage = {
-    id: "dev-induction",
-    title: "Induction Package",
-    description: "Basic local onboarding for new GP reception and administrative starters.",
-    kind: "induction",
-    moduleIds: modules.map((m) => m.id),
-    version: 1,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  modules.forEach((m) => {
-    m.packageId = induction.id;
-  });
-  return {
-    state: {
-      practiceData,
-      modules,
-      packages: [induction],
-      assignments: modules.slice(0, 2).map((m, i) => ({
-        id: `dev-assignment-${i}`,
-        moduleId: m.id,
-        traineeId,
-        assignedAt: Date.now(),
-        status: "assigned",
-        packageId: induction.id,
-      })),
-      setupComplete: true,
-      emojiMarks: {},
-      answers: {},
-      currentDraftId: null,
-    },
-    trainees: [
-      {
-        id: traineeId,
-        name: "Jamie Example (Mock Trainee)",
-        email: "jamie.trainee@example.test",
-        role: "Receptionist",
-        status: "active",
-        invitedAt: Date.now(),
-      },
-    ],
     sessions: [],
     version: 0,
   };
@@ -300,7 +66,11 @@ function read(): Workspace {
     }
     return workspace;
   }
-  const workspace = devRole() === "manager" ? managerSeed() : seed();
+  const workspace = seed(
+    devRole() === "manager"
+      ? "Mock practice — visual testing only"
+      : "Demo Willow Practice (fictional)",
+  );
   localStorage.setItem(storageKey, JSON.stringify(workspace));
   return workspace;
 }
@@ -406,7 +176,7 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
         role === "manager"
           ? state
           : {
-              practiceData: { ...state.practiceData, staff: [] },
+              practiceData: state.practiceData,
               modules: state.modules
                 .filter((m) => assignments.some((a) => a.moduleId === m.id))
                 .map(
@@ -429,28 +199,13 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
   if (action === "erase-staff") throw new Error("Erasing people is not available in mock mode.");
   if (action === "list-public-modules" || action === "copy-public-module") {
     if (role !== "manager") throw new Error("Manager access required.");
-    // Mock mode has one practice, so the library shows a fictional other practice's module.
-    const source = demoSharedModule();
-    if (action === "list-public-modules")
-      return {
-        modules: [
-          {
-            practiceId: "dev-other-practice",
-            id: source.id,
-            title: source.title,
-            topicKey: source.topicKey,
-            type: source.type,
-            scenarioCount: source.scenarios.length,
-          },
-        ] satisfies PublicModuleSummary[],
-      };
-    if (body.moduleId !== source.id) throw new Error("This module is no longer shared.");
-    return { module: copyPublicModule(source, crypto.randomUUID(), Date.now()) };
+    // Mock mode has one practice and no shared modules from others.
+    if (action === "list-public-modules") return { modules: [] satisfies PublicModuleSummary[] };
+    throw new Error("This module is no longer shared.");
   }
   if (["save-practice", "invite", "set-staff-active"].includes(action)) {
     if (role !== "manager") throw new Error("Manager access required.");
     if (action === "save-practice") {
-      validateLocalProcedures((body.state as PracticeState)?.practiceData?.localProcedures);
       if (body.version !== workspace.version)
         throw new Error("Mock practice changed. Reload and try again.");
       const next = body.state as PracticeState;

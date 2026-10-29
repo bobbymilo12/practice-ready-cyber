@@ -18,7 +18,6 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as DataHubRouteImport } from './routes/data-hub'
 import { Route as FaqsRouteImport } from './routes/faqs'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResultsRouteImport } from './routes/results'
@@ -31,8 +30,6 @@ import { Route as ModulesCreateRouteImport } from './routes/modules.create'
 import { Route as ModulesLibraryRouteImport } from './routes/modules.library'
 import { Route as ModulesMergeRouteImport } from './routes/modules.merge'
 import { Route as ModulesReviewRouteImport } from './routes/modules.review'
-import { Route as ModulesSetupRouteImport } from './routes/modules.setup'
-import { Route as PracticeSetupRouteImport } from './routes/practice.setup'
 import { Route as TraineesIdRouteImport } from './routes/trainees.$id'
 import { Route as TraineesInviteRouteImport } from './routes/trainees.invite'
 
@@ -79,11 +76,6 @@ const CookiesRoute = CookiesRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DataHubRoute = DataHubRouteImport.update({
-  id: '/data-hub',
-  path: '/data-hub',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FaqsRoute = FaqsRouteImport.update({
@@ -146,16 +138,6 @@ const ModulesReviewRoute = ModulesReviewRouteImport.update({
   path: '/modules/review',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ModulesSetupRoute = ModulesSetupRouteImport.update({
-  id: '/modules/setup',
-  path: '/modules/setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PracticeSetupRoute = PracticeSetupRouteImport.update({
-  id: '/practice/setup',
-  path: '/practice/setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TraineesIdRoute = TraineesIdRouteImport.update({
   id: '/trainees/$id',
   path: '/trainees/$id',
@@ -177,7 +159,6 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
   '/dashboard': typeof DashboardRoute
-  '/data-hub': typeof DataHubRoute
   '/faqs': typeof FaqsRoute
   '/privacy': typeof PrivacyRoute
   '/results': typeof ResultsRoute
@@ -190,8 +171,6 @@ export interface FileRoutesByFullPath {
   '/modules/library': typeof ModulesLibraryRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
-  '/modules/setup': typeof ModulesSetupRoute
-  '/practice/setup': typeof PracticeSetupRoute
   '/trainees/$id': typeof TraineesIdRoute
   '/trainees/invite': typeof TraineesInviteRoute
 }
@@ -205,7 +184,6 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
   '/dashboard': typeof DashboardRoute
-  '/data-hub': typeof DataHubRoute
   '/faqs': typeof FaqsRoute
   '/privacy': typeof PrivacyRoute
   '/results': typeof ResultsRoute
@@ -218,8 +196,6 @@ export interface FileRoutesByTo {
   '/modules/library': typeof ModulesLibraryRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
-  '/modules/setup': typeof ModulesSetupRoute
-  '/practice/setup': typeof PracticeSetupRoute
   '/trainees/$id': typeof TraineesIdRoute
   '/trainees/invite': typeof TraineesInviteRoute
 }
@@ -234,7 +210,6 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
   '/dashboard': typeof DashboardRoute
-  '/data-hub': typeof DataHubRoute
   '/faqs': typeof FaqsRoute
   '/privacy': typeof PrivacyRoute
   '/results': typeof ResultsRoute
@@ -247,8 +222,6 @@ export interface FileRoutesById {
   '/modules/library': typeof ModulesLibraryRoute
   '/modules/merge': typeof ModulesMergeRoute
   '/modules/review': typeof ModulesReviewRoute
-  '/modules/setup': typeof ModulesSetupRoute
-  '/practice/setup': typeof PracticeSetupRoute
   '/trainees/$id': typeof TraineesIdRoute
   '/trainees/invite': typeof TraineesInviteRoute
 }
@@ -264,7 +237,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/cookies'
     | '/dashboard'
-    | '/data-hub'
     | '/faqs'
     | '/privacy'
     | '/results'
@@ -277,8 +249,6 @@ export interface FileRouteTypes {
     | '/modules/library'
     | '/modules/merge'
     | '/modules/review'
-    | '/modules/setup'
-    | '/practice/setup'
     | '/trainees/$id'
     | '/trainees/invite'
   fileRoutesByTo: FileRoutesByTo
@@ -292,7 +262,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/cookies'
     | '/dashboard'
-    | '/data-hub'
     | '/faqs'
     | '/privacy'
     | '/results'
@@ -305,8 +274,6 @@ export interface FileRouteTypes {
     | '/modules/library'
     | '/modules/merge'
     | '/modules/review'
-    | '/modules/setup'
-    | '/practice/setup'
     | '/trainees/$id'
     | '/trainees/invite'
   id:
@@ -320,7 +287,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/cookies'
     | '/dashboard'
-    | '/data-hub'
     | '/faqs'
     | '/privacy'
     | '/results'
@@ -333,8 +299,6 @@ export interface FileRouteTypes {
     | '/modules/library'
     | '/modules/merge'
     | '/modules/review'
-    | '/modules/setup'
-    | '/practice/setup'
     | '/trainees/$id'
     | '/trainees/invite'
   fileRoutesById: FileRoutesById
@@ -349,7 +313,6 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   CookiesRoute: typeof CookiesRoute
   DashboardRoute: typeof DashboardRoute
-  DataHubRoute: typeof DataHubRoute
   FaqsRoute: typeof FaqsRoute
   PrivacyRoute: typeof PrivacyRoute
   ResultsRoute: typeof ResultsRoute
@@ -362,8 +325,6 @@ export interface RootRouteChildren {
   ModulesLibraryRoute: typeof ModulesLibraryRoute
   ModulesMergeRoute: typeof ModulesMergeRoute
   ModulesReviewRoute: typeof ModulesReviewRoute
-  ModulesSetupRoute: typeof ModulesSetupRoute
-  PracticeSetupRoute: typeof PracticeSetupRoute
   TraineesIdRoute: typeof TraineesIdRoute
   TraineesInviteRoute: typeof TraineesInviteRoute
 }
@@ -431,13 +392,6 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/data-hub': {
-      id: '/data-hub'
-      path: '/data-hub'
-      fullPath: '/data-hub'
-      preLoaderRoute: typeof DataHubRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/faqs': {
@@ -524,20 +478,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ModulesReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/modules/setup': {
-      id: '/modules/setup'
-      path: '/modules/setup'
-      fullPath: '/modules/setup'
-      preLoaderRoute: typeof ModulesSetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/practice/setup': {
-      id: '/practice/setup'
-      path: '/practice/setup'
-      fullPath: '/practice/setup'
-      preLoaderRoute: typeof PracticeSetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/trainees/$id': {
       id: '/trainees/$id'
       path: '/trainees/$id'
@@ -565,7 +505,6 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   CookiesRoute: CookiesRoute,
   DashboardRoute: DashboardRoute,
-  DataHubRoute: DataHubRoute,
   FaqsRoute: FaqsRoute,
   PrivacyRoute: PrivacyRoute,
   ResultsRoute: ResultsRoute,
@@ -578,8 +517,6 @@ const rootRouteChildren: RootRouteChildren = {
   ModulesLibraryRoute: ModulesLibraryRoute,
   ModulesMergeRoute: ModulesMergeRoute,
   ModulesReviewRoute: ModulesReviewRoute,
-  ModulesSetupRoute: ModulesSetupRoute,
-  PracticeSetupRoute: PracticeSetupRoute,
   TraineesIdRoute: TraineesIdRoute,
   TraineesInviteRoute: TraineesInviteRoute,
 }

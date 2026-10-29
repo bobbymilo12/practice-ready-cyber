@@ -44,7 +44,7 @@ in it (TODO owner: one-off query for non-empty `notes` across practices).
 
 PracticeReady must not hold patient-identifiable information.
 
-- Notice shown on `/practice/setup` and `/data-hub` (the screens with free-text fields).
+- The setup screens that carried this notice (`/practice/setup`, `/data-hub`) were removed in the cyber version. Re-add the notice to any new screen with free-text fields.
 - Privacy notice and Terms already state it.
 - TODO (owner): add the same line to the Terms acceptable-use clause and the DPA; decide whether to
   add automatic detection of NHS-number-shaped strings (10 digits) in `save-practice`. Not built:

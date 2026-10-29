@@ -10,10 +10,6 @@ export interface SequenceContent {
   learningPoint: string;
   evidence: { reference: string; version?: string }[];
   scope: "production" | "test_only";
-  localProcedure?: Extract<
-    import("./local-procedures").ProcedureRevision,
-    { status: "configured" }
-  >;
 }
 export type SequenceSource = SequenceContent &
   (
