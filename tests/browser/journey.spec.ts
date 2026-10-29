@@ -110,6 +110,20 @@ async function mockAccount(page: Page, mustReset = false, empty = false) {
         status: 204,
         headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*" },
       });
+    // Changing the password revokes sessions, so the page signs in again with the new one.
+    if (request.url().includes("/auth/v1/token"))
+      return route.fulfill({
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({
+          access_token: token,
+          refresh_token: "test-refresh",
+          expires_in: 3600,
+          expires_at: expiresAt,
+          token_type: "bearer",
+          user: { id: "alice", email: "alice@example.test", app_metadata: {}, user_metadata: {} },
+        }),
+      });
     const body = request.postDataJSON();
     let payload: unknown = {};
     let status = 200;
@@ -175,7 +189,10 @@ async function mockAccount(page: Page, mustReset = false, empty = false) {
   };
 }
 
-test("password change, saved feedback, different followup, next module and completion", async ({
+const startLink = (page: Page) => page.getByRole("link", { name: "Start training →" });
+const saved = "Your answer is saved and cannot be changed.";
+
+test("password change, saved answers, different followup, next module and completion", async ({
   page,
 }) => {
   const { sessions } = await mockAccount(page, true);
@@ -185,22 +202,23 @@ test("password change, saved feedback, different followup, next module and compl
   await page.getByLabel("New password", { exact: true }).fill("my-new-password-123");
   await page.getByLabel("Confirm new password").fill("my-new-password-123");
   await page.getByRole("button", { name: "Save password and start training" }).click();
-  await expect(page.getByRole("heading", { name: "Your training", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Continue Training" }).click();
+  await expect(page.getByRole("heading", { name: "Hello, Alice", exact: true })).toBeVisible();
+  await startLink(page).click();
   await page.getByRole("button", { name: "Begin training" }).click();
   await page.getByRole("button", { name: "Guess the process" }).click();
-  await page.getByRole("button", { name: "Check answer", exact: true }).click();
-  await expect(
-    page.getByText("Your checked answer is recorded and cannot be changed.", { exact: false }),
-  ).toBeVisible();
+  // A wrong first answer adds the approved follow-up instead of showing feedback.
+  await page.getByRole("button", { name: "Review answers →" }).click();
+  await expect(page.getByRole("heading", { name: "A changed booking" })).toBeVisible();
   await page.reload();
-  await expect(
-    page.getByText("Your checked answer is recorded and cannot be changed.", { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "A changed booking" })).toBeVisible();
+  await page.getByRole("button", { name: "← Previous question" }).click();
+  await expect(page.getByText(saved, { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Guess the process/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await page.getByRole("button", { name: "Continue →", exact: true }).click();
-  await expect(page.getByRole("button", { name: "← Previous question" })).toBeEnabled();
   await page.getByRole("button", { name: "Check the local rules again" }).click();
-  await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await page.getByRole("button", { name: "Review answers →" }).click();
   await page.getByRole("button", { name: "Submit module" }).click();
   await expect(page.getByRole("heading", { name: "Improved with extra practice" })).toBeVisible();
@@ -211,13 +229,12 @@ test("password change, saved feedback, different followup, next module and compl
   await page.getByRole("button", { name: "Begin training" }).click();
   await page.getByRole("button", { name: "Move step 3 up" }).click();
   await page.getByRole("button", { name: "Move step 2 up" }).click();
-  await page.getByRole("button", { name: "Check answer" }).click();
   await page.getByRole("button", { name: "Review answers →" }).click();
   await page.getByRole("button", { name: "Submit module" }).click();
   await expect(
     page.getByRole("heading", { name: "All assigned training completed!" }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Back to your training" }).click();
+  await page.getByRole("link", { name: "Back to your training" }).first().click();
   await expect(page.getByText("100%", { exact: true })).toBeVisible();
 });
 
@@ -225,46 +242,39 @@ test("failed answer can be retried, and trainee cannot open manager routes", asy
   const mock = await mockAccount(page);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/staff$/);
-  await page.getByRole("link", { name: "Continue Training" }).click();
+  await startLink(page).click();
   await page.getByRole("button", { name: "Begin training" }).click();
   mock.failNextAnswer();
   await page.getByRole("button", { name: "Check the local rules" }).click();
-  await page.getByRole("button", { name: "Check answer", exact: true }).click();
+  await page.getByRole("button", { name: "Review answers →" }).click();
   await expect(page.getByRole("alert")).toContainText("Could not save");
-  await expect(page.getByRole("heading", { name: "Correct", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Check answer", exact: true }).click();
-  await expect(
-    page.getByText("Your checked answer is recorded and cannot be changed.", { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review your answers" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Review answers →" }).click();
+  await expect(page.getByRole("heading", { name: "Review your answers" })).toBeVisible();
 });
 
 test("unassigned trainee has an empty homepage, not the published library", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockAccount(page, false, true);
   await page.goto("/staff");
-  await expect(
-    page.getByRole("heading", { name: "You're ready for your first assignment" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No training yet" })).toBeVisible();
   await expect(page.getByText("Local booking", { exact: true })).toHaveCount(0);
   const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > window.innerWidth,
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(overflow).toBe(false);
   await page.goto("/train?id=m1");
   await expect(page.getByRole("heading", { name: "Module unavailable" })).toBeVisible();
 });
 
-test("previous and continue preserve committed responses and first-answer scoring", async ({
-  page,
-}) => {
+test("previous and continue preserve saved answers and first-answer scoring", async ({ page }) => {
   const { sessions } = await mockAccount(page);
   await page.goto("/staff");
-  await page.getByRole("link", { name: "Continue Training" }).click();
+  await startLink(page).click();
   await page.getByRole("button", { name: "Begin training" }).click();
   await expect(page.getByRole("button", { name: "← Previous question" })).toBeDisabled();
   await page.getByRole("button", { name: "Guess the process" }).click();
-  await page.getByRole("button", { name: "Check answer", exact: true }).click();
-  await page.getByRole("button", { name: "Continue →" }).click();
+  await page.getByRole("button", { name: "Review answers →" }).click();
   await page.getByRole("button", { name: "← Previous question" }).click();
   await expect(page.getByRole("button", { name: /Guess the process/ })).toHaveAttribute(
     "aria-pressed",
@@ -278,10 +288,9 @@ test("previous and continue preserve committed responses and first-answer scorin
     "aria-pressed",
     "true",
   );
-  await expect(page.getByText("Incorrect.", { exact: true })).toBeVisible();
+  await expect(page.getByText(saved, { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Continue →" }).click();
   await page.getByRole("button", { name: "Check the local rules again" }).click();
-  await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await page.getByRole("button", { name: "Review answers →" }).click();
   await page.getByRole("button", { name: "Submit module" }).click();
   await expect(page).toHaveURL(/results/);

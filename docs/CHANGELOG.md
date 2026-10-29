@@ -2,6 +2,42 @@
 
 Newest entries first.
 
+## 2026-10-29: Bring the journey browser test up to date; fix header overflow on phones
+
+**Files:** `tests/browser/journey.spec.ts`, `src/components/Shell.tsx`
+
+**What changed**
+- `journey.spec.ts` was written before the Oct 27 changes to the staff dashboard (`797fa03`) and
+  the training flow (`c7868cf`), so all 4 tests failed. They now follow the current flow:
+  - the trainee home shows "Hello, <name>" and a **Start training →** link;
+  - there is no **Check answer** step: **Continue** / **Review answers →** saves the answer and
+    moves on;
+  - a wrong first answer adds the approved follow-up, and feedback appears only on the results
+    page;
+  - the empty home shows "No training yet".
+- The mock Supabase route now also answers `/auth/v1/token`. After a password change the page
+  signs in again with the new password, because the change revokes every session.
+- The 390px "no horizontal scroll" check measured overflow with `innerWidth`, which includes the
+  scrollbar. It now uses `clientWidth`.
+- The check then found a real bug: on a 390px screen, the app header's Dashboard/Log out buttons
+  ran 33px off the right edge. The header row in `Shell.tsx` now wraps (`flex-wrap`, with gaps),
+  so the buttons move to a second line instead of causing a horizontal scroll.
+
+**Why**
+The browser tests should check how the app behaves now, and a phone-width horizontal scroll is
+an accessibility problem.
+
+**How it works**
+The tests still check the same guarantees:
+- answers survive reload and Previous;
+- a saved answer can't be changed;
+- the score uses the first answer, and a follow-up doesn't change it;
+- a failed save keeps the trainee on the question so they can retry;
+- trainees can't open manager pages.
+
+The marketing specs still fail on Windows because of the 15px scrollbar width (hero width 375
+vs 390) and the contact-form submission. Neither is related to this change.
+
 ## 2026-10-29: Remove the GP module creation system
 
 **Files**
