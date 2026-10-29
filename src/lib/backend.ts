@@ -1,8 +1,5 @@
 import { flagPracticeChanges } from "./practice-change-tracking";
 import { managerActionKey, managerActionPatch, type ManagerAction } from "./manager-actions";
-import { normaliseRoleRequestCategories } from "./role-requests";
-import { validateLocalProcedures, procedureTargets, type LocalProcedure } from "./local-procedures";
-import { setRoleTemplates, type RoleTemplate } from "./role-templates";
 import { devRole, leaveDevSession } from "./dev-mode";
 import { createClient } from "@supabase/supabase-js";
 import { create } from "zustand";
@@ -34,7 +31,6 @@ export type Snapshot = {
   version: number;
   trainees: Trainee[];
   sessions: TrainingSession[];
-  roleTemplates?: RoleTemplate[];
 };
 export const useConnection = create<{
   recoveryUserId: string | null;
@@ -83,11 +79,6 @@ export function emptyPractice() {
   return {
     ...Object.fromEntries(Object.keys(defaultPracticeData).map((k) => [k, ""])),
     practiceName: "Your practice",
-    staff: [],
-    sameDayReasons: [],
-    rolePolicies: Object.fromEntries(
-      Object.keys(defaultPracticeData.rolePolicies).map((k) => [k, ""]),
-    ),
   } as unknown as AppState["practiceData"];
 }
 
@@ -159,7 +150,6 @@ async function fetchWorkspace() {
     const snapshot = await api<Snapshot>("load");
     if (ticket !== generation) return;
     applying = true;
-    if (snapshot.roleTemplates) setRoleTemplates(snapshot.roleTemplates);
     version = snapshot.version;
     const marks = snapshot.state.emojiMarks ?? {};
     const results = snapshot.sessions
@@ -180,16 +170,6 @@ async function fetchWorkspace() {
       practiceData: {
         ...emptyPractice(),
         ...snapshot.state.practiceData,
-        ...(snapshot.state.practiceData?.roleRequests
-          ? {
-              roleRequests: Object.fromEntries(
-                Object.entries(snapshot.state.practiceData.roleRequests).map(([id, role]) => [
-                  id,
-                  normaliseRoleRequestCategories(role),
-                ]),
-              ),
-            }
-          : {}),
       },
       account: snapshot.account,
       trainees: snapshot.trainees,
@@ -310,71 +290,6 @@ export function confirmManagerAction(action: ManagerAction): Promise<void> {
     });
   managerOperation = { key, promise };
   return promise;
-}
-
-/** Persist first: failed saves never replace confirmed procedure records in the store. */
-export async function saveLocalProcedures(
-  updates: LocalProcedure[],
-  expectedVersions: Record<string, number>,
-) {
-  while (saving || dirty) await flushPractice();
-  const current = useApp.getState();
-  if (!useConnection.getState().ready || current.account?.role !== "manager")
-    throw new Error("Please log in as a manager before saving.");
-  const targets = procedureTargets(current.practiceData);
-  const records = { ...current.practiceData.localProcedures };
-  for (const record of updates) {
-    if ((records[record.requestId]?.version ?? 0) !== expectedVersions[record.requestId])
-      throw new Error("This procedure has changed. Cancel and reopen it before saving.");
-    if (
-      !targets.some(
-        (t) =>
-          t.id === record.requestId && !t.conflict && t.label === record.requestLabelAtConfirmation,
-      )
-    )
-      throw new Error("This request has changed. Review the practice roles before saving.");
-    records[record.requestId] = record;
-  }
-  validateLocalProcedures(records);
-  if (!updates.length) return;
-  const ticket = generation;
-  const state = practiceState(current);
-  state.practiceData = { ...state.practiceData, localProcedures: records };
-  state.modules = flagPracticeChanges(current.practiceData, state.practiceData, state.modules);
-  saving = (async () => {
-    useConnection.setState({ saving: true, error: "" });
-    try {
-      const result = await api<{ version: number }>("save-practice", { state, version });
-      if (ticket !== generation)
-        throw new Error("Your session changed. Reopen the practice to check the saved procedure.");
-      version = result.version;
-      applying = true;
-      try {
-        useApp.setState((s) => {
-          const practiceData = { ...s.practiceData, localProcedures: records };
-          return {
-            practiceData,
-            modules: flagPracticeChanges(current.practiceData, practiceData, s.modules),
-          };
-        });
-      } finally {
-        applying = false;
-      }
-    } catch (error) {
-      if (ticket === generation)
-        useConnection.setState({
-          error: error instanceof Error ? error.message : "Could not save procedures.",
-        });
-      throw error;
-    } finally {
-      saving = null;
-      if (ticket === generation) {
-        useConnection.setState({ saving: false });
-        if (dirty) void flushPractice().catch(() => {});
-      }
-    }
-  })();
-  return saving;
 }
 
 export function initializeBackend() {

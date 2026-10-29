@@ -79,7 +79,7 @@ function AuthPage() {
           return;
         }
         await loadWorkspace();
-        await nav({ to: useApp.getState().setupComplete ? "/dashboard" : "/practice/setup" });
+        await nav({ to: "/dashboard" });
       } else {
         const { error: loginError } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -98,12 +98,7 @@ function AuthPage() {
         setPassword("");
         if (!me.mustResetPassword)
           await nav({
-            to:
-              me.role === "manager"
-                ? useApp.getState().setupComplete
-                  ? "/dashboard"
-                  : "/practice/setup"
-                : "/staff",
+            to: me.role === "manager" ? "/dashboard" : "/staff",
           });
       }
     } catch (err) {

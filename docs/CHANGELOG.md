@@ -2,6 +2,73 @@
 
 Newest entries first.
 
+## 2026-10-29: Remove the GP module creation system
+
+**Files**
+- Deleted generators (`src/lib/`): `module-config.ts`, `module-config-legacy.ts`,
+  `scenario-applications.ts`, `practice-scenarios.ts`, `module-presentation.ts`, `core-*.ts`,
+  `appointment-local-scenarios.ts`, `local-procedure-sequences.ts`, `role-matching.ts`,
+  `role-question-presentation.ts`, `question-quality.ts`, `training-copy.ts`,
+  `procedure-generation-diagnostics.ts`, `dev-procedure-diagnostics.ts`.
+- Deleted the practice-setup layer: `src/lib/` `practice-config.ts`, `role-requests.ts`,
+  `role-templates.ts`, `local-procedures.ts`, `practice-requests.ts`,
+  `appointment-capabilities.ts` and `practice-setup.ts`. Also deleted 13 setup components
+  (`TeamFields`, `RolesStep`, `LocalProcedures`, `PredefinedModuleSetup`…) and the routes
+  `/practice/setup`, `/data-hub` and `/modules/setup`.
+- Edited `store.ts`, `training-types.ts`, `practice-change-tracking.ts`, `backend.ts`,
+  `dev-backend.ts`, `sequence.ts` and `matching-interaction.ts` in `src/lib/`; the routes
+  `modules.create`, `modules.review`, `modules.library`, `dashboard`, `auth` and `train`;
+  `src/routeTree.gen.ts` (regenerated); and `supabase/functions/practice-api/index.ts`.
+- Tests: deleted 16 generator/setup unit tests and 9 Playwright files. Pruned `training`,
+  `sequence`, `matching-board`, `manager-persistence`, `practice-change-tracking`, `api` and
+  `dev-auth`. Replaced `tests/fixtures/role-matching.ts` with `tests/fixtures/practice.ts`.
+  Updated the `package.json` test chain.
+- Docs: deleted `CORE-TRAINING.md`, `SEQUENCING-STAGE1.md`, `MATCHING-LOCAL-CHECK.md`,
+  `generation-quality*.md` and `predefined-module-creation.md`. Updated `PROJECT-OVERVIEW.md`,
+  `SETUP.md`, `GDPR.md` and `README.md`.
+
+**What changed**
+- The GP question generators (Appointment Booking Core, topic pools, local procedures, role
+  matching) and the 8-step practice-setup wizard that fed them are gone. `PracticeData` is now
+  `practiceName`, `hours` and `address`.
+- `/modules/create` shows a "Cyber security modules are coming soon" card. The review page no
+  longer offers Regenerate, module settings or generation diagnostics. Approve, edit, delete,
+  publish, merge, the shared library, assignments, training, results, analytics and dev mode all
+  work as before.
+- Managers go straight to `/dashboard` after login, and the setup prompt is gone. The
+  `setupComplete` flag is still saved but no longer used.
+- Dev mode starts with no modules for either mock role, and its shared library is empty.
+
+**Why**
+This repo is becoming the cyber security version for the assignment. The cyber modules will be
+written here and later merged into the main repo, so everything outside module creation stays
+as it is to keep the two repos easy to merge.
+
+**How it works now**
+- **Module lifecycle (unchanged):** a module arrives whole as a `Scenario[]` (`mcq`, `order` or
+  `matching`) through `createDraftModule`, a merge, or a library copy. Then:
+  - a manager approves each question;
+  - `publishModule` and the Edge Function's `save-practice` refuse to publish until every
+    scenario is approved;
+  - `startSession` snapshots the approved scenarios, so later edits never change an attempt
+    that is already running.
+
+  Cyber generators should produce `Scenario[]` and call `createDraftModule`.
+- **Practice-change review is now generic.** `ScenarioProvenance` (`training-types.ts`) is
+  `{ kind, paths?, snapshot?, managerModified? }`.
+  - `practiceChanges` diffs `practiceData` key by key.
+  - `flagPracticeChanges` puts published modules into review when a change touches one of a
+    question's `paths`.
+  - If a question has no paths, or a manager edited it, any change sends the whole module for
+    review, which is the safe default.
+- **Approval rules are unchanged.** `enforceReviewDecisions` and the review keys still require
+  an explicit, server-stamped decision before a flagged module returns to trainees.
+- **Existing data is kept.** `practiceData` round-trips whole through
+  `load_practice_data`/`save_practice_data`, so older practices keep their staff, roles and
+  procedures in the database. The SQL migrations and the `role_templates` table are untouched.
+- **Moved helper:** `uniqueMatching` (the one-to-one board solver used on the review page) moved
+  from `role-matching.ts` to `matching-interaction.ts`.
+
 ## 2026-10-29: Assignment-focused README
 
 **Files:** `README.md`, `.gitignore`, `docs/CHANGELOG.md` (new), `docs/SETUP.md`

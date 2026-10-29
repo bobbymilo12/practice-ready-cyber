@@ -373,7 +373,11 @@ function ScenarioBlock({
         </div>
       ) : scenario.kind === "matching" ? (
         <MatchingBoard
-          instructions={scenario.provenance.managerModified ? scenario.question : undefined}
+          instructions={
+            scenario.provenance && !scenario.provenance.managerModified
+              ? undefined
+              : scenario.question
+          }
           items={scenario.items}
           targets={scenario.targets}
           value={isMatchingAnswer(selected) ? selected : {}}

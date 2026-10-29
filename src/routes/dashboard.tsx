@@ -33,7 +33,6 @@ function Dashboard() {
   const action = useManagerAction();
   const trainees = useApp((s) => s.trainees);
   const assignments = useApp((s) => s.assignments);
-  const setupComplete = useApp((s) => s.setupComplete);
 
   const published = modules.filter((m) => m.published);
   const draftModules = modules.filter((m) => !m.published);
@@ -58,9 +57,6 @@ function Dashboard() {
             <Link to="/analytics" className="font-semibold text-primary underline">
               Analytics
             </Link>
-            <Link to="/data-hub" className="font-semibold text-primary underline">
-              Practice information
-            </Link>
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -76,16 +72,6 @@ function Dashboard() {
       <Card className="mt-8 border-primary/30 bg-primary/5">
         <h2 className="font-display text-xl font-semibold">What needs your attention</h2>
         <ul className="mt-4 space-y-3">
-          {!setupComplete && (
-            <AttentionItem
-              text="Finish setting up your practice. Add your team and local procedures to get starter training."
-              action={
-                <Link to="/practice/setup" className={bigButton}>
-                  Continue setup
-                </Link>
-              }
-            />
-          )}
           {needsReview.map((m) => (
             <AttentionItem
               key={`review-${m.id}`}
@@ -122,7 +108,7 @@ function Dashboard() {
               }
             />
           ))}
-          {setupComplete && !trainees.length && (
+          {!trainees.length && (
             <AttentionItem
               text="You haven't invited any staff yet."
               action={
@@ -132,7 +118,7 @@ function Dashboard() {
               }
             />
           )}
-          {setupComplete && !needsReview.length && !draftModules.length && trainees.length > 0 && (
+          {!needsReview.length && !draftModules.length && trainees.length > 0 && (
             <li className="text-base">Nothing needs your attention right now.</li>
           )}
         </ul>

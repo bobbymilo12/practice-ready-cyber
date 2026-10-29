@@ -12,7 +12,7 @@ For setup, commands and the tech stack, see the [README](../README.md).
 | User | What they do | Main routes |
 | --- | --- | --- |
 | Visitor | Learns about the product, contacts the team | `/`, `/about`, `/faqs`, `/contact` |
-| Manager | Sets up the practice, builds modules, invites and monitors trainees | `/practice/setup`, `/data-hub`, `/modules/*`, `/dashboard`, `/trainees/*`, `/results` |
+| Manager | Reviews and publishes modules, invites and monitors trainees | `/modules/*`, `/dashboard`, `/trainees/*`, `/results` |
 | Trainee | Completes assigned modules | `/staff`, `/train` |
 
 `/auth` handles log in, practice registration and accepting invitations. `AccountGate`
@@ -20,15 +20,12 @@ For setup, commands and the tech stack, see the [README](../README.md).
 
 ## Main journeys
 
-1. **Practice setup** (`/practice/setup`) — a guided, resumable wizard: practice basics → team →
-   bookings → prescriptions → safety → review. Saved details can be edited later in `/data-hub`.
-2. **Module creation** (`/modules/create` → `/modules/setup` → `/modules/review`) — the manager
-   picks a predefined topic or a custom module. Questions are generated from the practice's saved
-   configuration plus the source-controlled core library, then reviewed and approved as drafts.
-   `/modules/merge` combines modules.
-3. **Training** (`/staff` → `/train`) — trainees answer multiple-choice, matching
+1. **Modules** (`/modules/review`, `/modules/merge`, `/modules/library`). The manager reviews,
+   approves and publishes drafts, combines modules and copies shared ones. The cyber security
+   generators are not built yet, so `/modules/create` is a placeholder.
+2. **Training** (`/staff` → `/train`) — trainees answer multiple-choice, matching
    (`MatchingBoard`) and ordering (`SequenceBoard`) questions, with confidence ratings.
-4. **Monitoring** (`/dashboard`, `/trainees/$id`, `/results`) — the manager invites trainees
+3. **Monitoring** (`/dashboard`, `/trainees/$id`, `/results`) — the manager invites trainees
    (`/trainees/invite`, emailed via Resend) and reviews scores and progress.
 
 ## Architecture
@@ -64,13 +61,12 @@ Without Supabase environment variables, local development uses mock Manager/Trai
 | Path | Contents |
 | --- | --- |
 | `src/routes/` | File-based routes ([conventions](../src/routes/README.md)); `__root.tsx` is the app shell |
-| `src/components/` | Feature components: setup steps (`TeamFields`, `RolesStep`, `SafeguardingFields`, `LocalProcedures`, `SameDayRequests`…), question UIs (`ModuleQuestion`, `MatchingBoard`, `SequenceBoard`), shells (`Shell` for the app, `MarketingShell` for public pages), `CookieBanner` |
+| `src/components/` | Feature components: question UIs (`MatchingBoard`, `SequenceBoard`), shells (`Shell` for the app, `MarketingShell` for public pages), `CookieBanner` |
 | `src/components/ui/` | shadcn/ui primitives |
 | `src/lib/store.ts`, `backend.ts` | Client state (`useApp`, `PracticeData`) and backend calls |
-| `src/lib/practice-*.ts`, `role-*.ts` | Practice configuration, roles, staff requests and role matching |
-| `src/lib/core-*.ts`, `appointment-*.ts` | Core appointment-booking training library and question generation ([CORE-TRAINING](CORE-TRAINING.md)) |
-| `src/lib/module-config*.ts`, `training*.ts`, `scenario-applications.ts` | Module settings and scenario generation (`configuredScenarios`) |
-| `src/lib/sequence.ts`, `matching-interaction.ts`, `local-procedure*.ts` | Ordering, matching and local-procedure question logic |
+| `src/lib/practice-change-tracking.ts` | Flags published modules for review when practice data changes |
+| `src/lib/training*.ts` | Question types, sessions and scoring |
+| `src/lib/sequence.ts`, `matching-interaction.ts` | Ordering and matching question logic |
 | `src/lib/contact*.ts`, `resend-receiving.ts` | Contact form and inbound email |
 | `supabase/` | Edge Function, SQL migrations, config |
 | `tests/` | Node unit tests (`npm test`), Playwright browser tests in `tests/browser/`, shared fixtures |
@@ -93,9 +89,5 @@ still a draft.
 
 - [Setup and deployment](SETUP.md)
 - [Contact form](CONTACT.md)
-- [Core training library](CORE-TRAINING.md)
-- [Predefined module creation](predefined-module-creation.md)
-- [Sequencing stage 1](SEQUENCING-STAGE1.md)
-- [Matching local check](MATCHING-LOCAL-CHECK.md)
 - [Marketing photography](PHOTOGRAPHY.md)
 - [Product review](PRODUCT-REVIEW.md)

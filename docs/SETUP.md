@@ -119,7 +119,7 @@ Create and confirm a manager account. If this browser contains the original demo
 
 Use two test inboxes you control and two separate browser profiles/devices:
 
-1. Manager: complete practice setup, review **both primary and follow-up scenarios**, approve and publish a module. Generated scenarios are templates quoting your saved rules; there is no external AI service.
+1. Manager: review **both primary and follow-up scenarios** of a module, approve and publish it. (The cyber module generators are not built yet; until then, copy a shared module from the library.)
 2. Invite a trainee. Confirm the email actually arrives, contains the correct practice link and permits login with the temporary password. “Accepted for email delivery” means Resend accepted the request; delivery/bounces can be inspected in Resend.
 3. Try opening `/staff` before changing the password. It should return to the password-change screen. Change the password, then confirm the homepage opens automatically. Verify the temporary password no longer works.
 4. Assign two modules. Check Not Started, then start one, answer incorrectly and refresh while its explanation is visible. Confirm the answer is retained. Sign out and resume on a second device.
@@ -134,7 +134,7 @@ Use two test inboxes you control and two separate browser profiles/devices:
 - Manager forms autosave to the shared practice. A stale version is rejected rather than overwriting another device's work. The error banner offers retry or an explicit reload that discards unsaved edits.
 - Published modules awaiting review are unavailable to trainees. Already started attempts retain their approved scenario snapshot; after a content correction, reassign the module to require a fresh attempt using the revised content.
 - All assignments currently count toward onboarding/training completion. There is no separate required/optional assignment type or pass threshold. A completed module can still show areas needing practice.
-- Existing modules without approved follow-up scenarios still show explanations and areas to practise. New generated modules include paired follow-ups for manager review.
+- Modules without approved follow-up scenarios still show explanations and areas to practise.
 - Each account belongs to one practice. New manager signup creates a separate practice; joining additional managers to an existing practice is outside this trainee journey.
 - Forgotten-password recovery for already activated users is not part of this first-login password-change flow. Account support currently requires the Supabase administrator.
 - Initial provisioning, database RLS behaviour against real Postgres, actual email delivery and cross-device synchronization need the live verification above; local tests use mocked services.
@@ -160,24 +160,11 @@ After deployment, run `npm run backend:check`. This checks the public Auth endpo
 
 Deployment still needs a Supabase CLI login, the final app URL, and a verified Resend sender. Put a fresh Resend API key into the Edge Function secrets. Also set the two public frontend variables in the Vercel project's environment variables; the ignored local file is not deployed through Git.
 
-## Manager’s first setup
-
-Once the service setup above is complete:
-
-1. Create and confirm a manager account. Log in to open guided practice setup.
-2. Follow **Practice → Roles → Team → Bookings → Prescriptions → Safety → Review**. Configure each practice role once, then add named employees using those roles. Use **Customise for [employee]** only for individual exceptions.
-3. Record local booking and prescription processes. In Safety, select one or more named team members as safeguarding leads and confirm how staff should raise a concern. Optional instructions stay available.
-4. Check the review screen and choose **Create starter drafts**. Use **Save and exit** if you need to collect missing information.
-5. Review each module, including follow-up scenarios, then approve and publish.
-6. Invite trainees and assign the published modules.
-
-Existing practice information is retained. Changes to local procedures require a separate review of existing modules. See [the product review](./PRODUCT-REVIEW.md) for remaining work.
-
 ## Local development without Supabase
 
 Run `npm run dev` and open the local server at `http://localhost:5173/auth` (or the port Vite prints). Choose **Continue as Manager** or **Continue as Trainee**. No Supabase project or environment variables are needed for this mode.
 
-- The fictional practice includes a manager, Jamie Example as the assigned trainee, two published modules and one draft. Manager edits and trainee results share the same mock workspace in this tab.
+- The fictional practice has a manager and Jamie Example as the trainee, with no modules. Manager edits and trainee results share the same mock workspace in this tab. Add `?sequencePreview=1` to a URL to add and assign a test-only ordering module.
 - The development banner links back to the role selector. Switching roles reloads the app to isolate mock and real authentication. **Log out** exits mock mode; any pre-existing real Supabase session is left untouched.
 - Mock invitations create local records only and explicitly report that no email was sent. The built-in trainee cannot be removed, so role switching remains usable. Newly invited mock records do not create real accounts.
 - Data survives refresh and restarts in `localStorage`, not the real database. Clear the `practiceready-dev-workspace-v1` local-storage entry and reload to reset the sample data. Clear `practiceready-dev-role-v1` (session storage) to exit mock mode manually; closing the tab clears it.
@@ -185,10 +172,8 @@ Run `npm run dev` and open the local server at `http://localhost:5173/auth` (or 
 
 ### Reusable local Mock Manager baseline
 
-On localhost development, a fresh **Mock Manager** workspace loads the agreed visual-test
-configuration: Doctor and Nurse Practitioner responsibilities and the three-step UTI procedure.
-This is test data, not clinical guidance. Other practice settings are blank, with no staff or
-generated modules. Existing mock workspaces are reused without overwriting edits.
+On localhost development, a fresh **Mock Manager** workspace has a fictional practice name and
+address and no modules. Existing mock workspaces are reused without overwriting edits.
 
 Mock Manager includes Jamie Example (Mock Trainee), using the same identity as the Mock Trainee
 login. Loading an older Manager workspace adds Jamie only if missing, preserving existing data.
@@ -206,29 +191,7 @@ localStorage.removeItem("practiceready-dev-workspace-v1");
 location.reload();
 ```
 
-The baseline is only loaded for a fresh Mock Manager workspace. Mock Trainee retains its existing
-demo when started first; to use the Manager baseline, switch to Mock Manager and reset as above.
 Real authenticated accounts continue loading their own Supabase practice; this seed is never
 imported into a database. Browser-session edits do not update the baseline in source.
 
 The removable implementation is in `src/lib/dev-mode.ts` and the dynamically loaded `src/lib/dev-backend.ts`. Integration points are marked by `devRole`/`devAuthAvailable` in the backend, account gate, login and invitation pages. The Supabase API, database permissions and real account types are unchanged. Remove those hooks, the two files and its tests (`tests/browser/dev-auth.spec.ts`, `tests/dev-mode.test.mjs` and the corresponding npm test command) when the bypass is no longer needed.
-
-### Roles, employee exceptions and safeguarding compatibility
-
-Practice roles use the existing `practiceData.roleRequests` catalogue, with stable category/request IDs and locally confirmed selections. Team members inherit their assigned role; `requestOverrides[roleId][requestId]` stores only employee exceptions. Changing an employee’s role does not apply their previous role’s exceptions to the new role. No automatic clinical scope is inferred.
-
-Removing an unused role archives it rather than deleting its configuration. Adding the same role again restores its categories, custom requests and selections. Roles still assigned to employees cannot be removed until those employees are reassigned. Older roles referenced only by employees appear in Roles as needing review; historical individual information is retained.
-
-Safeguarding uses `safeguardingRoute.leadIds` to reference named team members, alongside the existing method and instructions. Existing single-person staff-ID contacts are safely projected into this list. Generic role/free-text contacts and older instructions remain preserved, but require the manager to select named leads. No names are guessed. Renames and role changes resolve through Team records; deleting a lead flags Safety and Review until the missing selection is removed and valid leads remain.
-
-These fields persist through the existing practice-state API; no database migration or authentication changes are required. Browser tests use mocked services. Before using the updated setup with staff, review legacy role/Safety warnings and verify saving/reloading against your live Supabase project.
-
-### Common role library and starting templates
-
-Roles uses one page: select the roles at your practice, then expand each selected role to edit its requests. **Add another role** adds a local role to the same list. **Continue to Team** saves and confirms the selected configurations together; individual **Save role** buttons remain optional. Unticking an unused role retains its saved configuration for restoration. Roles assigned to team members require reassignment before removal. NP and ANP remain distinct, and existing role identities and employee exceptions are retained.
-
-`src/lib/role-templates.ts` is the versioned template library. Each entry has a stable template ID, explicit name aliases, a suggestion review status and a `selectedRequestIds` dataset using the existing request catalogue. **The current datasets await content review and contain no preselected clinical requests.** The older appointment defaults explicitly describe themselves as placeholders, so they have not been promoted to reviewed suggestions or expanded into specific clinical capabilities.
-
-To supply a reviewed starting point, populate its request IDs from `requestCategories`, mark the suggestion dataset `reviewed`, and increment the template version when its content changes. Newly added roles then have those requests preselected in their inline configuration. Managers can edit them or leave them selected before continuing to Team. Unknown request IDs fail validation. This content review is separate from the manager's required confirmation of their own practice configuration.
-
-Templates are copied only when creating a new practice configuration. The copy records template ID/version/review status; it does not read changing template selections afterwards. Reopening, re-adding or restoring an archived role preserves its saved categories, selections and custom entries. No database migration is needed.

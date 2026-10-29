@@ -5,11 +5,10 @@ import {
   reviewKey,
 } from "@/lib/practice-change-tracking";
 import { useManagerAction } from "@/hooks/use-manager-action";
-import { readProcedureDiagnostics } from "@/lib/dev-procedure-diagnostics";
 import { orderKey, orderLabels } from "@/lib/sequence";
-import { inspectRoleMatching, uniqueMatching } from "@/lib/role-matching";
+import { uniqueMatching } from "@/lib/matching-interaction";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
 import { useApp, type Scenario } from "@/lib/store";
 
@@ -24,18 +23,7 @@ function Review() {
   const nav = useNavigate();
   const action = useManagerAction();
   const module = useApp((s) => s.modules.find((m) => m.id === id));
-  const { practiceData, approveScenario, deleteScenario, regenerateScenario, updateScenario } =
-    useApp();
-
-  const matchingDiagnostic = useMemo(
-    () =>
-      module?.topicKey === "appointment-booking" &&
-      module.settings?.trainingLevel === "learn" &&
-      !module.scenarios.some((s) => s.kind === "matching")
-        ? inspectRoleMatching(practiceData).diagnostic
-        : undefined,
-    [module, practiceData],
-  );
+  const { practiceData, approveScenario, deleteScenario, updateScenario } = useApp();
 
   if (!module) {
     return (
@@ -78,9 +66,6 @@ function Review() {
           <div>
             <p className="text-sm text-muted-foreground">
               {module.type} · {module.published ? "Published module review" : "Draft review"}
-              {module.settings?.trainingLevel
-                ? ` · ${module.settings.trainingLevel === "learn" ? "Learn" : "Apply"}`
-                : ""}
             </p>
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
               {module.published ? "Review training" : "Review draft questions"}
@@ -167,9 +152,6 @@ function Review() {
               Existing attempts keep their original questions. Reassign corrected training to staff
               who have already started it.
             </p>
-            <Link to="/data-hub" className="mt-3 inline-block text-sm text-primary underline">
-              View current practice information
-            </Link>
           </Card>
         )}
         {!!module.reviewConfirmations?.length && (
@@ -199,42 +181,6 @@ function Review() {
           </details>
         )}
 
-        {module.settings && (
-          <Card className="mt-6">
-            <p>
-              {module.scenarios.filter((s) => !s.followUpFor).length} scenarios · Requested length:{" "}
-              {module.settings.length} ({module.settings.count})
-            </p>
-            <Link
-              className="text-primary underline"
-              to="/modules/setup"
-              search={{ id: module.id, topic: module.topicKey, title: module.type }}
-            >
-              Edit settings and regenerate module
-            </Link>
-          </Card>
-        )}
-
-        {module.topicKey === "appointment-booking" && readProcedureDiagnostics(module.id) && (
-          <details className="mt-3 rounded-xl border p-3 text-sm">
-            <summary>Development only: procedure generation diagnostics</summary>
-            <p>
-              Captured from saved workspace data when this draft was generated. Not a live
-              eligibility check.
-            </p>
-            <pre className="mt-2 whitespace-pre-wrap break-words">
-              {JSON.stringify(JSON.parse(readProcedureDiagnostics(module.id)!), null, 2)}
-            </pre>
-          </details>
-        )}
-        {matchingDiagnostic && (
-          <p className="mt-4 text-sm text-muted-foreground">
-            <strong>Matching:</strong> This module contains no matching board. Current role
-            configuration: {matchingDiagnostic.message}
-            {matchingDiagnostic.code === "ready" &&
-              " Regenerate the Learn module to include one when there is room alongside other local questions."}
-          </p>
-        )}
         <div className="mt-8 space-y-5">
           {module.scenarios.map((s) => (
             <ScenarioCard
@@ -252,7 +198,6 @@ function Review() {
               }
               onApprove={() => approveScenario(module.id, s.id)}
               onDelete={() => deleteScenario(module.id, s.id)}
-              onRegenerate={() => regenerateScenario(module.id, s.id)}
               onSave={(next) => updateScenario(module.id, next)}
             />
           ))}
@@ -291,7 +236,6 @@ function ScenarioCard({
   scenario,
   onApprove,
   onDelete,
-  onRegenerate,
   onSave,
 }: {
   sourceChanges?: string[];
@@ -301,11 +245,9 @@ function ScenarioCard({
   scenario: Scenario;
   onApprove: () => void;
   onDelete: () => void;
-  onRegenerate: () => void;
   onSave: (s: Scenario) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [regenerationError, setRegenerationError] = useState("");
   const [draft, setDraft] = useState<Scenario>(scenario);
   const solution =
     scenario.kind === "matching" && scenario.pairingMode === "one_to_one"
@@ -500,32 +442,9 @@ function ScenarioCard({
               </span>
             </div>
           ))}
-          <p className="text-xs text-muted-foreground">
-            Mappings are retained from generation. During a practice-change review, Regenerate uses
-            the current confirmed role responsibilities.
-          </p>
         </div>
       )}
 
-      {scenario.provenance?.kind === "sequence" && scenario.provenance.snapshot.localProcedure && (
-        <div className="mt-3 space-y-2 text-sm">
-          <p className="font-medium">
-            Local Procedure ·{" "}
-            {scenario.provenance.snapshot.localProcedure.requestLabelAtConfirmation} · Version{" "}
-            {scenario.provenance.sourceVersion}
-          </p>
-          <p>Manager-confirmed practice procedure</p>
-          {scenario.provenance.snapshot.localProcedure.appliesWhen && (
-            <p className="whitespace-pre-wrap">
-              {scenario.provenance.snapshot.localProcedure.appliesWhen}
-            </p>
-          )}
-          <p className="text-muted-foreground">
-            This exercise retains its saved procedure. During a practice-change review, Regenerate
-            uses the current confirmed procedure if it is eligible.
-          </p>
-        </div>
-      )}
       {scenario.kind === "order" && draft.kind === "order" && (
         <ol className="mt-3 space-y-2">
           {orderLabels(scenario, orderKey(scenario)).map((s, i) => (
@@ -594,11 +513,6 @@ function ScenarioCard({
         />
       </div>
 
-      {regenerationError && (
-        <p role="alert" className="mt-3 text-sm text-destructive">
-          {regenerationError}
-        </p>
-      )}
       <div className="mt-5 flex flex-wrap gap-2">
         {editing ? (
           <>
@@ -638,29 +552,6 @@ function ScenarioCard({
               className="rounded-lg border border-border px-3 py-2 text-sm"
             >
               Edit
-            </button>
-            <button
-              disabled={scenario.provenance?.kind === "sequence" && !reviewingChanges}
-              title={
-                scenario.provenance?.kind === "sequence"
-                  ? reviewingChanges
-                    ? "Regenerate from the current confirmed procedure."
-                    : "Generate a new module to use updated procedure information."
-                  : undefined
-              }
-              onClick={() => {
-                setRegenerationError("");
-                try {
-                  onRegenerate();
-                } catch (error) {
-                  setRegenerationError(
-                    error instanceof Error ? error.message : "Could not regenerate this question.",
-                  );
-                }
-              }}
-              className="rounded-lg border border-border px-3 py-2 text-sm"
-            >
-              Regenerate
             </button>
             <button
               onClick={onDelete}

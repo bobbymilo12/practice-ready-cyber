@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import ts from "typescript";
 import * as managerActions from "../src/lib/manager-actions.ts";
-import { empty } from "./fixtures/role-matching.ts";
+import { empty } from "./fixtures/practice.ts";
 
 const require = createRequire(import.meta.url);
 function compile(
@@ -127,9 +127,6 @@ async function harness(assigned = false, published = assigned) {
       "./practice-change-tracking": changeTracking,
       "./store": { useApp, defaultPracticeData: empty() },
       "./dev-mode": { devRole: () => null },
-      "./role-requests": { normaliseRoleRequestCategories: (v: unknown) => v },
-      "./local-procedures": {},
-      "./role-templates": { setRoleTemplates() {} },
       "@supabase/supabase-js": {
         createClient: () => ({
           auth: {
@@ -237,8 +234,7 @@ async function harness(assigned = false, published = assigned) {
         Link: "a",
       },
       "@/components/Shell": { Shell: "main", Card: "section", Badge: "span" },
-      "@/lib/dev-procedure-diagnostics": { readProcedureDiagnostics: () => null },
-      "@/lib/role-matching": {},
+      "@/lib/matching-interaction": {},
       "@/lib/sequence": {},
       "@/lib/practice-change-tracking": changeTracking,
       "@/lib/training": {
@@ -823,12 +819,7 @@ test("merge keeps different answers/guidance and provenance, deduplicates equiva
     correctIndex: 0,
     learningPoint: "Guidance",
     status: "approved",
-    provenance: {
-      kind: "core",
-      inputs: [
-        { source: "practice_setup", paths: ["practiceData.repeatTurnaround"], snapshot: "48" },
-      ],
-    },
+    provenance: { kind: "test", paths: ["practiceData.hours"], snapshot: "" },
   };
   const follow = { ...q, id: "follow", followUpFor: "q", title: "Follow-up" };
   const first: any = {
@@ -864,7 +855,7 @@ test("merge keeps different answers/guidance and provenance, deduplicates equiva
   assert.deepEqual(merged.scenarios[0].provenance, q.provenance);
   assert.equal(merged.scenarios[1].followUpFor, merged.scenarios[0].id);
   const before = empty();
-  const after = { ...before, repeatTurnaround: "Updated" };
+  const after = { ...before, hours: "Updated" };
   const flagged = changeTracking.flagPracticeChanges(before, after, [
     { ...merged, published: true },
   ])[0];
@@ -1015,9 +1006,8 @@ test("manager review displays every correct multi-select choice without starting
       react: { useState: (value: any) => [value, () => {}] },
       "@/lib/practice-change-tracking": changeTracking,
       "@/hooks/use-manager-action": {},
-      "@/lib/dev-procedure-diagnostics": {},
       "@/lib/sequence": {},
-      "@/lib/role-matching": {},
+      "@/lib/matching-interaction": {},
       "@tanstack/react-router": { createFileRoute: () => (options: any) => options },
       "@/components/Shell": { Card: "section" },
       "@/lib/store": {},
@@ -1029,7 +1019,6 @@ test("manager review displays every correct multi-select choice without starting
     scenario,
     onApprove: () => {},
     onDelete: () => {},
-    onRegenerate: () => {},
     onSave: () => {},
   });
   const correct = elements(tree).filter(
