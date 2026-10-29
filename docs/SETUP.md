@@ -183,6 +183,34 @@ Run `npm run dev` and open the local server at `http://localhost:5173/auth` (or 
 - Data survives refresh and restarts in `localStorage`, not the real database. Clear the `practiceready-dev-workspace-v1` local-storage entry and reload to reset the sample data. Clear `practiceready-dev-role-v1` (session storage) to exit mock mode manually; closing the tab clears it.
 - Only Vite development builds on `localhost`, `127.0.0.1` or IPv6 loopback allow this bypass. It is unavailable on hosted/forwarded preview domains, production builds and `npm run preview`, even if a mock role is stored. To use it from a remote development environment, forward the port to localhost on your machine.
 
+### Reusable local Mock Manager baseline
+
+On localhost development, a fresh **Mock Manager** workspace loads the agreed visual-test
+configuration: Doctor and Nurse Practitioner responsibilities and the three-step UTI procedure.
+This is test data, not clinical guidance. Other practice settings are blank, with no staff or
+generated modules. Existing mock workspaces are reused without overwriting edits.
+
+Mock Manager includes Jamie Example (Mock Trainee), using the same identity as the Mock Trainee
+login. Loading an older Manager workspace adds Jamie only if missing, preserving existing data.
+No modules are assigned automatically. Refresh Mock Manager, then on a published module click
+**Assign to employees → Jamie Example (Mock Trainee) → Assign**. Switch to Mock Trainee in the
+same browser tab to start that training; no invitation or workspace reset is needed.
+
+To reset, open browser developer tools while in the local mock session, go to **Application →
+Local Storage → your local app origin**, delete only `practiceready-dev-workspace-v1`, then
+reload. This discards that mock workspace's edits, modules and attempts and reloads the baseline.
+The equivalent browser-console command is:
+
+```js
+localStorage.removeItem("practiceready-dev-workspace-v1");
+location.reload();
+```
+
+The baseline is only loaded for a fresh Mock Manager workspace. Mock Trainee retains its existing
+demo when started first; to use the Manager baseline, switch to Mock Manager and reset as above.
+Real authenticated accounts continue loading their own Supabase practice; this seed is never
+imported into a database. Browser-session edits do not update the baseline in source.
+
 The removable implementation is in `src/lib/dev-mode.ts` and the dynamically loaded `src/lib/dev-backend.ts`. Integration points are marked by `devRole`/`devAuthAvailable` in the backend, account gate, login and invitation pages. The Supabase API, database permissions and real account types are unchanged. Remove those hooks, the two files and its tests (`tests/browser/dev-auth.spec.ts`, `tests/dev-mode.test.mjs` and the corresponding npm test command) when the bypass is no longer needed.
 
 ### Roles, employee exceptions and safeguarding compatibility

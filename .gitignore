@@ -39,8 +39,9 @@ playwright-report/
 test-results/
 supabase/.temp/
 
-# Claude Code local settings and graphify cache
+# Local tooling and graphify cache
 .claude/
+CLAUDE.md
 graphify-out/cache/
 
 # Vercel
