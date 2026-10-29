@@ -7,19 +7,19 @@
 <style>
   :root {
     --bg: #f5f7f9; --panel: #ffffff; --ink: #14202b; --muted: #5b6b78; --line: #e3e8ec;
-    --section: #f0f3f6; --break: #e6eaee; --today: #b5452b;
+    --section: #f0f3f6; --break: #e6eaee; --meet: #b5452b;
     --prep: #7b8794; --s0: #2f6690; --dev: #148a7f; --deliv: #6a5acd; --ongoing: #9aa5b1; --milestone: #d9822b;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #10181f; --panel: #16212a; --ink: #e6edf2; --muted: #9aa8b3; --line: #253440;
-      --section: #1b2833; --break: #1f2d38; --today: #ff7a59;
+      --section: #1b2833; --break: #1f2d38; --meet: #ff7a59;
       --prep: #8b97a3; --s0: #4f9ad0; --dev: #35b7a8; --deliv: #9d8df0; --ongoing: #6f7c88; --milestone: #f0a050;
     }
   }
   :root[data-theme="dark"] {
     --bg: #10181f; --panel: #16212a; --ink: #e6edf2; --muted: #9aa8b3; --line: #253440;
-    --section: #1b2833; --break: #1f2d38; --today: #ff7a59;
+    --section: #1b2833; --break: #1f2d38; --meet: #ff7a59;
     --prep: #8b97a3; --s0: #4f9ad0; --dev: #35b7a8; --deliv: #9d8df0; --ongoing: #6f7c88; --milestone: #f0a050;
   }
   * { box-sizing: border-box; }
@@ -44,15 +44,16 @@
   .head .label, .head .track { font: 12px ui-monospace, Consolas, monospace; color: var(--muted); }
   .bar { position: absolute; top: 50%; height: 15px; transform: translateY(-50%); border-radius: 3px; }
   .ms { position: absolute; top: 50%; width: 11px; height: 11px; transform: translate(-50%, -50%) rotate(45deg); background: var(--milestone); }
-  .ms.small { width: 8px; height: 8px; background: var(--ongoing); }
+  .ms.meet { width: 9px; height: 9px; background: var(--meet); }
+  .grid .mt { position: absolute; top: 0; bottom: 0; border-left: 1px dotted var(--meet); opacity: .45; }
+  .head { min-height: 46px; }
+  .dlabel { position: absolute; bottom: 4px; font-size: 10.5px; transform: translateX(-50%); }
   .mslabel { position: absolute; top: 50%; transform: translateY(-50%); font: 11.5px ui-monospace, Consolas, monospace; color: var(--ink); white-space: nowrap; }
   .grid { position: absolute; inset: 0; pointer-events: none; }
   .grid .wk { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); }
   .grid .mo { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); }
   .grid .brk { position: absolute; top: 0; bottom: 0; background: var(--break); opacity: .8; }
-  .grid .today { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--today); }
   .mlabel { position: absolute; top: 8px; padding-left: 6px; }
-  .todaylabel { position: absolute; bottom: -2px; font-size: 10.5px; font-weight: 700; color: var(--today); padding-left: 4px; }
   .notes { margin-top: 20px; max-width: 720px; font-size: 13.5px; }
   .notes h2 { font-size: 15px; margin: 0 0 6px; }
   .notes ul { margin: 0; padding-left: 18px; color: var(--muted); }
@@ -63,9 +64,9 @@
   <header>
     <div>
       <h1>PracticeReady Cyber Security Awareness Training: Project Plan</h1>
-      <p class="sub">Gantt chart for the COMP3000 Computing Project, from idea generation in October 2026 to the viva in May 2027. Development runs in two-week sprints, each ending with a supervisor meeting and sprint diary entry.</p>
+      <p class="sub">Gantt chart for the COMP3000 Computing Project, from idea generation in October 2026 to the viva in May 2027. Development runs in two-week sprints (Wednesday to Tuesday). Each sprint is reviewed at a fortnightly supervisor meeting, followed by a sprint diary entry.</p>
     </div>
-    <div class="meta">Supervisor: Dr Muhammad Asad<br>Module: COMP3000 (2026/27)<br>Sprint length: 2 weeks</div>
+    <div class="meta">Supervisor: Dr Muhammad Asad<br>Module: COMP3000 (2026/27)<br>Sprint length: 2 weeks<br>Meetings: alternate Wed, 12:00–14:00</div>
   </header>
   <div class="legend">
     <span><i class="sw" style="background:var(--prep)"></i>Preparation</span>
@@ -74,6 +75,7 @@
     <span><i class="sw" style="background:var(--deliv)"></i>Deliverable work</span>
     <span><i class="sw" style="background:var(--ongoing)"></i>Ongoing</span>
     <span><i class="dia"></i>Deadline / milestone</span>
+    <span><i class="dia" style="background:var(--meet)"></i>Sprint meeting (dotted line)</span>
     <span><i class="sw" style="background:var(--break)"></i>Winter break (approx.)</span>
   </div>
   <div class="chart" id="chart"></div>
@@ -82,44 +84,47 @@
 <script>
   // Edit the plan here: [label, kind, start, end] for bars, [label, "ms", date] for milestones.
   const START = new Date("2026-10-01"), END = new Date("2027-05-17");
-  const TODAY = "2026-10-13", BREAK = ["2026-12-19", "2027-01-10"];
+  const BREAK = ["2026-12-19", "2027-01-05"];
+  // fortnightly Wednesdays from 28 Oct; 23 Dec falls in the break so it is skipped
+  const MEETINGS = ["2026-10-28", "2026-11-11", "2026-11-25", "2026-12-09", "2027-01-06", "2027-01-20", "2027-02-03",
+    "2027-02-17", "2027-03-03", "2027-03-17", "2027-03-31", "2027-04-14", "2027-04-28"];
   const plan = [
+    ["Sprint meetings (Wed 12:00–14:00)"],
+    ["Supervisor sprint review & sprint diary", "meet", MEETINGS],
     ["Project preparation (before any code)"],
-    ["Explore ideas, meet potential supervisors", "prep", "2026-10-01", "2026-10-13"],
+    ["Explore ideas, meet potential supervisors", "prep", "2026-10-01", "2026-10-12"],
     ["Supervisor selection", "ms", "2026-10-12", "12 Oct"],
     ["Sprint 0: project initiation"],
-    ["Project title, vision & keywords", "s0", "2026-10-12", "2026-10-21"],
-    ["Literature review (social engineering, phishing, NHS data)", "s0", "2026-10-12", "2026-11-08"],
-    ["Choose tech stack, set up repo & dev environment", "s0", "2026-10-12", "2026-10-28"],
-    ["Legal, social, ethical & UK GDPR considerations", "s0", "2026-10-26", "2026-11-08"],
-    ["Risk assessment", "s0", "2026-10-26", "2026-11-03"],
-    ["Initial product backlog & Gantt chart", "s0", "2026-10-26", "2026-11-08"],
+    ["Project title, vision & keywords", "s0", "2026-10-12", "2026-10-27"],
+    ["Literature review (social engineering, phishing, NHS data)", "s0", "2026-10-12", "2026-11-10"],
+    ["Choose tech stack, set up repo & dev environment", "s0", "2026-10-12", "2026-11-03"],
+    ["Legal, social, ethical & UK GDPR considerations", "s0", "2026-10-28", "2026-11-08"],
+    ["Risk assessment", "s0", "2026-10-12", "2026-11-03"],
+    ["Initial product backlog & Gantt chart", "s0", "2026-10-28", "2026-11-08"],
     ["Project Initiation Document (PID)", "ms", "2026-11-09", "9 Nov"],
-    ["Development sprints"],
-    ["S1: app skeleton, auth & roles, placeholder data", "dev", "2026-11-09", "2026-11-22"],
-    ["S2: scenario model & question engine", "dev", "2026-11-23", "2026-12-06"],
-    ["S3: social engineering calls module", "dev", "2026-12-07", "2026-12-18"],
-    ["S4: identity verification module", "dev", "2027-01-11", "2027-01-24"],
-    ["S5: phishing & email module", "dev", "2027-01-25", "2027-02-07"],
-    ["S6: manager assignment, scoring & progress", "dev", "2027-02-08", "2027-02-21"],
-    ["S7: testing & security hardening (RLS, auth)", "dev", "2027-02-22", "2027-03-07"],
-    ["S8: accessibility, UX polish & evaluation", "dev", "2027-03-08", "2027-03-21"],
-    ["S9: feature freeze & bug fixing", "dev", "2027-03-22", "2027-04-04"],
-    ["S10: final fixes & demo build", "dev", "2027-04-05", "2027-04-18"],
+    ["Development sprints (Wed–Tue)"],
+    ["S1: app skeleton, auth & roles, placeholder data", "dev", "2026-11-11", "2026-11-24"],
+    ["S2: scenario model & question engine", "dev", "2026-11-25", "2026-12-08"],
+    ["S3: social engineering calls module (short, break)", "dev", "2026-12-09", "2026-12-18"],
+    ["S4: identity verification module", "dev", "2027-01-06", "2027-01-19"],
+    ["S5: phishing & email module", "dev", "2027-01-20", "2027-02-02"],
+    ["S6: manager assignment, scoring & progress", "dev", "2027-02-03", "2027-02-16"],
+    ["S7: testing & security hardening (RLS, auth)", "dev", "2027-02-17", "2027-03-02"],
+    ["S8: accessibility, UX polish & evaluation", "dev", "2027-03-03", "2027-03-16"],
+    ["S9: feature freeze & bug fixing", "dev", "2027-03-17", "2027-03-30"],
+    ["S10: final fixes & demo build", "dev", "2027-03-31", "2027-04-13"],
     ["Deliverables"],
-    ["Report writing (10,000 words)", "deliv", "2027-01-04", "2027-05-03"],
+    ["Report writing (10,000 words)", "deliv", "2027-01-06", "2027-05-03"],
     ["Poster & description design", "deliv", "2027-02-15", "2027-04-04"],
     ["Poster & description draft (progress check)", "ms", "2027-03-08", "8 Mar"],
     ["Poster print deadline", "ms", "2027-04-05", "5 Apr"],
-    ["5-minute video demo", "deliv", "2027-04-05", "2027-04-26"],
-    ["Final report & ePortfolio assembly", "deliv", "2027-04-19", "2027-05-03"],
+    ["5-minute video demo", "deliv", "2027-04-14", "2027-04-27"],
+    ["Final report & ePortfolio assembly", "deliv", "2027-04-14", "2027-05-03"],
     ["Project ePortfolio complete", "ms", "2027-05-04", "4 May"],
     ["Showcase", "ms", "2027-05-06", "6 May"],
     ["Viva presentation prep", "deliv", "2027-05-04", "2027-05-10"],
     ["Viva (w/c 10 May)", "viva", "2027-05-10", "2027-05-17"],
     ["Ongoing"],
-    ["Supervisor meeting & sprint diary", "meet", ["2026-10-26", "2026-11-09", "2026-11-22", "2026-12-06", "2026-12-18",
-      "2027-01-24", "2027-02-07", "2027-02-21", "2027-03-07", "2027-03-21", "2027-04-04", "2027-04-18"]],
     ["CPD reflection 1", "ms", "2026-12-18", "18 Dec"],
     ["CPD reflection 2", "ms", "2027-02-26", "26 Feb"],
     ["CPD reflection 3", "ms", "2027-04-23", "23 Apr"],
@@ -141,11 +146,11 @@
     for (let d = new Date(START); d < END; d.setDate(d.getDate() + 1)) {
       if (d.getDate() === 1) {
         g.append(el("div", "mo", { left: pct(d) }));
-        if (head) track.append(el("div", "mlabel", { left: pct(d) }, d.toLocaleString("en-GB", { month: "short" }) + " " + String(d.getFullYear()).slice(2)));
+        if (head) track.append(el("div", "mlabel", { left: pct(d) }, d.toLocaleString("en-GB", { month: "long", year: "numeric" })));
       } else if (d.getDay() === 1) g.append(el("div", "wk", { left: pct(d) }));
+      if (head && d.getDay() === 1) track.append(el("div", "dlabel", { left: pct(d) }, d.getDate()));
     }
-    g.append(el("div", "today", { left: pct(TODAY) }));
-    if (head) track.append(el("div", "todaylabel", { left: pct(TODAY) }, "today"));
+    for (const m of MEETINGS) g.append(el("div", "mt", { left: pct(m) }));
     track.prepend(g);
   }
 
@@ -156,7 +161,8 @@
     if (kind === "ms") {
       t.append(el("div", "ms", { left: pct(a) }), el("div", "mslabel", { left: `calc(${pct(a)} + 10px)` }, b));
     } else if (kind === "meet") {
-      for (const d of a) t.append(el("div", "ms small", { left: pct(d) }));
+      for (const d of a) t.append(el("div", "ms meet", { left: pct(d) }),
+        el("div", "mslabel", { left: `calc(${pct(d)} + 9px)` }, new Date(d).toLocaleString("en-GB", { day: "numeric", month: "short" })));
     } else if (kind) {
       const end = new Date(b); end.setDate(end.getDate() + 1); // bars include their last day
       t.append(el("div", "bar", { left: pct(a), width: `calc(${pct(end)} - ${pct(a)})`, background: `var(${color[kind]})` }));
