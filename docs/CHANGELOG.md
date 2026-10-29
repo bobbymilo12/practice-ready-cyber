@@ -2,6 +2,26 @@
 
 Newest entries first.
 
+## 2026-10-29: Clear leftover GP demo modules from dev-mode workspaces
+
+**Files:** `src/lib/dev-backend.ts`, `docs/SETUP.md`
+
+**What changed**
+- The dev-mode workspace key is now `practiceready-dev-workspace-v2` (was `-v1`), and `read()`
+  deletes any old `-v1` entry.
+- `docs/SETUP.md` now names the `-v2` key in its reset steps.
+
+**Why**
+Removing the GP module system emptied `seed()`, but `read()` only seeds when no workspace is
+saved. Browsers that had used mock mode before still loaded the old `-v1` workspace, which held
+the GP demo modules ("Demo appointment booking", "Demo prescription requests", "Demo reception
+onboarding"). The deployed database had no modules, so only local workspaces were affected.
+
+**How it works**
+On the next mock-mode call, `read()` removes `-v1`, finds no `-v2` entry, and saves a fresh
+`seed()` workspace: no modules, packages, assignments or sessions, plus the mock trainee. Any
+mock-mode progress saved under `-v1` is discarded, which is fine because it was test data only.
+
 ## 2026-10-29: Bring the journey browser test up to date; fix header overflow on phones
 
 **Files:** `tests/browser/journey.spec.ts`, `src/components/Shell.tsx`

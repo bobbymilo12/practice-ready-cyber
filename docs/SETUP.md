@@ -167,7 +167,7 @@ Run `npm run dev` and open the local server at `http://localhost:5173/auth` (or 
 - The fictional practice has a manager and Jamie Example as the trainee, with no modules. Manager edits and trainee results share the same mock workspace in this tab. Add `?sequencePreview=1` to a URL to add and assign a test-only ordering module.
 - The development banner links back to the role selector. Switching roles reloads the app to isolate mock and real authentication. **Log out** exits mock mode; any pre-existing real Supabase session is left untouched.
 - Mock invitations create local records only and explicitly report that no email was sent. The built-in trainee cannot be removed, so role switching remains usable. Newly invited mock records do not create real accounts.
-- Data survives refresh and restarts in `localStorage`, not the real database. Clear the `practiceready-dev-workspace-v1` local-storage entry and reload to reset the sample data. Clear `practiceready-dev-role-v1` (session storage) to exit mock mode manually; closing the tab clears it.
+- Data survives refresh and restarts in `localStorage`, not the real database. Clear the `practiceready-dev-workspace-v2` local-storage entry and reload to reset the sample data. Clear `practiceready-dev-role-v1` (session storage) to exit mock mode manually; closing the tab clears it.
 - Only Vite development builds on `localhost`, `127.0.0.1` or IPv6 loopback allow this bypass. It is unavailable on hosted/forwarded preview domains, production builds and `npm run preview`, even if a mock role is stored. To use it from a remote development environment, forward the port to localhost on your machine.
 
 ### Reusable local Mock Manager baseline
@@ -182,12 +182,12 @@ No modules are assigned automatically. Refresh Mock Manager, then on a published
 same browser tab to start that training; no invitation or workspace reset is needed.
 
 To reset, open browser developer tools while in the local mock session, go to **Application →
-Local Storage → your local app origin**, delete only `practiceready-dev-workspace-v1`, then
+Local Storage → your local app origin**, delete only `practiceready-dev-workspace-v2`, then
 reload. This discards that mock workspace's edits, modules and attempts and reloads the baseline.
 The equivalent browser-console command is:
 
 ```js
-localStorage.removeItem("practiceready-dev-workspace-v1");
+localStorage.removeItem("practiceready-dev-workspace-v2");
 location.reload();
 ```
 

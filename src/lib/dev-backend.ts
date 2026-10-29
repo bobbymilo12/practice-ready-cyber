@@ -16,7 +16,8 @@ import {
   type TrainingSession,
 } from "./training";
 
-const storageKey = "practiceready-dev-workspace-v1";
+// v2: v1 workspaces still hold the removed GP demo modules.
+const storageKey = "practiceready-dev-workspace-v2";
 const traineeId = "dev-trainee-jamie";
 const mockTrainee = (): Trainee => ({
   id: traineeId,
@@ -55,6 +56,7 @@ function seed(practiceName: string): Workspace {
   };
 }
 function read(): Workspace {
+  localStorage.removeItem("practiceready-dev-workspace-v1");
   const raw = localStorage.getItem(storageKey);
   if (raw) {
     const workspace = JSON.parse(raw) as Workspace;
