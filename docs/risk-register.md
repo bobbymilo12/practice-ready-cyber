@@ -1,0 +1,30 @@
+# Risk register
+
+**Project:** PracticeReady Cyber · **Module:** COMP3000 (2026/27) · **Last reviewed:** 13 Oct 2026
+
+Likelihood (L) and Impact (I) are scored 1 (low) to 5 (high). **Score = L × I.** 15 or above is high, 8–14 is medium, and 7 or below is low. All high risks have mitigating actions, as the brief requires. I'll review this register at every sprint review and record any changes in the sprint diary.
+
+| ID | Risk | Category | L | I | Score | Mitigation | Contingency if it happens | Status |
+|---|---|---|---|---|---|---|---|---|
+| R1 | Scope creep: three modules plus manager features is more than the time allows | Planning | 4 | 4 | **16 High** | Fixed MVP backlog agreed at the PID. Each module is a vertical slice. Feature freeze at Sprint 9. New ideas go to "further work". | Drop module 3 (phishing) and cover it in further work. The core scenario engine and two modules still meet the aims. | Open |
+| R2 | Falling behind schedule due to other modules, coursework clashes or part-time work | Planning | 4 | 4 | **16 High** | Two-week sprints with a supervisor check-in. Gantt chart updated each sprint. Report writing starts in January, not after development. | Use the buffer in Sprints 9–10. Cut UX polish before core features. | Open |
+| R3 | Security flaw in the app (misconfigured row-level security, broken access control, leaked API keys) | Technical / security | 3 | 5 | **15 High** | RLS on every table and deny by default. Automated tests check that a trainee can't read another practice's data. Secrets kept in environment variables only. Dedicated hardening sprint (S7) checked against the OWASP Top 10. | Fix and retest. Record the issue and fix in the report as evaluation evidence. | Open |
+| R4 | Data loss: laptop failure, accidental deletion, or OneDrive sync corrupting the git repo | Technical | 3 | 5 | **15 High** | Push to GitHub at least daily. Move the repo out of the OneDrive folder so sync can't conflict with `.git`. Report drafts also kept in cloud storage. | Re-clone from GitHub. At most a day of work lost. | Open |
+| R5 | TanStack Start is young: framework bugs, breaking changes or thin documentation block progress | Technical | 3 | 3 | 9 Medium | Lock dependency versions. Keep business logic in plain TypeScript (`src/lib/`) separate from the framework. Automated tests catch regressions after upgrades. | Move to a Vite SPA or Next.js. React components and logic carry over largely unchanged. | Open |
+| R6 | Supabase problems: free-tier project paused after inactivity, an outage, or limits reached | Technical / vendor | 3 | 3 | 9 Medium | Migrations kept in the repo (`supabase/migrations/`) so the database can be rebuilt. Local mock backend for development. Check the project weekly before demos. | Restore the project or recreate it from migrations. Demo on the local mock backend if needed. | Open |
+| R7 | Unrealistic or inaccurate scenarios that teach the wrong procedure | Quality | 3 | 4 | 12 Medium | Base scenarios on published guidance (NCSC, ICO, NHS England data security, the BMA guide to confidentiality) and cite the sources. Manager review step before modules go live. | Mark weak scenarios as draft and revise them. Discuss the limitation in the evaluation. | Open |
+| R8 | Evaluation is weak because there are no real users (placeholder data only) | Academic | 3 | 4 | 12 Medium | Test plan with clear verification (automated tests) and validation (scenario walkthroughs against the aims). Ask the supervisor early whether peer testing with fictional scenarios is acceptable. | Expand automated coverage and do an expert-style heuristic review. State the limitation clearly. | Open |
+| R9 | Real personal or patient data enters the system by accident | Legal / ethical | 1 | 5 | 5 Low | Placeholder data only, and all fixtures are clearly fictional. No real practice or patient names. No real users in testing. Justified in the report's LSEP section. | Delete the data immediately and record what happened. Tell the supervisor. | Open |
+| R10 | Undeclared or over-reliant use of generative AI breaches academic integrity | Academic | 2 | 5 | 10 Medium | Keep a log of AI use. Declare it in the documentation and the signed Generative AI Declaration. Understand and be able to explain all submitted code at the viva. | Correct the declaration before submission. | Open |
+| R11 | Illness or personal circumstances cause lost time | Personal | 2 | 4 | 8 Medium | Buffer built into the final sprints. Keep the supervisor informed early. | Apply for extenuating circumstances. Reprioritise the backlog. | Open |
+| R12 | Supervisor unavailable for a sprint review | Planning | 2 | 2 | 4 Low | Agree a meeting schedule at the first meeting. Send updates by email when a meeting is missed. | Record self-review notes in the sprint diary and catch up at the next meeting. | Open |
+| R13 | Vulnerable third-party dependency (npm supply chain) | Security | 3 | 3 | 9 Medium | `npm audit` and GitHub Dependabot alerts. Minimal new dependencies. Lockfile committed. | Patch or replace the package. Record it in the report. | Open |
+| R14 | Accessibility issues stop some staff using the training | Quality / legal | 3 | 3 | 9 Medium | Use accessible shadcn/Radix components. Keyboard and screen-reader checks in S8 against WCAG 2.2 AA. | Fix high-impact issues first. List the remainder as further work. | Open |
+| R15 | Third-party email (Resend) fails, so invitations aren't delivered | Technical / vendor | 2 | 3 | 6 Low | Show the invite link in the manager UI as a fallback. Test with a verified domain. | Managers share invite links by hand. | Open |
+| R16 | Demo fails on the day (showcase, video or viva) | Academic | 2 | 5 | 10 Medium | Stable demo build tagged at S10. Video recorded in advance. Seeded demo accounts. Local mock backend as a fallback. | Switch to the local build or the recorded video. | Open |
+
+## Changes log
+
+| Date | Change |
+|---|---|
+| 13 Oct 2026 | Register created. |
