@@ -5,6 +5,7 @@ import type { Account, Trainee } from "./store";
 import type { PracticeState, Snapshot } from "./backend";
 import { devRole } from "./dev-mode";
 import { practiceOverview } from "./analytics";
+import { withCoreModules, withoutCoreModules } from "./core-modules";
 import type { PublicModuleSummary } from "./shared-modules";
 import {
   startSession,
@@ -32,7 +33,7 @@ type Workspace = {
   sessions: TrainingSession[];
   version: number;
 };
-/** Fictional local-development practice with no modules until the cyber modules exist. */
+/** Fictional local-development practice; core modules are added on every read, not stored. */
 function seed(practiceName: string): Workspace {
   return {
     state: {
@@ -79,6 +80,8 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
   if (!role) throw new Error("No local mock session.");
   const workspace = read();
   const { state } = workspace;
+  // Same as the Edge Function: core modules come from code, never from the stored workspace.
+  state.modules = withCoreModules(state.modules);
   const account: Account = {
     id: role === "manager" ? "dev-manager-morgan" : traineeId,
     practiceId: "dev-practice",
@@ -209,6 +212,7 @@ export async function devApi(action: string, body: Record<string, unknown>): Pro
       if (body.version !== workspace.version)
         throw new Error("Mock practice changed. Reload and try again.");
       const next = body.state as PracticeState;
+      next.modules = withoutCoreModules(next.modules);
       validateAssignmentLifecycle(
         state.assignments,
         next.assignments,

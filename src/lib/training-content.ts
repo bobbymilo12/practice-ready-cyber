@@ -8,6 +8,7 @@ export function scenarioContent(s: Scenario) {
     title: s.title,
     question: s.question,
     patientQuote: "patientQuote" in s ? s.patientQuote : undefined,
+    email: "email" in s && s.email ? stableValue(s.email) : undefined,
     learningPoint: s.learningPoint,
     managerNote: s.managerNote || undefined,
   };

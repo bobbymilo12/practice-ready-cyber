@@ -2,6 +2,7 @@ import { orderKey, orderLabels } from "@/lib/sequence";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
+import { EmailCard } from "@/components/EmailCard";
 import { trainingAction, useConnection } from "@/lib/backend";
 import { assignmentProgress, matchingFeedback } from "@/lib/training";
 import { useApp } from "@/lib/store";
@@ -187,6 +188,7 @@ function Results() {
                         {answer.correct ? "Correct" : "Incorrect"}
                       </Badge>
                     </div>
+                    <EmailCard scenario={scenario} />
                     <p className="mt-3 text-sm">
                       <strong>Your answer:</strong> {selected}
                     </p>

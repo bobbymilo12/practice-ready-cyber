@@ -10,6 +10,7 @@ import { uniqueMatching } from "@/lib/matching-interaction";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card, Badge } from "@/components/Shell";
+import { EmailCard } from "@/components/EmailCard";
 import { useApp, type Scenario } from "@/lib/store";
 
 export const Route = createFileRoute("/modules/review")({
@@ -71,12 +72,19 @@ function Review() {
               {module.published ? "Review training" : "Review draft questions"}
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              {module.published
-                ? "Review all questions and their saved answers below. No answers or training attempt are required."
-                : "Manager review required. Approve every question, then publish the module for staff."}
+              {module.core
+                ? "Required training provided by PracticeReady for every practice. It can't be edited, but you can preview every question and assign it to staff."
+                : module.published
+                  ? "Review all questions and their saved answers below. No answers or training attempt are required."
+                  : "Manager review required. Approve every question, then publish the module for staff."}
             </p>
+            {module.core && (
+              <div className="mt-3">
+                <Badge tone="approved">Required · provided by PracticeReady</Badge>
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className={module.core ? "hidden" : "flex flex-wrap gap-2"}>
             <button
               onClick={publish}
               disabled={!allApproved || action.saving || (!!module.needsReview && !decisionReady)}
@@ -105,7 +113,7 @@ function Review() {
           </div>
         </div>
 
-        {module.published && (
+        {module.published && !module.core && (
           <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
             <button
               type="button"
@@ -199,11 +207,18 @@ function Review() {
               onApprove={() => approveScenario(module.id, s.id)}
               onDelete={() => deleteScenario(module.id, s.id)}
               onSave={(next) => updateScenario(module.id, next)}
+              readOnly={module.core}
             />
           ))}
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
+        <div
+          className={
+            module.core
+              ? "hidden"
+              : "mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4"
+          }
+        >
           <div className="text-sm text-muted-foreground">
             {pendingReviews.length
               ? "Review and approve the required questions before republishing."
@@ -237,7 +252,9 @@ function ScenarioCard({
   onApprove,
   onDelete,
   onSave,
+  readOnly = false,
 }: {
+  readOnly?: boolean;
   sourceChanges?: string[];
   reviewRequired?: boolean;
   reviewingChanges?: boolean;
@@ -320,6 +337,7 @@ function ScenarioCard({
             )}
           </blockquote>
         )}
+      <EmailCard scenario={scenario} />
 
       <p className="mt-4 text-sm font-medium">
         {editing ? (
@@ -489,7 +507,9 @@ function ScenarioCard({
         )}
       </div>
 
-      <div className="mt-4 rounded-lg border border-accent/40 bg-accent/5 p-3">
+      <div
+        className={readOnly ? "hidden" : "mt-4 rounded-lg border border-accent/40 bg-accent/5 p-3"}
+      >
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Additional information (optional)
         </div>
@@ -513,7 +533,7 @@ function ScenarioCard({
         />
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className={readOnly ? "hidden" : "mt-5 flex flex-wrap gap-2"}>
         {editing ? (
           <>
             <button

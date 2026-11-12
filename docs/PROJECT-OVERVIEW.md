@@ -22,7 +22,9 @@ For setup, commands and the tech stack, see the [README](../README.md).
 
 1. **Modules** (`/modules/review`, `/modules/merge`, `/modules/library`). The manager reviews,
    approves and publishes drafts, combines modules and copies shared ones. The cyber security
-   generators are not built yet, so `/modules/create` is a placeholder.
+   generators are not built yet, so `/modules/create` is a placeholder. Required "core" modules
+   (currently Phishing & email safety) come from `src/lib/core-modules.ts` and appear in every
+   practice, published and read-only.
 2. **Training** (`/staff` → `/train`) — trainees answer multiple-choice, matching
    (`MatchingBoard`) and ordering (`SequenceBoard`) questions, with confidence ratings.
 3. **Monitoring** (`/dashboard`, `/trainees/$id`, `/results`) — the manager invites trainees

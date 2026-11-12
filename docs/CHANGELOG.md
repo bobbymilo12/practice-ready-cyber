@@ -2,6 +2,84 @@
 
 Newest entries first.
 
+## 2026-11-12: Required "Phishing & email safety" core module
+
+**Files:** `src/lib/core-modules.ts` (new), `src/components/EmailCard.tsx` (new),
+`src/lib/training-types.ts`, `src/lib/training-content.ts`, `src/lib/dev-backend.ts`,
+`supabase/functions/practice-api/index.ts`, `src/routes/train.tsx`, `src/routes/results.tsx`,
+`src/routes/modules.review.tsx`, `src/routes/dashboard.tsx`, `tests/core-modules.test.ts` (new),
+`tests/training-interaction.test.ts`, `tests/manager-persistence.test.ts`, `tests/api.test.mjs`,
+`package.json`, `docs/PROJECT-OVERVIEW.md`
+
+**What changed**
+- Added the first cyber module, "Phishing & email safety". It has 10 primary questions and 3
+  follow-ups covering four topics: spotting phishing, reporting steps, impersonation and invoice
+  fraud, and email requests for patient data. Difficulty ranges from obvious scams to convincing
+  ones, such as a compromised partner-practice account and a solicitor's request with "consent
+  attached". One question is a genuine email, so trainees learn not to report everything.
+- The module is a **core module**: written by PracticeReady, required, and the same in every
+  practice. Managers can preview it and assign it but can't edit, delete, publish or share it.
+- Scenarios can now include an optional `email` (`from`, `subject`, `body`). `EmailCard` shows it
+  in training, on results and on the review page.
+- Matching targets may now have `kind: "action"` as well as `"role"`.
+
+**Why**
+- Phishing training applies to every practice and uses no practice data. Keeping a single
+  canonical copy in code means the module transfers to any practice, present or future, with no
+  setup. A content fix also reaches every practice in one deploy.
+
+**How it works**
+- `CORE_MODULES` in `src/lib/core-modules.ts` holds the canonical module, with fixed id
+  `core-phishing-email`, `core: true`, published, and every scenario approved.
+- **Merge on read.** The Edge Function builds its `modules` list with
+  `withCoreModules(load_practice_modules)`. That list feeds `load`, `start`, `answer` and
+  analytics, so the module behaves like any published module. A stored module with a core id is
+  ignored, so a practice can't shadow it.
+- **Strip on save.** `save-practice` runs `withoutCoreModules`, which filters by the `core` flag
+  and by id, before validating or persisting. So:
+  - core modules are never written to `practice_modules`;
+  - they never pass through `enforceReviewDecisions` or `flagPracticeChanges`, so a practice data
+    change can never pause them;
+  - they can't be shared.
+  Assignments are checked against `withCoreModules(next.modules)`, so assigning the core module
+  passes the "published module" rule.
+- **Attempts stay stable.** `startSession` snapshots the scenarios as before, so updating the core
+  content never changes attempts in progress or completed results. `scenarioContent` now includes
+  `email`, so an edited email shows trainees in the middle of an attempt the existing "updated
+  content" prompt.
+- **Dev mode** (`dev-backend.ts`) applies the same merge on every read and the same strip on save.
+- **Safe rendering.** `EmailCard` renders the email as plain text, so links in the training content
+  are never clickable. All senders, companies and domains are fictional. The one exception is
+  `nhs.net`, used for the genuine example and for the "compromised colleague" case.
+- **Tests.** `tests/core-modules.test.ts` checks that every core scenario is approved, that the
+  correct answer scores and a wrong MCQ answer doesn't, that follow-up parents and matching targets
+  exist, that `startSession` works, and that the merge and strip behave as described. The
+  route-harness tests stub `@/components/EmailCard`, and the API test rewrites the new
+  `core-modules.ts` import.
+
+## 2026-11-07: Risk plan PDF for the PID
+
+**Files:** `docs/risk-plan.pdf` (new), `docs/risk-register.md`
+
+**What changed**
+- Added a two-page risk plan for the PebblePad "Risk Plan" field, condensed from
+  `docs/risk-register.md`: the scoring method, the four high risks with prevention and
+  contingency, and the medium and low risks in summary tables.
+- Sprint numbers and calendar dates are left out so the plan doesn't go stale as the Gantt chart
+  changes ("hardening sprint", "buffer sprints at the end of the plan").
+- R1's contingency now keeps the phishing module and trims scenarios per module and lower-priority
+  manager features instead. `docs/risk-register.md` R1 was updated to match, with a line in its
+  changes log.
+- Added R17–R22 to both the register and the PDF: ethics approval for user testing, no access to
+  domain experts, developer account compromise, dev-mode logins reaching production, trainee
+  results used for staff monitoring, and misuse of phishing examples. R6 now also covers Vercel
+  hosting limits. R20 promises a test or build check that production can't enable dev mode; that
+  check doesn't exist yet.
+
+**How it was made**
+- Written as print-styled HTML (A4, tables that don't split rows) and printed to PDF with headless
+  Edge. The HTML source is not kept in the repo; the risk register is the source of truth.
+
 ## 2026-10-29: Bring the journey browser test up to date; fix header overflow on phones
 
 **Files:** `tests/browser/journey.spec.ts`, `src/components/Shell.tsx`
