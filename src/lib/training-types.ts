@@ -9,6 +9,13 @@ export interface ScenarioProvenance {
 
 export type ScenarioStatus = "draft" | "approved";
 
+/** A simulated email shown instead of a spoken quote. `from` is the display form: `Name <address>`. */
+export interface ScenarioEmail {
+  from: string;
+  subject: string;
+  body: string;
+}
+
 export interface MCQScenario {
   /** Allocation metadata only; never affects scoring or source-change dependencies. */
   generationObjective?: {
@@ -25,6 +32,7 @@ export interface MCQScenario {
   id: string;
   title: string;
   patientQuote: string;
+  email?: ScenarioEmail;
   question: string;
   options: string[];
   correctIndex: number;
@@ -41,6 +49,7 @@ interface OrderScenarioBase {
   id: string;
   title: string;
   patientQuote: string;
+  email?: ScenarioEmail;
   question: string;
   learningPoint: string;
   status: ScenarioStatus;
@@ -72,7 +81,7 @@ export interface MatchingScenario {
   title: string;
   question: string;
   items: { id: string; label: string }[];
-  targets: { id: string; label: string; kind: "role" }[];
+  targets: { id: string; label: string; kind: "role" | "action" }[];
   // All configured relationships within the presented targets, not just an intended answer.
   validMatches: Record<string, string[]>;
   learningPoint: string;
@@ -133,6 +142,8 @@ export interface Module {
   reviewedQuestions?: Record<string, string>;
   reviewConfirmations?: ReviewConfirmation[];
   packageId?: string;
+  /** Company-authored module served from code to every practice; never stored or edited per practice. */
+  core?: true;
 }
 
 export interface TrainingResult {

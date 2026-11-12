@@ -184,6 +184,10 @@ const js = ts
   .replace(
     '"../../../src/lib/analytics.ts"',
     JSON.stringify(new URL("../src/lib/analytics.ts", import.meta.url).href),
+  )
+  .replace(
+    '"../../../src/lib/core-modules.ts"',
+    JSON.stringify(new URL("../src/lib/core-modules.ts", import.meta.url).href),
   );
 await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
 

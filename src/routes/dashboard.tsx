@@ -220,6 +220,8 @@ function Dashboard() {
                         <span className="text-[color:var(--warning-foreground)]">
                           Paused — needs checking
                         </span>
+                      ) : m.core ? (
+                        "Required · provided by PracticeReady"
                       ) : (
                         "Ready to use"
                       )}

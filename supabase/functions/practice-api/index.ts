@@ -4,6 +4,7 @@ import {
   enforceReviewDecisions,
 } from "../../../src/lib/practice-change-tracking.ts";
 import { copyPublicModule, shareable } from "../../../src/lib/shared-modules.ts";
+import { withCoreModules, withoutCoreModules } from "../../../src/lib/core-modules.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
   advanceSession,
@@ -99,7 +100,7 @@ Deno.serve(async (request) => {
       p_practice: profile.practice_id,
     });
     check(modulesError);
-    const modules: Module[] = moduleRows ?? [];
+    const modules: Module[] = withCoreModules(moduleRows ?? []);
     const assignments: Assignment[] = state.assignments ?? [];
     const account = {
       id: profile.id,
@@ -258,7 +259,7 @@ Deno.serve(async (request) => {
           userId: l.user_id,
           at: Date.parse(l.created_at),
         })),
-        modules: ((moduleList.data ?? []) as Module[]).map((m) => ({ id: m.id, title: m.title })),
+        modules: withCoreModules((moduleList.data ?? []) as Module[]).map((m) => ({ id: m.id, title: m.title })),
         assignments: ((targetPractice.data.state.assignments ?? []) as Assignment[]).map((a) => ({
           id: a.id,
           traineeId: a.traineeId,
@@ -368,10 +369,13 @@ Deno.serve(async (request) => {
       } catch (error) {
         fail(error instanceof Error ? error.message : "Invalid assignments.");
       }
+      // Core modules come from code: the client copy is discarded and never stored.
+      next.modules = withoutCoreModules(next.modules);
+      const assignable = withCoreModules(next.modules);
       for (const a of next.assignments) {
         if (
           !ids.has(a.traineeId) ||
-          (!a.withdrawnAt && !next.modules.some((m: Module) => m.id === a.moduleId && m.published))
+          (!a.withdrawnAt && !assignable.some((m: Module) => m.id === a.moduleId && m.published))
         )
           fail("Assignments must refer to a trainee and published module in this practice.");
       }

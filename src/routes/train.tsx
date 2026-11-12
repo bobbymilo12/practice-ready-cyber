@@ -1,6 +1,7 @@
 import { SequenceBoard } from "@/components/SequenceBoard";
 import { orderLabels } from "@/lib/sequence";
 import { MatchingBoard } from "@/components/MatchingBoard";
+import { EmailCard } from "@/components/EmailCard";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, Card } from "@/components/Shell";
@@ -338,6 +339,7 @@ function ScenarioBlock({
           “{scenario.patientQuote}”
         </blockquote>
       )}
+      <EmailCard scenario={scenario} />
       {scenario.kind !== "matching" && <p className="mt-5 font-medium">{scenario.question}</p>}
       {scenario.kind === "mcq" ? (
         <div className="mt-4 space-y-3">
